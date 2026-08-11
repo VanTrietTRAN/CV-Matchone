@@ -10,15 +10,13 @@ Sentry.init({
   // Add optional integrations for additional features
   integrations: [Sentry.replayIntegration()],
 
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
+  // Production lấy mẫu 10% để không đốt quota Sentry; dev giữ 100% cho dễ debug.
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1,
   // Enable logs to be sent to Sentry
   enableLogs: true,
 
-  // Define how likely Replay events are sampled.
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: 0.1,
+  // Session Replay tốn quota nhất — production chỉ ghi 2% phiên bình thường.
+  replaysSessionSampleRate: process.env.NODE_ENV === 'production' ? 0.02 : 0.1,
 
   // Define how likely Replay events are sampled when an error occurs.
   replaysOnErrorSampleRate: 1.0,

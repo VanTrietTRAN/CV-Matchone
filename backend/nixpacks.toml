@@ -1,0 +1,13 @@
+# Binary hệ thống cho bước OCR fallback trong src/services/cronWorker.js
+#
+#   pdf2pic  -> cần GraphicsMagick + Ghostscript để render trang PDF thành ảnh
+#   tesseract.js -> chạy thuần JS, không cần cài thêm gì
+#
+# Không có 2 gói này thì CV dạng ảnh scan sẽ thất bại ở bước OCR (retry 3 lần rồi
+# chuyển processingStatus = "failed"). CV PDF có sẵn text vẫn xử lý bình thường.
+#
+# "..." giữ nguyên danh sách gói mặc định của Nixpacks (Node runtime) rồi mới nối thêm.
+# Lưu ý: file này chỉ có tác dụng khi builder của service là NIXPACKS (xem railway.json).
+
+[phases.setup]
+nixPkgs = ["...", "graphicsmagick", "ghostscript"]

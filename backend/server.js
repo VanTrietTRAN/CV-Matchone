@@ -4,7 +4,9 @@ const Sentry = require("@sentry/node");
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
-    tracesSampleRate: 1.0,
+    environment: process.env.NODE_ENV || 'development',
+    // Production lấy mẫu 10% để không đốt quota Sentry; dev giữ 100% cho dễ debug.
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
   });
   console.log('[Sentry] Khởi tạo giám sát lỗi Backend thành công.');
 }

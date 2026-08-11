@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { frontendOrigin } = require('../utils/frontendUrl');
 
 let transporter = null;
 
@@ -44,7 +45,7 @@ const sendJobMatchEmail = async (user, matchedJobs) => {
 
     if (!matchedJobs || matchedJobs.length === 0) return;
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = frontendOrigin();
     const sender = process.env.SENDER_EMAIL || 'Smart Recruit <khaitran955@gmail.com>';
 
     const jobsHtml = matchedJobs.map(job => `
@@ -110,7 +111,7 @@ const sendJobAlertEmail = async (target, alert, matchedJobs) => {
     if (!t) throw new Error('Transporter not ready');
     if (!matchedJobs || matchedJobs.length === 0) return;
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = frontendOrigin();
     const sender = process.env.SENDER_EMAIL || 'Smart Recruit <khaitran955@gmail.com>';
 
     const jobsHtml = matchedJobs

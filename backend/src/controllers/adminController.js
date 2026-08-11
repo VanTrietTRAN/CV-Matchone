@@ -6,6 +6,7 @@ const Notification = require('../models/Notification');
 const SystemSetting = require('../models/SystemSetting');
 const AuditLog = require('../models/AuditLog');
 const { logAdminAction } = require('../services/auditLogService');
+const { frontendOrigin } = require('../utils/frontendUrl');
 
 const getStats = async (req, res) => {
   try {
@@ -168,7 +169,7 @@ const resetUserPasswordByAdmin = async (req, res) => {
     user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
     await user.save();
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = frontendOrigin();
     const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
     const emailService = require('../services/emailService');

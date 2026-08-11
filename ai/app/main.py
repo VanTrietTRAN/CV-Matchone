@@ -1,4 +1,10 @@
 import os
+from dotenv import load_dotenv
+
+# Nạp ai/.env TRƯỚC khi import các service — embedding_service đọc os.environ
+# ngay ở cấp module (GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL...).
+load_dotenv()
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Optional

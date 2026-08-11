@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { frontendOrigin } = require('../utils/frontendUrl');
 
 // ─── Helper: tạo token và gắn vào HTTPOnly Cookie ─────────────────────────────
 const sendTokenCookie = (user, statusCode, res, extraJson = {}) => {
@@ -167,7 +168,10 @@ const googleAuth = (req, res) => {
 
 const googleCallback = async (req, res) => {
     const { code } = req.query;
-    const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
+    // Dùng FRONTEND_URL (một origin duy nhất) chứ KHÔNG dùng CLIENT_ORIGIN:
+    // CLIENT_ORIGIN là allowlist CORS, có thể chứa nhiều origin cách nhau bởi dấu phẩy
+    // nên không ghép được thành URL redirect hợp lệ.
+    const clientOrigin = frontendOrigin();
 
     try {
         let email, name, googleId;
@@ -279,7 +283,8 @@ const facebookAuth = (req, res) => {
 
 const facebookCallback = async (req, res) => {
     const { code } = req.query;
-    const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
+    // Xem ghi chú ở googleCallback về việc không dùng CLIENT_ORIGIN.
+    const clientOrigin = frontendOrigin();
 
     try {
         let email, name, facebookId;
@@ -400,7 +405,7 @@ const forgotPassword = async (req, res) => {
     user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
     await user.save();
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = frontendOrigin();
     const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
     const emailService = require('../services/emailService');

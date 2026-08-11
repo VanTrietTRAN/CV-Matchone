@@ -43,6 +43,17 @@ const extractTextWithOCRFromBuffer = async (pdfBuffer) => {
     await worker.terminate();
 
     return text;
+  } catch (error) {
+    // pdf2pic gọi binary GraphicsMagick/Ghostscript ở ngoài Node. Khi máy chủ chưa cài,
+    // lỗi ném ra rất khó đoán ("Command failed", ENOENT...) nên diễn giải lại cho rõ.
+    const raw = String(error && error.message);
+    if (/ENOENT|not found|command failed|gm\/convert|gs:/i.test(raw)) {
+      throw new Error(
+        `OCR không chạy được — máy chủ thiếu GraphicsMagick hoặc Ghostscript. ` +
+          `Xem backend/nixpacks.toml. Lỗi gốc: ${raw}`,
+      );
+    }
+    throw error;
   } finally {
     if (fs.existsSync(tempFilePath)) {
       fs.unlinkSync(tempFilePath);
