@@ -107,13 +107,13 @@ export default function BroadcastPage() {
     <AdminLayout>
       <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
           <div>
             <div className="flex items-center gap-2">
-              <Megaphone className="w-7 h-7 text-cyan-400" />
+              <Megaphone className="w-7 h-7 text-blue-400" />
               <h1 className="text-2xl font-bold text-white tracking-tight">Phát thông báo Hệ thống (System Broadcast)</h1>
             </div>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-slate-400 text-sm mt-1">
               Gửi thông điệp In-App và Email đồng loạt tới toàn bộ Ứng viên hoặc Nhà tuyển dụng bằng tiến trình xử lý ngầm (Non-blocking).
             </p>
           </div>
@@ -122,7 +122,7 @@ export default function BroadcastPage() {
             onClick={fetchBroadcasts}
             disabled={loading}
             variant="outline"
-            className="border-gray-800 bg-gray-900/60 hover:bg-gray-800 text-gray-300 gap-2 self-start sm:self-auto"
+            className="border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 gap-2 self-start sm:self-auto"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
@@ -130,29 +130,29 @@ export default function BroadcastPage() {
         </div>
 
         {/* Creation Form */}
-        <form onSubmit={handleSubmit} className="bg-gray-900/40 p-6 rounded-2xl border border-gray-800 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 space-y-5">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Send className="w-5 h-5 text-cyan-400" /> Soạn thông báo mới
+            <Send className="w-5 h-5 text-blue-400" /> Soạn thông báo mới
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 space-y-2">
-              <label className="text-xs font-medium text-gray-300">Tiêu đề thông báo *</label>
+              <label className="text-xs font-medium text-slate-300">Tiêu đề thông báo *</label>
               <Input
                 placeholder="Ví dụ: Thông báo bảo trì hệ thống hoặc Tính năng mới..."
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="bg-gray-950 border-gray-800 text-white placeholder:text-gray-600 focus:border-cyan-500"
+                className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:border-blue-500"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-300">Đối tượng nhận *</label>
+              <label className="text-xs font-medium text-slate-300">Đối tượng nhận *</label>
               <Select value={targetGroup} onValueChange={(val: 'all' | 'candidates' | 'employers') => setTargetGroup(val)}>
-                <SelectTrigger className="bg-gray-950 border-gray-800 text-white">
+                <SelectTrigger className="bg-slate-950 border-slate-800 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-900 border-gray-800 text-white">
+                <SelectContent className="bg-slate-900 border-slate-800 text-white">
                   <SelectItem value="all">🌐 Tất cả người dùng (All)</SelectItem>
                   <SelectItem value="candidates">🎓 Chỉ Ứng viên (Candidates)</SelectItem>
                   <SelectItem value="employers">🏢 Chỉ Nhà tuyển dụng (Employers)</SelectItem>
@@ -162,13 +162,13 @@ export default function BroadcastPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-gray-300">Nội dung thông báo *</label>
+            <label className="text-xs font-medium text-slate-300">Nội dung thông báo *</label>
             <Textarea
               rows={4}
               placeholder="Nhập nội dung chi tiết thông báo..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="bg-gray-950 border-gray-800 text-white placeholder:text-gray-600 focus:border-cyan-500"
+              className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:border-blue-500"
             />
           </div>
 
@@ -179,10 +179,10 @@ export default function BroadcastPage() {
                 id="sendInApp"
                 checked={sendInApp}
                 onCheckedChange={(checked) => setSendInApp(!!checked)}
-                className="border-gray-700 data-[state=checked]:bg-cyan-600"
+                className="border-slate-700 data-[state=checked]:bg-blue-600"
               />
-              <label htmlFor="sendInApp" className="text-sm font-medium text-gray-300 cursor-pointer flex items-center gap-1.5">
-                <Bell className="w-4 h-4 text-cyan-400" /> Gửi Thông báo trong App (In-App)
+              <label htmlFor="sendInApp" className="text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-1.5">
+                <Bell className="w-4 h-4 text-blue-400" /> Gửi Thông báo trong App (In-App)
               </label>
             </div>
 
@@ -191,10 +191,10 @@ export default function BroadcastPage() {
                 id="sendEmail"
                 checked={sendEmail}
                 onCheckedChange={(checked) => setSendEmail(!!checked)}
-                className="border-gray-700 data-[state=checked]:bg-cyan-600"
+                className="border-slate-700 data-[state=checked]:bg-blue-600"
               />
-              <label htmlFor="sendEmail" className="text-sm font-medium text-gray-300 cursor-pointer flex items-center gap-1.5">
-                <Mail className="w-4 h-4 text-violet-400" /> Gửi Email trực tiếp (Resend)
+              <label htmlFor="sendEmail" className="text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-1.5">
+                <Mail className="w-4 h-4 text-brand-400" /> Gửi Email trực tiếp (Resend)
               </label>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default function BroadcastPage() {
             <Button
               type="submit"
               disabled={submitting}
-              className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 font-medium gap-2 shadow-lg shadow-cyan-600/20"
+              className="bg-blue-600 hover:bg-blue-500 text-white px-6 font-medium gap-2 shadow-lg shadow-blue-600/20"
             >
               <Send className={`w-4 h-4 ${submitting ? 'animate-bounce' : ''}`} />
               {submitting ? 'Đang khởi tạo phát ngầm...' : 'Phát thông báo ngầm'}
@@ -214,13 +214,13 @@ export default function BroadcastPage() {
         {/* History Table */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Clock className="w-5 h-5 text-gray-400" /> Lịch sử phát thông báo
+            <Clock className="w-5 h-5 text-slate-400" /> Lịch sử phát thông báo
           </h2>
 
-          <div className="bg-gray-900/40 rounded-xl border border-gray-800 overflow-hidden">
+          <div className="bg-slate-900/40 rounded-xl border border-slate-800 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-gray-950/80 text-gray-400 text-xs uppercase font-medium border-b border-gray-800">
+              <table className="w-full text-left text-sm text-slate-300">
+                <thead className="bg-slate-950/80 text-slate-400 text-xs uppercase font-medium border-b border-slate-800">
                   <tr>
                     <th className="py-3.5 px-4">Tiêu đề & Nội dung</th>
                     <th className="py-3.5 px-4">Đối tượng</th>
@@ -230,18 +230,18 @@ export default function BroadcastPage() {
                     <th className="py-3.5 px-4">Thời gian</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-800/60">
+                <tbody className="divide-y divide-slate-800/60">
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-500">
-                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-cyan-400" />
+                      <td colSpan={6} className="py-12 text-center text-slate-500">
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-400" />
                         Đang tải lịch sử phát thông báo...
                       </td>
                     </tr>
                   ) : broadcasts.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-500">
-                        <Megaphone className="w-8 h-8 mx-auto mb-2 text-gray-600" />
+                      <td colSpan={6} className="py-12 text-center text-slate-500">
+                        <Megaphone className="w-8 h-8 mx-auto mb-2 text-slate-600" />
                         Chưa có thông báo toàn hệ thống nào được phát.
                       </td>
                     </tr>
@@ -252,33 +252,33 @@ export default function BroadcastPage() {
                       const isFailed = item.status === 'failed'
 
                       return (
-                        <tr key={item._id} className="hover:bg-gray-800/30 transition-colors">
+                        <tr key={item._id} className="hover:bg-slate-800/30 transition-colors">
                           <td className="py-3.5 px-4 max-w-sm">
                             <p className="text-white font-medium text-sm">{item.title}</p>
-                            <p className="text-gray-400 text-xs truncate max-w-xs mt-0.5">{item.message}</p>
+                            <p className="text-slate-400 text-xs truncate max-w-xs mt-0.5">{item.message}</p>
                           </td>
 
                           <td className="py-3.5 px-4 whitespace-nowrap text-xs">
-                            {item.targetGroup === 'all' && <span className="text-cyan-300 font-medium">🌐 Tất cả người dùng</span>}
-                            {item.targetGroup === 'candidates' && <span className="text-emerald-300 font-medium">🎓 Ứng viên</span>}
+                            {item.targetGroup === 'all' && <span className="text-blue-300 font-medium">🌐 Tất cả người dùng</span>}
+                            {item.targetGroup === 'candidates' && <span className="text-brand-300 font-medium">🎓 Ứng viên</span>}
                             {item.targetGroup === 'employers' && <span className="text-purple-300 font-medium">🏢 Nhà tuyển dụng</span>}
                           </td>
 
                           <td className="py-3.5 px-4 whitespace-nowrap text-xs">
                             <div className="flex items-center gap-2">
-                              {item.sendInApp && <span className="px-2 py-0.5 rounded bg-gray-800 text-cyan-400">In-App</span>}
-                              {item.sendEmail && <span className="px-2 py-0.5 rounded bg-gray-800 text-violet-400">Email</span>}
+                              {item.sendInApp && <span className="px-2 py-0.5 rounded bg-slate-800 text-blue-400">In-App</span>}
+                              {item.sendEmail && <span className="px-2 py-0.5 rounded bg-slate-800 text-brand-400">Email</span>}
                             </div>
                           </td>
 
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             {isCompleted && (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20">
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Hoàn tất
                               </span>
                             )}
                             {isProcessing && (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
                                 <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Đang phát ngầm
                               </span>
                             )}
@@ -290,14 +290,14 @@ export default function BroadcastPage() {
                           </td>
 
                           <td className="py-3.5 px-4 whitespace-nowrap text-xs font-mono">
-                            <span className="text-emerald-400 font-semibold">{item.stats?.sentCount || 0}</span>
-                            <span className="text-gray-500"> / {item.stats?.totalTargets || 0}</span>
+                            <span className="text-brand-400 font-semibold">{item.stats?.sentCount || 0}</span>
+                            <span className="text-slate-500"> / {item.stats?.totalTargets || 0}</span>
                             {item.stats?.failCount > 0 && (
                               <span className="text-red-400 text-[11px] block">({item.stats.failCount} lỗi)</span>
                             )}
                           </td>
 
-                          <td className="py-3.5 px-4 whitespace-nowrap text-xs text-gray-400">
+                          <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-400">
                             {new Date(item.createdAt).toLocaleString('vi-VN')}
                           </td>
                         </tr>
@@ -309,7 +309,7 @@ export default function BroadcastPage() {
             </div>
 
             {pages > 1 && (
-              <div className="flex items-center justify-between p-4 border-t border-gray-800 text-xs text-gray-400">
+              <div className="flex items-center justify-between p-4 border-t border-slate-800 text-xs text-slate-400">
                 <p>Trang <strong>{page}</strong> / {pages}</p>
                 <div className="flex items-center gap-2">
                   <Button
@@ -317,7 +317,7 @@ export default function BroadcastPage() {
                     variant="outline"
                     disabled={page <= 1}
                     onClick={() => setPage((p) => p - 1)}
-                    className="border-gray-800 bg-gray-950 text-gray-300 hover:bg-gray-800"
+                    className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
                   >
                     Trang trước
                   </Button>
@@ -326,7 +326,7 @@ export default function BroadcastPage() {
                     variant="outline"
                     disabled={page >= pages}
                     onClick={() => setPage((p) => p + 1)}
-                    className="border-gray-800 bg-gray-950 text-gray-300 hover:bg-gray-800"
+                    className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
                   >
                     Trang sau
                   </Button>

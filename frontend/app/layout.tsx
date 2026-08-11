@@ -1,35 +1,41 @@
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import type { Metadata, Viewport } from 'next'
+import { Be_Vietnam_Pro, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 import './globals.css'
 
-const geistSans = Geist({ subsets: ["latin"] })
+// Be Vietnam Pro: font được thiết kế riêng cho tiếng Việt — dấu thanh cân đối,
+// không bị rơi về font hệ thống như Geist (chỉ có subset latin).
+const appSans = Be_Vietnam_Pro({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-app-sans',
+})
+
 const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-geist-mono",
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-geist-mono',
 })
 
 export const metadata: Metadata = {
-  title: 'Smart Recruit | AI-Powered Job Matching',
-  description: 'Find your perfect job match with AI-powered recommendations. Smart Recruit connects talented professionals with opportunities that fit their skills and career goals.',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+  title: {
+    default: 'Smart Recruit — Tìm việc làm phù hợp bằng AI',
+    template: '%s | Smart Recruit',
   },
+  description:
+    'Smart Recruit dùng AI để chấm điểm độ phù hợp giữa CV của bạn và từng tin tuyển dụng. Tìm việc nhanh hơn, ứng tuyển đúng chỗ hơn.',
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#00B14F' },
+    { media: '(prefers-color-scheme: dark)', color: '#0F1720' },
+  ],
 }
 
 export default function RootLayout({
@@ -38,10 +44,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${geistSans.className} ${geistMono.variable} bg-background`}>
-      <body className="font-sans antialiased">
+    <html lang="vi" className={`${appSans.variable} ${geistMono.variable}`}>
+      <body className="bg-background font-sans antialiased">
         {children}
-        <Toaster position="top-right" richColors />
+        <Toaster position="top-right" richColors closeButton />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

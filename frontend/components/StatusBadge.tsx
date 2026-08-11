@@ -1,45 +1,72 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 
-type Status = 'applied' | 'reviewing' | 'interview' | 'accepted' | 'rejected' | 'active' | 'paused' | 'closed'
+/**
+ * Gộp cả status do backend trả về (pending/reviewed/...) và status hiển thị của tin
+ * tuyển dụng để dùng chung một component ở mọi trang.
+ */
+export type Status =
+  | 'pending'
+  | 'applied'
+  | 'reviewed'
+  | 'reviewing'
+  | 'interview'
+  | 'accepted'
+  | 'rejected'
+  | 'open'
+  | 'active'
+  | 'paused'
+  | 'closed'
+  | 'expired'
+  | 'draft'
+
+type Tone = 'info' | 'brand' | 'warning' | 'danger' | 'neutral' | 'violet'
+
+const toneClasses: Record<Tone, string> = {
+  info: 'bg-info-surface text-info-foreground',
+  brand: 'bg-success-surface text-success-foreground',
+  warning: 'bg-warning-surface text-warning-foreground',
+  danger: 'bg-danger-surface text-danger-foreground',
+  neutral: 'bg-muted text-muted-foreground',
+  violet: 'bg-chart-4/12 text-chart-4',
+}
+
+const statusConfig: Record<Status, { tone: Tone; label: string }> = {
+  pending: { tone: 'info', label: 'Chờ duyệt' },
+  applied: { tone: 'info', label: 'Đã ứng tuyển' },
+  reviewed: { tone: 'violet', label: 'Đã xem hồ sơ' },
+  reviewing: { tone: 'violet', label: 'Đang xem xét' },
+  interview: { tone: 'warning', label: 'Phỏng vấn' },
+  accepted: { tone: 'brand', label: 'Trúng tuyển' },
+  rejected: { tone: 'danger', label: 'Từ chối' },
+  open: { tone: 'brand', label: 'Đang tuyển' },
+  active: { tone: 'brand', label: 'Đang hoạt động' },
+  paused: { tone: 'warning', label: 'Tạm dừng' },
+  closed: { tone: 'neutral', label: 'Đã đóng' },
+  expired: { tone: 'neutral', label: 'Hết hạn' },
+  draft: { tone: 'neutral', label: 'Bản nháp' },
+}
 
 interface StatusBadgeProps {
-  status: Status
+  status: Status | string
   size?: 'sm' | 'md'
   className?: string
 }
 
-const statusConfig: Record<Status, { bg: string; text: string; label: string }> = {
-  applied: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Applied' },
-  reviewing: { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Under Review' },
-  interview: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Interview' },
-  accepted: { bg: 'bg-green-50', text: 'text-green-700', label: 'Accepted' },
-  rejected: { bg: 'bg-red-50', text: 'text-red-700', label: 'Rejected' },
-  active: { bg: 'bg-green-50', text: 'text-green-700', label: 'Active' },
-  paused: { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Paused' },
-  closed: { bg: 'bg-gray-50', text: 'text-gray-700', label: 'Closed' },
-}
-
 export default function StatusBadge({ status, size = 'md', className }: StatusBadgeProps) {
-  const config = statusConfig[status]
-  const sizeClasses = {
-    sm: 'px-2 py-1 text-xs',
-    md: 'px-3 py-1.5 text-sm',
-  }
+  const config = statusConfig[status as Status] ?? { tone: 'neutral' as Tone, label: status }
 
   return (
-    <div
+    <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full font-medium border',
-        config.bg,
-        config.text,
-        'border-opacity-30',
-        sizeClasses[size],
-        className
+        'inline-flex items-center gap-1.5 rounded-full font-semibold whitespace-nowrap',
+        toneClasses[config.tone],
+        size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs',
+        className,
       )}
     >
-      <span className="w-2 h-2 rounded-full bg-current opacity-70" />
-      <span>{config.label}</span>
-    </div>
+      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+      {config.label}
+    </span>
   )
 }

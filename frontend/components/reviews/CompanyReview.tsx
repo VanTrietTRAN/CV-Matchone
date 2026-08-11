@@ -42,7 +42,7 @@ export function StarRating({
           >
             <Star
               style={{ width: size, height: size }}
-              className={cn(filled ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/40')}
+              className={cn(filled ? 'fill-warning text-warning' : 'text-muted-foreground/40')}
             />
           </button>
         )
@@ -187,7 +187,7 @@ export function ReviewCompanyButton({
                 {status?.myReview && (
                   <Button
                     variant="ghost"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="text-danger-foreground hover:text-danger-foreground hover:bg-danger-surface"
                     onClick={remove}
                     disabled={saving}
                   >

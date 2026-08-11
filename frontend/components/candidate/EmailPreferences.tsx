@@ -1,9 +1,10 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Briefcase, Loader2 } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { Slider } from '@/components/ui/slider'
+import { MailCheck, Loader2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -36,7 +37,7 @@ export default function EmailPreferences() {
           jobMatchFrequency: user?.jobMatchFrequency ?? 'daily',
         }))
       } catch {
-        toast.error('Không tải được cài đặt, hiển thị mặc định')
+        toast.error('Không tải được cài đặt, hiển thị giá trị mặc định')
       } finally {
         setLoading(false)
       }
@@ -65,71 +66,72 @@ export default function EmailPreferences() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-28">
-        <Loader2 className="w-7 h-7 animate-spin text-primary" />
+      <div className="surface-card flex h-32 items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-brand-500" />
       </div>
     )
   }
 
   return (
-    <Card className="p-6 border border-border mb-8">
-      <div className="flex items-start justify-between mb-1">
+    <section className="surface-card p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <Briefcase className="w-5 h-5 text-blue-600" />
-          </div>
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+            <MailCheck className="size-5" />
+          </span>
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Nhận email gợi ý việc làm AI</h2>
-            <p className="text-sm text-foreground/70 mt-1 max-w-xl">
-              Tự động gợi ý việc dựa trên CV của bạn — không cần đặt bộ lọc. Muốn lọc cụ thể (từ khoá,
-              địa điểm, lương...), hãy tạo Thông báo việc làm bên dưới.
+            <h2 className="font-bold">Email gợi ý việc làm bằng AI</h2>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              Hệ thống tự gợi ý việc làm dựa trên CV của bạn, không cần đặt bộ lọc. Nếu muốn lọc
+              theo từ khoá, địa điểm hay mức lương cụ thể, hãy tạo thông báo việc làm bên dưới.
             </p>
           </div>
         </div>
-        <label className="flex items-center gap-3 cursor-pointer flex-shrink-0">
-          <input
-            type="checkbox"
+
+        <label className="flex shrink-0 cursor-pointer items-center gap-2.5">
+          <Switch
             checked={settings.isEmailSubscribed}
-            onChange={() => {
-              const next = { ...settings, isEmailSubscribed: !settings.isEmailSubscribed }
+            onCheckedChange={(checked) => {
+              const next = { ...settings, isEmailSubscribed: checked }
               setSettings(next)
               persist(next)
             }}
-            className="rounded w-4 h-4"
           />
-          <span className="text-sm font-medium text-foreground">
-            {settings.isEmailSubscribed ? 'Bật' : 'Tắt'}
+          <span className="text-sm font-semibold">
+            {settings.isEmailSubscribed ? 'Đang bật' : 'Đang tắt'}
           </span>
         </label>
       </div>
 
       {settings.isEmailSubscribed && (
-        <div className="border-t border-border pt-4 mt-4">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-foreground">
-              Điểm khớp tối thiểu: {settings.minMatchScore}%
-            </label>
+        <div className="mt-5 border-t border-border pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="text-sm font-semibold">Điểm phù hợp tối thiểu</label>
+            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-sm font-bold text-brand-700 tabular-nums">
+              {settings.minMatchScore}%
+            </span>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="10"
-            value={settings.minMatchScore}
-            onChange={(e) => setSettings({ ...settings, minMatchScore: Number(e.target.value) })}
-            className="w-full"
+
+          <Slider
+            className="mt-4"
+            min={0}
+            max={100}
+            step={10}
+            value={[settings.minMatchScore]}
+            onValueChange={([value]) => setSettings({ ...settings, minMatchScore: value })}
           />
-          <div className="flex items-center justify-between mt-2">
-            <p className="text-xs text-foreground/60">
-              Chỉ nhận gợi ý khi điểm khớp AI ≥ {settings.minMatchScore}%
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              Chỉ gửi email khi có việc làm đạt từ {settings.minMatchScore}% độ phù hợp trở lên.
             </p>
             <Button size="sm" onClick={() => persist(settings)} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
-              Lưu
+              {saving && <Loader2 className="animate-spin" />}
+              Lưu thay đổi
             </Button>
           </div>
         </div>
       )}
-    </Card>
+    </section>
   )
 }

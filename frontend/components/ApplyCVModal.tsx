@@ -1,10 +1,22 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import SkillTag from '@/components/SkillTag'
 import { apiFetch } from '@/lib/api'
-import { Loader2, FileText, Star, CheckCircle, AlertCircle, X, Zap, Upload } from 'lucide-react'
+import { Loader2, FileText, Star, CheckCircle2, AlertCircle, Zap, Upload } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { formatDate } from '@/lib/format'
 
 type CvSummary = {
   _id: string
@@ -37,10 +49,8 @@ export default function ApplyCVModal({ jobId, jobTitle, onClose, onSuccess }: Pr
         const res = await apiFetch<{ data: CvSummary[] }>('/api/cv')
         const list = res.data || []
         setCvList(list)
-        // Pre-select: CV primary trước, nếu không thì CV mới nhất
-        const primary = list.find((c) => c.isPrimary)
-        const first = list[0]
-        setSelectedCvId(primary?._id || first?._id || null)
+        // Ưu tiên CV chính, nếu không có thì lấy CV đầu danh sách
+        setSelectedCvId(list.find((c) => c.isPrimary)?._id || list[0]?._id || null)
       } catch {
         toast.error('Không tải được danh sách CV')
       } finally {
@@ -71,120 +81,126 @@ export default function ApplyCVModal({ jobId, jobTitle, onClose, onSuccess }: Pr
     }
   }
 
-  const hasEmbedding = (cv: CvSummary) => cv.embedding && cv.embedding.length > 0
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
-        
-        <div className="relative px-6 pt-6 pb-4 border-b border-border bg-gradient-to-r from-primary/5 to-primary/10">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-          <div className="flex items-center gap-3 pr-8">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-              <FileText className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-foreground">Chọn CV để ứng tuyển</h2>
-              <p className="text-sm text-foreground/60 truncate max-w-xs">{jobTitle}</p>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="border-b border-border bg-brand-50/60 p-5 text-left">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-card text-brand-600 ring-1 ring-brand-200">
+              <FileText className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-lg">Chọn CV để ứng tuyển</DialogTitle>
+              <DialogDescription className="truncate">{jobTitle}</DialogDescription>
             </div>
           </div>
-        </div>
+        </DialogHeader>
 
-        <div className="px-6 py-4 max-h-[55vh] overflow-y-auto">
+        <div className="max-h-[52vh] overflow-y-auto p-5">
           {loading ? (
-            <div className="flex items-center justify-center h-32 gap-2 text-foreground/60">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Đang tải danh sách CV...</span>
+            <div className="flex h-32 items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin" />
+              Đang tải danh sách CV...
             </div>
           ) : cvList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 gap-3 text-center">
-              <AlertCircle className="w-8 h-8 text-amber-500" />
+            <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+              <span className="grid size-12 place-items-center rounded-full bg-warning-surface text-warning-foreground">
+                <AlertCircle className="size-6" />
+              </span>
               <div>
-                <p className="font-medium text-foreground">Bạn chưa có CV nào</p>
-                <p className="text-sm text-foreground/60 mt-1">
-                  Hãy tạo CV trong trang <strong>Hồ sơ & CV</strong> trước khi ứng tuyển.
+                <p className="font-semibold">Bạn chưa có CV nào</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Hãy tạo CV trong mục Hồ sơ &amp; CV trước khi ứng tuyển.
                 </p>
               </div>
+              <Button asChild size="sm">
+                <Link href="/candidate/cv">Tạo CV ngay</Link>
+              </Button>
             </div>
           ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-foreground/60 mb-1">
-                Điểm khớp AI sẽ được tính lại theo CV bạn chọn.
+            <div className="space-y-2.5">
+              <p className="text-sm text-muted-foreground">
+                Điểm phù hợp sẽ được tính lại theo CV bạn chọn.
               </p>
+
               {cvList.map((cv) => {
                 const isSelected = selectedCvId === cv._id
-                const hasEmb = hasEmbedding(cv)
+                const hasEmbedding = Boolean(cv.embedding && cv.embedding.length > 0)
+
                 return (
                   <button
                     key={cv._id}
                     type="button"
                     onClick={() => setSelectedCvId(cv._id)}
-                    className={`w-full text-left rounded-xl border-2 p-4 transition-all duration-150 ${
+                    aria-pressed={isSelected}
+                    className={cn(
+                      'w-full rounded-xl border p-4 text-left transition-all',
                       isSelected
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-border bg-background hover:border-primary/40 hover:bg-foreground/[0.02]'
-                    }`}
+                        ? 'border-brand-500 bg-brand-50/60 ring-1 ring-brand-500/25'
+                        : 'border-border hover:border-brand-300 hover:bg-muted/50',
+                    )}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                          isSelected ? 'border-primary bg-primary' : 'border-border'
-                        }`}>
-                          {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={cn(
+                          'mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors',
+                          isSelected ? 'border-brand-500 bg-brand-500' : 'border-input',
+                        )}
+                      >
+                        {isSelected && <span className="size-2 rounded-full bg-white" />}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate font-semibold">{cv.fullName}</span>
+                          {cv.isPrimary && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warning-surface px-2 py-0.5 text-[11px] font-semibold text-warning-foreground">
+                              <Star className="size-3 fill-current" />
+                              CV chính
+                            </span>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-foreground truncate">{cv.fullName}</span>
-                            {cv.isPrimary && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 flex-shrink-0">
-                                <Star className="w-3 h-3 fill-amber-500 stroke-amber-500" />
-                                CV chính
-                              </span>
-                            )}
-                          </div>
-                          {cv.headline && (
-                            <p className="text-sm text-foreground/60 mt-0.5 truncate">{cv.headline}</p>
-                          )}
-                          {cv.skills && cv.skills.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {cv.skills.slice(0, 4).map((s) => (
-                                <span key={s} className="px-2 py-0.5 rounded text-xs bg-foreground/5 border border-border text-foreground/70">
-                                  {s}
-                                </span>
-                              ))}
-                              {cv.skills.length > 4 && (
-                                <span className="text-xs text-foreground/40">+{cv.skills.length - 4}</span>
-                              )}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 mt-2">
-                            {hasEmb ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-green-600">
-                                <Zap className="w-3 h-3" /> AI embedding sẵn sàng
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                                <AlertCircle className="w-3 h-3" /> Chưa có AI embedding
-                              </span>
-                            )}
-                            {cv.fileUrl && (
-                              <span className="inline-flex items-center gap-1 text-xs text-blue-600">
-                                <FileText className="w-3 h-3" /> Có file PDF
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-foreground/40 mt-1">
-                            Tạo {new Date(cv.createdAt).toLocaleDateString('vi-VN')}
+
+                        {cv.headline && (
+                          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                            {cv.headline}
                           </p>
+                        )}
+
+                        {cv.skills && cv.skills.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {cv.skills.slice(0, 4).map((s) => (
+                              <SkillTag key={s} skill={s} size="sm" />
+                            ))}
+                            {cv.skills.length > 4 && (
+                              <span className="self-center text-[11px] text-muted-foreground">
+                                +{cv.skills.length - 4}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                          {hasEmbedding ? (
+                            <span className="inline-flex items-center gap-1 font-medium text-success-foreground">
+                              <Zap className="size-3" />
+                              Đã phân tích AI
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 font-medium text-warning-foreground">
+                              <AlertCircle className="size-3" />
+                              Chưa phân tích AI
+                            </span>
+                          )}
+                          {cv.fileUrl && (
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
+                              <FileText className="size-3" />
+                              Có file đính kèm
+                            </span>
+                          )}
+                          <span className="text-muted-foreground">
+                            Tạo ngày {formatDate(cv.createdAt)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -195,29 +211,29 @@ export default function ApplyCVModal({ jobId, jobTitle, onClose, onSuccess }: Pr
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-border bg-foreground/[0.01] flex items-center justify-between gap-3">
-          <a href="/candidate/cv" className="text-sm text-primary hover:underline inline-flex items-center gap-1">
-            <Upload className="w-3.5 h-3.5" />
+        <DialogFooter className="flex-row items-center justify-between gap-3 border-t border-border p-4 sm:justify-between">
+          <Link
+            href="/candidate/cv"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-brand-600"
+          >
+            <Upload className="size-3.5" />
             Quản lý CV
-          </a>
+          </Link>
+
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={applying}>
-              Hủy
+              Huỷ
             </Button>
             <Button
               onClick={handleApply}
               disabled={applying || loading || cvList.length === 0 || !selectedCvId}
-              className="gap-2 min-w-[130px]"
             >
-              {applying ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Đang gửi...</>
-              ) : (
-                <><CheckCircle className="w-4 h-4" /> Xác nhận ứng tuyển</>
-              )}
+              {applying ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+              {applying ? 'Đang gửi...' : 'Xác nhận ứng tuyển'}
             </Button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

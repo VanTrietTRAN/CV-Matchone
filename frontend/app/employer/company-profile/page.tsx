@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import EmployerLayout from '@/layouts/EmployerLayout'
+import PageContainer from '@/components/dashboard/PageContainer'
+import PageHeader from '@/components/dashboard/PageHeader'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -124,49 +126,50 @@ export default function CompanyProfilePage() {
   if (loading) {
     return (
       <EmployerLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
+        <PageContainer size="md">
+          <div className="flex h-64 items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="size-6 animate-spin text-brand-500" />
+            Đang tải hồ sơ công ty...
+          </div>
+        </PageContainer>
       </EmployerLayout>
     )
   }
 
   return (
     <EmployerLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
-              Hồ sơ Công ty
-            </h1>
-            <p className="text-foreground/70">Quản lý thông tin công ty hiển thị với ứng viên</p>
-          </div>
-          {isEditing ? (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
-                Hủy
+      <PageContainer size="md">
+        <PageHeader
+          title="Trang công ty"
+          description="Thông tin dưới đây hiển thị với ứng viên trên mỗi tin tuyển dụng của bạn."
+          actions={
+            isEditing ? (
+              <>
+                <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
+                  Huỷ
+                </Button>
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? <Loader2 className="animate-spin" /> : <CheckCircle />}
+                  Lưu thay đổi
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setIsEditing(true)}>
+                <Building2 />
+                Chỉnh sửa thông tin
               </Button>
-              <Button onClick={handleSave} disabled={saving} className="gap-2">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                Lưu thay đổi
-              </Button>
-            </div>
-          ) : (
-            <Button onClick={() => setIsEditing(true)} className="gap-2">
-              <Building2 className="w-4 h-4" />
-              Chỉnh sửa
-            </Button>
-          )}
-        </div>
+            )
+          }
+        />
 
         <Card className="p-8 border border-border mb-8">
-          <div className="relative h-32 rounded-lg bg-gradient-to-r from-primary to-primary/50 mb-6 flex items-center justify-center">
-            <span className="text-white/60 text-sm">Banner công ty</span>
+          <div className="brand-gradient mb-6 flex h-32 items-center justify-center rounded-lg">
+            <span className="text-sm font-medium text-white/70">Ảnh bìa công ty</span>
           </div>
 
           <div className="flex items-start gap-6">
-            <div className="w-24 h-24 rounded-xl bg-primary/10 flex items-center justify-center border-4 border-background flex-shrink-0 shadow-md">
-              <span className="text-3xl font-bold text-primary">
+            <div className="flex size-24 shrink-0 items-center justify-center rounded-xl border-4 border-card bg-brand-50 shadow-[var(--shadow-card)]">
+              <span className="text-3xl font-bold text-brand-600">
                 {(formData.companyName || '?').substring(0, 2).toUpperCase()}
               </span>
             </div>
@@ -320,7 +323,7 @@ export default function CompanyProfilePage() {
             </div>
           )}
         </Card>
-      </div>
+      </PageContainer>
     </EmployerLayout>
   )
 }

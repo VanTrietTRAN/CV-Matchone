@@ -11,6 +11,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -18,6 +20,7 @@ interface ConfirmDialogProps {
   title: string
   description: string
   actionLabel: string
+  cancelLabel?: string
   onConfirm: () => void
   onCancel?: () => void
   destructive?: boolean
@@ -30,6 +33,7 @@ export default function ConfirmDialog({
   title,
   description,
   actionLabel,
+  cancelLabel = 'Huỷ bỏ',
   onConfirm,
   onCancel,
   destructive = false,
@@ -40,16 +44,19 @@ export default function ConfirmDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
+          <AlertDialogDescription className="leading-relaxed">{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel} disabled={loading}>
+            {cancelLabel}
+          </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             disabled={loading}
-            className={destructive ? 'bg-red-600 hover:bg-red-700' : ''}
+            className={cn(destructive && 'bg-destructive text-white hover:brightness-95')}
           >
-            {loading ? 'Loading...' : actionLabel}
+            {loading && <Loader2 className="animate-spin" />}
+            {loading ? 'Đang xử lý...' : actionLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

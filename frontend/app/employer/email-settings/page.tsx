@@ -2,8 +2,10 @@
 
 import React, { useState } from 'react'
 import EmployerLayout from '@/layouts/EmployerLayout'
-import { Card } from '@/components/ui/card'
+import PageContainer from '@/components/dashboard/PageContainer'
+import PageHeader from '@/components/dashboard/PageHeader'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -11,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CheckCircle, Bell, Users } from 'lucide-react'
+import { CheckCircle2, Bell, Users, CalendarClock, Info } from 'lucide-react'
 
 const initialSettings = {
   autoEmailMatched: true,
@@ -20,6 +22,49 @@ const initialSettings = {
   applicationAlerts: true,
   alertFrequency: 'daily',
   jobReminders: true,
+}
+
+function SettingCard({
+  icon: Icon,
+  title,
+  description,
+  enabled,
+  onToggle,
+  children,
+}: {
+  icon: React.ElementType
+  title: string
+  description: string
+  enabled: boolean
+  onToggle: () => void
+  children?: React.ReactNode
+}) {
+  return (
+    <section className="surface-card p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+            <Icon className="size-5" />
+          </span>
+          <div>
+            <h2 className="font-bold">{title}</h2>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              {description}
+            </p>
+          </div>
+        </div>
+
+        <label className="flex shrink-0 cursor-pointer items-center gap-2.5">
+          <Switch checked={enabled} onCheckedChange={onToggle} />
+          <span className="text-sm font-semibold">{enabled ? 'Đang bật' : 'Đang tắt'}</span>
+        </label>
+      </div>
+
+      {enabled && children && (
+        <div className="mt-5 space-y-4 border-t border-border pt-5">{children}</div>
+      )}
+    </section>
+  )
 }
 
 export default function EmployerEmailSettingsPage() {
@@ -31,11 +76,8 @@ export default function EmployerEmailSettingsPage() {
     setTimeout(() => setSaved(false), 3000)
   }
 
-  const handleToggle = (key: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      [key]: !prev[key as keyof typeof prev],
-    }))
+  const handleToggle = (key: keyof typeof initialSettings) => {
+    setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
   const handleSelect = (key: string, value: string) => {
@@ -47,169 +89,106 @@ export default function EmployerEmailSettingsPage() {
 
   return (
     <EmployerLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
-            Email & Notifications
-          </h1>
-          <p className="text-foreground/70">
-            Manage notifications about candidates, applications, and job postings
+      <PageContainer size="sm">
+        <PageHeader
+          title="Cài đặt email & thông báo"
+          description="Chọn thời điểm hệ thống gửi email về ứng viên phù hợp, hồ sơ mới và hạn tin tuyển dụng."
+        />
+
+        {/* Trạng thái thật của tính năng — tránh gây hiểu nhầm là đã lưu lên máy chủ */}
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-surface p-4">
+          <Info className="mt-0.5 size-5 shrink-0 text-warning-foreground" />
+          <p className="text-sm leading-relaxed text-warning-foreground">
+            <strong>Tính năng đang hoàn thiện:</strong> các tuỳ chọn dưới đây mới áp dụng trong
+            phiên làm việc hiện tại và chưa được đồng bộ với máy chủ.
           </p>
         </div>
 
         {saved && (
-          <Card className="p-4 border border-green-200 bg-green-50 mb-6 flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-green-900">Settings saved successfully!</p>
-            </div>
-          </Card>
+          <div className="mb-5 flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4">
+            <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-brand-600" />
+            <p className="text-sm font-semibold text-brand-800">Đã ghi nhận tuỳ chọn của bạn.</p>
+          </div>
         )}
 
-        <Card className="p-6 border border-border mb-6">
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <Users className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">AI-Matched Candidates</h2>
-                <p className="text-sm text-foreground/70 mt-1">
-                  Automatically email when candidates match your job requirements
-                </p>
-              </div>
-            </div>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.autoEmailMatched}
-                onChange={() => handleToggle('autoEmailMatched')}
-                className="rounded"
-              />
-              <span className="text-sm font-medium text-foreground">
-                {settings.autoEmailMatched ? 'On' : 'Off'}
-              </span>
-            </label>
-          </div>
-
-          {settings.autoEmailMatched && (
-            <div className="space-y-4 border-t border-border pt-6">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-foreground">
-                  Match Threshold
-                </label>
-                <Select
-                  value={String(settings.matchThreshold)}
-                  onValueChange={(value) => handleSelect('matchThreshold', value)}
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="50">50% or higher</SelectItem>
-                    <SelectItem value="70">70% or higher</SelectItem>
-                    <SelectItem value="80">80% or higher</SelectItem>
-                    <SelectItem value="90">90% or higher</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.emailTopTenOnly}
-                  onChange={() => handleToggle('emailTopTenOnly')}
-                  className="rounded"
-                />
-                <span className="text-sm text-foreground/70">
-                  Email only top 10 candidates per job
-                </span>
-              </label>
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-6 border border-border mb-6">
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
-                <Bell className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Application Alerts</h2>
-                <p className="text-sm text-foreground/70 mt-1">
-                  Get notified when candidates apply to your open positions
-                </p>
-              </div>
-            </div>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.applicationAlerts}
-                onChange={() => handleToggle('applicationAlerts')}
-                className="rounded"
-              />
-              <span className="text-sm font-medium text-foreground">
-                {settings.applicationAlerts ? 'On' : 'Off'}
-              </span>
-            </label>
-          </div>
-
-          {settings.applicationAlerts && (
-            <div className="border-t border-border pt-6">
-              <label className="text-sm font-medium text-foreground block mb-2">
-                Alert Frequency
-              </label>
-              <Select value={settings.alertFrequency} onValueChange={(value) => handleSelect('alertFrequency', value)}>
-                <SelectTrigger>
+        <div className="space-y-5">
+          <SettingCard
+            icon={Users}
+            title="Ứng viên phù hợp do AI gợi ý"
+            description="Gửi email cho bạn khi có ứng viên có điểm phù hợp cao với tin tuyển dụng đang mở."
+            enabled={settings.autoEmailMatched}
+            onToggle={() => handleToggle('autoEmailMatched')}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="text-sm font-semibold">Ngưỡng điểm phù hợp</label>
+              <Select
+                value={String(settings.matchThreshold)}
+                onValueChange={(value) => handleSelect('matchThreshold', value)}
+              >
+                <SelectTrigger className="w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="realtime">Real-time</SelectItem>
-                  <SelectItem value="daily">Daily Digest</SelectItem>
-                  <SelectItem value="weekly">Weekly Digest</SelectItem>
+                  <SelectItem value="50">Từ 50% trở lên</SelectItem>
+                  <SelectItem value="70">Từ 70% trở lên</SelectItem>
+                  <SelectItem value="80">Từ 80% trở lên</SelectItem>
+                  <SelectItem value="90">Từ 90% trở lên</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          )}
-        </Card>
 
-        <Card className="p-6 border border-border mb-8">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
-                <Bell className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Job Post Reminders</h2>
-                <p className="text-sm text-foreground/70 mt-1">
-                  Get reminder when your job posts are about to expire
-                </p>
-              </div>
-            </div>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.jobReminders}
-                onChange={() => handleToggle('jobReminders')}
-                className="rounded"
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <Switch
+                checked={settings.emailTopTenOnly}
+                onCheckedChange={() => handleToggle('emailTopTenOnly')}
               />
-              <span className="text-sm font-medium text-foreground">
-                {settings.jobReminders ? 'On' : 'Off'}
-              </span>
+              <span className="text-sm">Chỉ gửi 10 ứng viên phù hợp nhất mỗi tin</span>
             </label>
-          </div>
-        </Card>
+          </SettingCard>
 
-        <div className="flex gap-4">
+          <SettingCard
+            icon={Bell}
+            title="Thông báo hồ sơ ứng tuyển mới"
+            description="Nhận email khi có ứng viên nộp hồ sơ vào tin tuyển dụng của bạn."
+            enabled={settings.applicationAlerts}
+            onToggle={() => handleToggle('applicationAlerts')}
+          >
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold">Tần suất nhận email</label>
+              <Select
+                value={settings.alertFrequency}
+                onValueChange={(value) => handleSelect('alertFrequency', value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="realtime">Ngay khi có hồ sơ mới</SelectItem>
+                  <SelectItem value="daily">Tổng hợp hằng ngày</SelectItem>
+                  <SelectItem value="weekly">Tổng hợp hằng tuần</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </SettingCard>
+
+          <SettingCard
+            icon={CalendarClock}
+            title="Nhắc hạn tin tuyển dụng"
+            description="Nhắc bạn trước khi tin tuyển dụng hết hạn hiển thị để kịp gia hạn."
+            enabled={settings.jobReminders}
+            onToggle={() => handleToggle('jobReminders')}
+          />
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-3">
           <Button onClick={handleSave} size="lg">
-            Save Settings
+            Lưu cài đặt
           </Button>
           <Button onClick={() => setSettings(initialSettings)} variant="outline" size="lg">
-            Reset to Default
+            Khôi phục mặc định
           </Button>
         </div>
-      </div>
+      </PageContainer>
     </EmployerLayout>
   )
 }

@@ -1,104 +1,93 @@
 import React from 'react'
 import Link from 'next/link'
-import { Briefcase, Mail, Linkedin, Twitter } from 'lucide-react'
+import Logo from '@/components/brand/Logo'
+import { Facebook, Linkedin, Youtube } from 'lucide-react'
+
+const columns = [
+  {
+    title: 'Dành cho ứng viên',
+    links: [
+      { label: 'Việc làm gợi ý bằng AI', href: '/candidate/matches' },
+      { label: 'Quản lý hồ sơ & CV', href: '/candidate/cv' },
+      { label: 'Việc làm đã ứng tuyển', href: '/candidate/applications' },
+      { label: 'Thông báo việc làm', href: '/candidate/notification-settings' },
+    ],
+  },
+  {
+    title: 'Dành cho nhà tuyển dụng',
+    links: [
+      { label: 'Đăng tin tuyển dụng', href: '/employer/post-job' },
+      { label: 'Tìm hồ sơ ứng viên', href: '/employer/candidates' },
+      { label: 'Trang công ty', href: '/employer/company-profile' },
+      { label: 'Bài đăng mạng xã hội', href: '/fb-generator' },
+    ],
+  },
+  {
+    title: 'Về Smart Recruit',
+    links: [
+      { label: 'Cách hoạt động', href: '/#cach-hoat-dong' },
+      { label: 'Câu hỏi thường gặp', href: '/#faq' },
+      { label: 'Điều khoản sử dụng', href: '/#faq' },
+      { label: 'Chính sách bảo mật', href: '/#faq' },
+    ],
+  },
+]
+
+const socials = [
+  { label: 'Facebook', href: '#', icon: Facebook },
+  { label: 'LinkedIn', href: '#', icon: Linkedin },
+  { label: 'YouTube', href: '#', icon: Youtube },
+]
 
 export default function Footer() {
   return (
-    <footer className="bg-foreground/5 border-t border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-          <div className="col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Briefcase className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-bold text-primary">Smart Recruit</span>
-            </div>
-            <p className="text-sm text-foreground/70">
-              AI-powered job matching platform connecting talent with opportunity.
+    <footer className="mt-auto border-t border-border bg-card">
+      <div className="container-page py-12 lg:py-14">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div>
+            <Logo size="md" />
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
+              Nền tảng tuyển dụng ứng dụng AI: chấm điểm độ phù hợp giữa CV và tin tuyển dụng,
+              giúp ứng viên và nhà tuyển dụng gặp nhau nhanh hơn.
             </p>
           </div>
 
-          <div>
-            <h3 className="font-semibold text-foreground mb-4">For Candidates</h3>
-            <ul className="space-y-2 text-sm text-foreground/70">
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  Find Jobs
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  AI Matches
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  Career Advice
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-foreground mb-4">For Employers</h3>
-            <ul className="space-y-2 text-sm text-foreground/70">
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  Post a Job
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  Find Talent
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  Pricing
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-foreground mb-4">Company</h3>
-            <ul className="space-y-2 text-sm text-foreground/70">
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  About
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link href="#" className="hover:text-foreground transition">
-                  Terms of Service
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {columns.map((col) => (
+            <div key={col.title}>
+              <h3 className="mb-4 text-sm font-bold tracking-wide text-foreground uppercase">
+                {col.title}
+              </h3>
+              <ul className="space-y-2.5 text-sm">
+                {col.links.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
+                      className="text-muted-foreground transition-colors hover:text-brand-600"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        <div className="border-t border-border pt-8">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <p className="text-sm text-foreground/60 mb-4 md:mb-0">
-              © 2024 Smart Recruit. All rights reserved.
-            </p>
-            <div className="flex items-center gap-4">
-              <Link href="#" className="text-foreground/60 hover:text-foreground transition">
-                <Mail className="w-5 h-5" />
+        <div className="mt-10 flex flex-col-reverse items-center justify-between gap-5 border-t border-border pt-7 sm:flex-row">
+          <p className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} Smart Recruit. Bảo lưu mọi quyền.
+          </p>
+          <div className="flex items-center gap-2">
+            {socials.map(({ label, href, icon: Icon }) => (
+              <Link
+                key={label}
+                href={href}
+                aria-label={label}
+                className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-brand-400 hover:bg-brand-50 hover:text-brand-600"
+              >
+                <Icon className="size-4" />
               </Link>
-              <Link href="#" className="text-foreground/60 hover:text-foreground transition">
-                <Linkedin className="w-5 h-5" />
-              </Link>
-              <Link href="#" className="text-foreground/60 hover:text-foreground transition">
-                <Twitter className="w-5 h-5" />
-              </Link>
-            </div>
+            ))}
           </div>
         </div>
       </div>

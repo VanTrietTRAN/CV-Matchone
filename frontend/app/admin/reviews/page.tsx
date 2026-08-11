@@ -71,14 +71,14 @@ export default function AdminReviewsPage() {
     <AdminLayout>
       <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="border-b border-gray-800 pb-5">
+        <div className="border-b border-slate-800 pb-5">
           <div className="flex items-center gap-3">
             <Star className="w-7 h-7 text-amber-400 fill-amber-400/20" />
             <h1 className="text-2xl font-bold text-white tracking-tight">Kiểm duyệt Đánh giá Công ty</h1>
           </div>
-          <p className="text-gray-400 text-sm mt-1">
+          <p className="text-slate-400 text-sm mt-1">
             Ẩn các đánh giá có nội dung vi phạm văn hóa hoặc công kích cá nhân. Dữ liệu gốc vẫn được lưu trữ bảo toàn bằng chứng trong DB.
-            <span className="ml-2 text-violet-400 font-medium">(Tổng {reviews.length} đánh giá · {hiddenCount} đang ẩn)</span>
+            <span className="ml-2 text-brand-400 font-medium">(Tổng {reviews.length} đánh giá · {hiddenCount} đang ẩn)</span>
           </p>
         </div>
 
@@ -95,8 +95,8 @@ export default function AdminReviewsPage() {
               className={cn(
                 'px-4 py-2 rounded-xl text-xs font-medium border transition-all duration-150',
                 filter === f
-                  ? 'bg-violet-600/20 text-violet-300 border-violet-500/40 shadow-lg shadow-violet-500/10'
-                  : 'bg-gray-900/40 border-gray-800 text-gray-400 hover:text-white hover:bg-gray-800'
+                  ? 'bg-brand-600/20 text-brand-300 border-brand-500/40 shadow-lg shadow-brand-500/10'
+                  : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
               )}
             >
               {label}
@@ -106,14 +106,14 @@ export default function AdminReviewsPage() {
 
         {/* Content */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-48 bg-gray-900/40 rounded-xl border border-gray-800 text-gray-400">
+          <div className="flex flex-col items-center justify-center h-48 bg-slate-900/40 rounded-xl border border-slate-800 text-slate-400">
             <Loader2 className="w-7 h-7 animate-spin text-amber-400 mb-2" />
             <p className="text-xs">Đang tải danh sách đánh giá...</p>
           </div>
         ) : displayed.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 bg-gray-900/40 rounded-xl border border-gray-800 space-y-2">
-            <ShieldAlert className="w-8 h-8 mx-auto text-gray-600" />
-            <p className="text-sm font-medium text-gray-400">Không có đánh giá nào phù hợp với bộ lọc hiện tại.</p>
+          <div className="p-12 text-center text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800 space-y-2">
+            <ShieldAlert className="w-8 h-8 mx-auto text-slate-600" />
+            <p className="text-sm font-medium text-slate-400">Không có đánh giá nào phù hợp với bộ lọc hiện tại.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -124,7 +124,7 @@ export default function AdminReviewsPage() {
                   'p-5 rounded-xl border transition-all',
                   r.isHidden
                     ? 'border-red-900/50 bg-red-950/20'
-                    : 'border-gray-800 bg-gray-900/40 hover:border-gray-700'
+                    : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
                 )}
               >
                 <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -137,19 +137,19 @@ export default function AdminReviewsPage() {
                           Đã ẩn (Chỉ xem trong Admin)
                         </span>
                       ) : (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-400 border border-brand-500/20">
                           Đang hiển thị công khai
                         </span>
                       )}
                     </div>
 
-                    <p className="text-xs text-gray-500">
-                      Bởi: <span className="text-gray-300">{r.isAnonymous ? `${r.candidateEmail} (Ẩn danh)` : r.candidateEmail}</span> ·{' '}
+                    <p className="text-xs text-slate-500">
+                      Bởi: <span className="text-slate-300">{r.isAnonymous ? `${r.candidateEmail} (Ẩn danh)` : r.candidateEmail}</span> ·{' '}
                       {new Date(r.createdAt).toLocaleString('vi-VN')}
                     </p>
 
                     {r.comment && (
-                      <p className="text-sm text-gray-200 bg-gray-950/60 p-3 rounded-lg border border-gray-800/80 leading-relaxed">
+                      <p className="text-sm text-slate-200 bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 leading-relaxed">
                         &quot;{r.comment}&quot;
                       </p>
                     )}
@@ -170,7 +170,7 @@ export default function AdminReviewsPage() {
                     className={cn(
                       'gap-1.5 shrink-0 text-xs font-medium',
                       r.isHidden
-                        ? 'border-emerald-500/30 text-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/40'
+                        ? 'border-brand-500/30 text-brand-400 bg-brand-900/20 hover:bg-brand-900/40'
                         : 'border-red-500/30 text-red-400 bg-red-950/20 hover:bg-red-900/40'
                     )}
                     disabled={actionId === r._id}

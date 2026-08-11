@@ -4,212 +4,169 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import PublicLayout from '@/layouts/PublicLayout'
+import AuthAside from '@/components/auth/AuthAside'
+import PasswordInput from '@/components/auth/PasswordInput'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Loader2, Mail, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { setAuth } from '@/lib/auth-storage'
 import { apiFetch, type AuthResponse } from '@/lib/api'
 
 export default function CandidateSignupPage() {
   const router = useRouter()
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    location: '',
-    experienceLevel: '',
-    headline: '',
-  })
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [accepted, setAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleExperienceChange = (value: string) => {
-    setFormData((prev) => ({ ...prev, experienceLevel: value }))
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Mật khẩu xác nhận không khớp')
-      return
-    }
-    if (formData.password.length < 6) {
+
+    if (password.length < 6) {
       toast.error('Mật khẩu cần ít nhất 6 ký tự')
       return
     }
-    setLoading(true)
+    if (password !== confirmPassword) {
+      toast.error('Mật khẩu xác nhận không khớp')
+      return
+    }
+    if (!accepted) {
+      toast.error('Vui lòng đồng ý với điều khoản sử dụng')
+      return
+    }
 
+    setLoading(true)
     try {
       const data = await apiFetch<AuthResponse>('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          role: 'candidate',
-        }),
+        body: JSON.stringify({ email, password, role: 'candidate' }),
         skipAuth: true,
       })
 
-      setAuth({
-        id: data._id,
-        email: data.email,
-        role: data.role,
-      })
-      toast.success('Đăng ký thành công')
-      router.push('/candidate/dashboard')
+      setAuth({ id: data._id, email: data.email, role: data.role })
+      toast.success('Đăng ký thành công! Hãy hoàn thiện hồ sơ để nhận gợi ý việc làm.')
+      router.push('/candidate/cv')
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Đăng ký thất bại'
-      toast.error(msg)
+      toast.error(err instanceof Error ? err.message : 'Đăng ký thất bại')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <PublicLayout>
-      <div className="min-h-screen flex items-center justify-center px-4 py-20">
-        <div className="w-full max-w-md">
-          <Link href="/register" className="inline-block mb-6">
-            <Button variant="ghost" className="-ml-2 text-foreground/70">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+    <PublicLayout hideFooter>
+      <div className="grid min-h-[calc(100vh-var(--header-h))] lg:grid-cols-2">
+        <AuthAside
+          eyebrow="Dành cho ứng viên"
+          title="Tạo hồ sơ, để AI tìm việc giúp bạn"
+          description="Chỉ cần email và mật khẩu để bắt đầu. Sau khi đăng ký, tải CV lên và hệ thống sẽ chấm điểm phù hợp cho từng tin tuyển dụng."
+          points={[
+            'Miễn phí toàn bộ tính năng dành cho ứng viên',
+            'Xem điểm phù hợp trước khi ứng tuyển',
+            'Nhận thông báo việc làm theo tiêu chí của bạn',
+          ]}
+        />
+
+        <div className="flex items-center justify-center px-4 py-12 sm:px-8">
+          <div className="w-full max-w-md">
+            <Button asChild variant="ghost" size="sm" className="-ml-2 mb-4">
+              <Link href="/register">
+                <ArrowLeft />
+                Chọn lại loại tài khoản
+              </Link>
             </Button>
-          </Link>
 
-          <Card className="p-8 border border-border">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-foreground mb-2">Create Your Account</h1>
-              <p className="text-foreground/70">Join Smart Recruit and find your dream job</p>
-            </div>
+            <h1 className="text-2xl font-bold sm:text-3xl">Đăng ký tài khoản ứng viên</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Đã có tài khoản?{' '}
+              <Link href="/login" className="link-brand">
+                Đăng nhập
+              </Link>
+            </p>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="mt-7 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Full Name</label>
-                <Input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Sarah Chen"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Email</label>
-                <Input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="sarah@example.com"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Location</label>
-                <Input
-                  type="text"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleChange}
-                  placeholder="San Francisco, CA"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Experience Level
+                <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">
+                  Email <span className="text-danger">*</span>
                 </label>
-                <Select
-                  value={formData.experienceLevel || undefined}
-                  onValueChange={handleExperienceChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your experience level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="entry">Entry Level (0-2 years)</SelectItem>
-                    <SelectItem value="mid">Mid Level (2-5 years)</SelectItem>
-                    <SelectItem value="senior">Senior (5-10 years)</SelectItem>
-                    <SelectItem value="expert">Expert (10+ years)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="ban@email.com"
+                    className="pl-10"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Professional Headline
+                <label htmlFor="password" className="mb-1.5 block text-sm font-semibold">
+                  Mật khẩu <span className="text-danger">*</span>
                 </label>
-                <Input
-                  type="text"
-                  name="headline"
-                  value={formData.headline}
-                  onChange={handleChange}
-                  placeholder="e.g. Senior React Developer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Password</label>
-                <Input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
+                <PasswordInput
+                  id="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Tối thiểu 6 ký tự"
                   minLength={6}
+                  showStrength
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Confirm Password
+                <label htmlFor="confirmPassword" className="mb-1.5 block text-sm font-semibold">
+                  Xác nhận mật khẩu <span className="text-danger">*</span>
                 </label>
-                <Input
-                  type="password"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  placeholder="••••••••"
+                <PasswordInput
+                  id="confirmPassword"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Nhập lại mật khẩu"
                   required
                 />
+                {confirmPassword && confirmPassword !== password && (
+                  <p className="mt-1.5 text-xs text-danger-foreground">
+                    Mật khẩu xác nhận chưa khớp
+                  </p>
+                )}
               </div>
 
-              <Button
-                type="submit"
-                className="w-full"
-                size="lg"
-                disabled={loading}
-              >
-                {loading ? 'Creating Account...' : 'Create Account'}
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={accepted}
+                  onChange={(e) => setAccepted(e.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 rounded border-input accent-[var(--brand-500)]"
+                />
+                <span className="leading-relaxed">
+                  Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật của Smart Recruit
+                </span>
+              </label>
+
+              <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                {loading && <Loader2 className="animate-spin" />}
+                {loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}
               </Button>
             </form>
 
-            <p className="text-center text-sm text-foreground/70 mt-6">
-              Already have an account?{' '}
-              <Link href="/login" className="text-primary hover:underline font-medium">
-                Sign in
-              </Link>
-            </p>
-          </Card>
+            <div className="mt-6 flex items-start gap-2.5 rounded-lg border border-brand-100 bg-brand-50/60 p-3.5">
+              <FileText className="mt-0.5 size-4 shrink-0 text-brand-600" />
+              <p className="text-xs leading-relaxed text-brand-800">
+                Sau khi đăng ký, bạn sẽ được đưa tới mục <strong>Hồ sơ &amp; CV</strong> để tải CV
+                lên. Đây là bước bắt buộc để hệ thống chấm điểm phù hợp cho từng việc làm.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </PublicLayout>

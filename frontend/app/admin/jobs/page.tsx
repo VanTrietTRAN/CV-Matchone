@@ -19,8 +19,8 @@ type AdminJob = {
 }
 
 const statusCls: Record<string, string> = {
-  open: 'bg-green-500/15 text-green-400 border border-green-500/20',
-  closed: 'bg-gray-500/15 text-gray-400 border border-gray-600/20',
+  open: 'bg-brand-500/15 text-brand-400 border border-brand-500/20',
+  closed: 'bg-slate-500/15 text-slate-400 border border-slate-600/20',
   archived: 'bg-amber-500/15 text-amber-400 border border-amber-500/20',
 }
 const statusLabel: Record<string, string> = { open: 'Đang mở', closed: 'Đã đóng', archived: 'Lưu trữ' }
@@ -91,28 +91,28 @@ export default function AdminJobsPage() {
             <h1 className="text-3xl font-bold text-white mb-1 flex items-center gap-3">
               <Briefcase className="w-7 h-7 text-amber-400" /> Kiểm duyệt Tin tuyển dụng
             </h1>
-            <p className="text-gray-400">{total} tin tổng cộng</p>
+            <p className="text-slate-400">{total} tin tổng cộng</p>
           </div>
-          <Button variant="outline" onClick={load} disabled={loading} className="gap-2 border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700 hover:text-white">
+          <Button variant="outline" onClick={load} disabled={loading} className="gap-2 border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white">
             <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Làm mới
           </Button>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-5 flex flex-wrap gap-3 items-center">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-5 flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               placeholder="Tìm theo tên tin tuyển dụng..."
-              className="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-500 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-            className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="">Tất cả Trạng thái</option>
             <option value="open">Đang mở</option>
@@ -121,54 +121,54 @@ export default function AdminJobsPage() {
           </select>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-800 border-b border-gray-700">
+              <thead className="bg-slate-800 border-b border-slate-700">
                 <tr>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Tin tuyển dụng</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Nhà tuyển dụng</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Trạng thái</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ứng tuyển</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ngày đăng</th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Hành động</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Tin tuyển dụng</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Nhà tuyển dụng</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Trạng thái</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Ứng tuyển</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Ngày đăng</th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Hành động</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800">
+              <tbody className="divide-y divide-slate-800">
                 {loading ? (
                   [...Array(8)].map((_, i) => (
                     <tr key={i}>
                       {[...Array(6)].map((__, j) => (
-                        <td key={j} className="px-5 py-4"><div className="h-4 bg-gray-800 rounded animate-pulse" /></td>
+                        <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-800 rounded animate-pulse" /></td>
                       ))}
                     </tr>
                   ))
                 ) : jobs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-gray-500">Không tìm thấy tin tuyển dụng nào</td>
+                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">Không tìm thấy tin tuyển dụng nào</td>
                   </tr>
                 ) : jobs.map((job) => (
-                  <tr key={job._id} className="hover:bg-gray-800/50 transition-colors">
+                  <tr key={job._id} className="hover:bg-slate-800/50 transition-colors">
                     <td className="px-5 py-4">
-                      <p className="text-gray-100 font-medium">{job.title}</p>
+                      <p className="text-slate-100 font-medium">{job.title}</p>
                       {job.location && (
-                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                        <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                           <MapPin className="w-3 h-3" />{job.location}
                         </p>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-gray-400 text-xs">{job.employerId?.email || '—'}</td>
+                    <td className="px-5 py-4 text-slate-400 text-xs">{job.employerId?.email || '—'}</td>
                     <td className="px-5 py-4">
                       <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', statusCls[job.status])}>
                         {statusLabel[job.status]}
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <span className="flex items-center gap-1 text-gray-300 text-sm">
-                        <Users className="w-3.5 h-3.5 text-gray-500" />{job.applyCount}
+                      <span className="flex items-center gap-1 text-slate-300 text-sm">
+                        <Users className="w-3.5 h-3.5 text-slate-500" />{job.applyCount}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-gray-400 text-xs">{new Date(job.createdAt).toLocaleDateString('vi-VN')}</td>
+                    <td className="px-5 py-4 text-slate-400 text-xs">{new Date(job.createdAt).toLocaleDateString('vi-VN')}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
                         {job.status === 'open' && (
@@ -200,15 +200,15 @@ export default function AdminJobsPage() {
           </div>
 
           {pages > 1 && (
-            <div className="px-5 py-4 border-t border-gray-800 flex items-center justify-between">
-              <p className="text-sm text-gray-400">Trang {page} / {pages}</p>
+            <div className="px-5 py-4 border-t border-slate-800 flex items-center justify-between">
+              <p className="text-sm text-slate-400">Trang {page} / {pages}</p>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                  className="h-8 border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 gap-1">
+                  className="h-8 border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 gap-1">
                   <ChevronLeft className="w-4 h-4" /> Trước
                 </Button>
                 <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage(p => p + 1)}
-                  className="h-8 border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 gap-1">
+                  className="h-8 border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 gap-1">
                   Sau <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>

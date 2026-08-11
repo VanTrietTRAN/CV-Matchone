@@ -1,30 +1,44 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import EmployerLayout from '@/layouts/EmployerLayout'
-import { Card } from '@/components/ui/card'
+import PageContainer from '@/components/dashboard/PageContainer'
+import PageHeader from '@/components/dashboard/PageHeader'
+import StatusBadge from '@/components/StatusBadge'
+import SkillTag from '@/components/SkillTag'
+import MatchBadge from '@/components/MatchBadge'
+import EmptyState from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Search,
   Loader2,
   RefreshCw,
   ChevronDown,
   ChevronUp,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
   Eye,
   Mail,
   Phone,
-  MapPin,
   Briefcase,
   GraduationCap,
   Clock,
   FileText,
+  Users,
+  Target,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
+import { formatDate, formatRelativeTime, initials } from '@/lib/format'
 
 type JobRow = { _id: string; title: string; status: string }
 
@@ -45,20 +59,6 @@ type Applicant = {
   matchingScore: number
   status: string
   appliedAt: string
-}
-
-const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
-  pending:  { label: 'Chờ duyệt',    classes: 'bg-blue-50 text-blue-700 border-blue-200' },
-  reviewed: { label: 'Đang xem xét', classes: 'bg-purple-50 text-purple-700 border-purple-200' },
-  interview:{ label: 'Phỏng vấn',    classes: 'bg-amber-50 text-amber-700 border-amber-200' },
-  accepted: { label: 'Chấp nhận',    classes: 'bg-green-50 text-green-700 border-green-200' },
-  rejected: { label: 'Từ chối',      classes: 'bg-red-50 text-red-700 border-red-200' },
-}
-
-function matchBadgeStyle(score: number) {
-  if (score >= 70) return 'bg-green-50 text-green-700 border-green-200'
-  if (score >= 40) return 'bg-yellow-50 text-yellow-700 border-yellow-200'
-  return 'bg-gray-50 text-gray-600 border-gray-200'
 }
 
 export default function EmployerCandidatesPage() {
@@ -94,7 +94,7 @@ export default function EmployerCandidatesPage() {
       const res = await apiFetch<{ data: Applicant[] }>(`/api/applications/job/${jobId}`)
       setApplicants(res.data || [])
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Không tải được ứng viên')
+      toast.error(e instanceof Error ? e.message : 'Không tải được danh sách ứng viên')
       setApplicants([])
     } finally {
       setLoadingApplicants(false)
@@ -113,15 +113,14 @@ export default function EmployerCandidatesPage() {
         body: JSON.stringify({ status: newStatus }),
       })
       const labelMap: Record<string, string> = {
-        reviewed: 'Đã chuyển sang Đang xem xét',
-        interview: 'Đã mời phỏng vấn',
+        reviewed: 'Đã chuyển sang trạng thái Đang xem xét',
+        interview: 'Đã mời ứng viên phỏng vấn',
         accepted: 'Đã chấp nhận ứng viên',
         rejected: 'Đã từ chối ứng viên',
       }
       toast.success(labelMap[newStatus] || 'Cập nhật thành công')
-      // Cập nhật trực tiếp trong state, không cần gọi lại API
       setApplicants((prev) =>
-        prev.map((a) => (a._id === appId ? { ...a, status: newStatus } : a))
+        prev.map((a) => (a._id === appId ? { ...a, status: newStatus } : a)),
       )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Cập nhật thất bại')
@@ -130,149 +129,178 @@ export default function EmployerCandidatesPage() {
     }
   }
 
-  const filteredApplicants = (searchText.trim()
-    ? applicants.filter((a) => {
-        const name = a.cvProfileId?.fullName?.toLowerCase() || ''
-        const email = a.candidateId?.email?.toLowerCase() || ''
-        const skills = (a.cvProfileId?.skills || []).join(' ').toLowerCase()
-        const q = searchText.toLowerCase()
-        return name.includes(q) || email.includes(q) || skills.includes(q)
-      })
-    : applicants
-  ).slice().sort((a, b) => (b.matchingScore ?? 0) - (a.matchingScore ?? 0))
+  const filteredApplicants = useMemo(() => {
+    const list = searchText.trim()
+      ? applicants.filter((a) => {
+          const name = a.cvProfileId?.fullName?.toLowerCase() || ''
+          const email = a.candidateId?.email?.toLowerCase() || ''
+          const skills = (a.cvProfileId?.skills || []).join(' ').toLowerCase()
+          const q = searchText.toLowerCase()
+          return name.includes(q) || email.includes(q) || skills.includes(q)
+        })
+      : applicants
+    return [...list].sort((a, b) => (b.matchingScore ?? 0) - (a.matchingScore ?? 0))
+  }, [applicants, searchText])
 
   const selectedJob = jobs.find((j) => j._id === selectedJobId)
+  const avgScore = applicants.length
+    ? Math.round(applicants.reduce((s, a) => s + (a.matchingScore || 0), 0) / applicants.length)
+    : 0
 
   return (
     <EmployerLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">Ứng viên</h1>
-          <p className="text-foreground/70">
-            Xem, duyệt hoặc từ chối đơn ứng tuyển — sắp xếp theo điểm khớp AI
-          </p>
-        </div>
+      <PageContainer>
+        <PageHeader
+          title="Hồ sơ ứng viên"
+          description="Danh sách được xếp hạng theo điểm phù hợp giữa CV ứng viên và mô tả công việc."
+          actions={
+            <Button
+              variant="outline"
+              onClick={() => loadApplicants(selectedJobId)}
+              disabled={loadingApplicants || !selectedJobId}
+            >
+              <RefreshCw className={loadingApplicants ? 'animate-spin' : ''} />
+              Làm mới
+            </Button>
+          }
+        />
 
         {loadingJobs ? (
-          <div className="flex items-center gap-2 text-foreground/70">
-            <Loader2 className="w-5 h-5 animate-spin" /> Đang tải tin tuyển dụng...
+          <div className="surface-card flex h-32 items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin text-brand-500" />
+            Đang tải tin tuyển dụng...
           </div>
         ) : jobs.length === 0 ? (
-          <Card className="p-8 border border-border text-center text-foreground/70">
-            Bạn chưa có tin tuyển dụng. Hãy đăng tin trước.
-          </Card>
+          <div className="surface-card">
+            <EmptyState
+              icon={Briefcase}
+              title="Bạn chưa có tin tuyển dụng nào"
+              description="Đăng tin tuyển dụng đầu tiên để bắt đầu nhận hồ sơ ứng viên."
+              action={{ label: 'Đăng tin tuyển dụng', href: '/employer/post-job' }}
+            />
+          </div>
         ) : (
           <>
-            <Card className="p-4 border border-border mb-6">
-              <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
-                <div className="flex-1">
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Chọn tin tuyển dụng để xem ứng viên:
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={selectedJobId}
-                      onChange={(e) => setSelectedJobId(e.target.value)}
-                      className="w-full appearance-none rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary pr-10"
-                    >
+            {/* Bộ lọc */}
+            <div className="surface-card p-4 sm:p-5">
+              <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">Tin tuyển dụng</label>
+                  <Select value={selectedJobId} onValueChange={setSelectedJobId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Chọn tin tuyển dụng" />
+                    </SelectTrigger>
+                    <SelectContent>
                       {jobs.map((job) => (
-                        <option key={job._id} value={job._id}>
+                        <SelectItem key={job._id} value={job._id}>
                           {job.title} — {job.status === 'open' ? 'Đang mở' : 'Đã đóng'}
-                        </option>
+                        </SelectItem>
                       ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-foreground/50 pointer-events-none" />
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold">Tìm trong hồ sơ</label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      placeholder="Tên, email hoặc kỹ năng..."
+                      className="pl-10"
+                    />
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  className="gap-2 sm:mt-6"
-                  onClick={() => loadApplicants(selectedJobId)}
-                  disabled={loadingApplicants}
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingApplicants ? 'animate-spin' : ''}`} />
-                  Làm mới
-                </Button>
               </div>
-            </Card>
 
-            <Card className="p-4 border border-border mb-6">
-              <div className="relative">
-                <Search className="w-4 h-4 text-foreground/50 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  placeholder="Tìm theo tên, email, kỹ năng..."
-                  className="w-full pl-9 pr-4 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            </Card>
+              {applicants.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-border pt-4 text-sm">
+                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    <Users className="size-4 text-brand-600" />
+                    <strong className="text-foreground">{applicants.length}</strong> hồ sơ
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    <Target className="size-4 text-brand-600" />
+                    Điểm phù hợp trung bình{' '}
+                    <strong className="text-foreground">{avgScore}%</strong>
+                  </span>
+                </div>
+              )}
+            </div>
 
             {loadingApplicants ? (
-              <div className="flex items-center justify-center h-40">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                <span className="ml-3 text-foreground/70">Đang tải ứng viên...</span>
+              <div className="mt-5 space-y-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="skeleton h-24 rounded-xl" />
+                ))}
               </div>
             ) : filteredApplicants.length === 0 ? (
-              <Card className="p-8 border border-border text-center text-foreground/70">
-                {applicants.length === 0
-                  ? `Chưa có ứng viên nào nộp đơn vào "${selectedJob?.title || 'tin này'}".`
-                  : 'Không có ứng viên phù hợp với tìm kiếm.'}
-              </Card>
+              <div className="surface-card mt-5">
+                <EmptyState
+                  icon={Users}
+                  title={
+                    applicants.length === 0 ? 'Chưa có ứng viên nộp hồ sơ' : 'Không tìm thấy hồ sơ'
+                  }
+                  description={
+                    applicants.length === 0
+                      ? `Tin “${selectedJob?.title || 'này'}” chưa nhận được hồ sơ nào. Hãy chia sẻ tin để tiếp cận nhiều ứng viên hơn.`
+                      : 'Thử từ khoá khác hoặc xoá ô tìm kiếm để xem toàn bộ hồ sơ.'
+                  }
+                >
+                  {applicants.length === 0 ? (
+                    <Button asChild variant="outline">
+                      <Link href="/fb-generator">Tạo bài đăng chia sẻ</Link>
+                    </Button>
+                  ) : (
+                    <Button onClick={() => setSearchText('')}>Xoá tìm kiếm</Button>
+                  )}
+                </EmptyState>
+              </div>
             ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-foreground/70 mb-2">
-                  {filteredApplicants.length} ứng viên — sắp xếp theo điểm AI giảm dần
+              <div className="mt-5 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Hiển thị <strong className="text-foreground">{filteredApplicants.length}</strong>{' '}
+                  hồ sơ, xếp theo điểm phù hợp giảm dần
                 </p>
 
                 {filteredApplicants.map((app, index) => {
                   const name =
-                    app.cvProfileId?.fullName ||
-                    app.candidateId?.email?.split('@')[0] ||
-                    'Ứng viên'
+                    app.cvProfileId?.fullName || app.candidateId?.email?.split('@')[0] || 'Ứng viên'
                   const email = app.candidateId?.email || ''
                   const skills = app.cvProfileId?.skills || []
-                  const initials = name
-                    .split(' ')
-                    .map((w: string) => w[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase()
                   const isExpanded = expandedId === app._id
                   const isUpdating = updatingId === app._id
-                  const statusCfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.pending
 
                   return (
-                    <Card key={app._id} className="border border-border overflow-hidden">
-                      <div className="p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="relative flex-shrink-0">
-                            <Avatar>
-                              <AvatarFallback>{initials}</AvatarFallback>
-                            </Avatar>
+                    <article key={app._id} className="surface-card overflow-hidden">
+                      <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex min-w-0 items-start gap-3.5">
+                          <div className="relative shrink-0">
+                            <span className="grid size-12 place-items-center rounded-full bg-brand-50 text-sm font-bold text-brand-700">
+                              {initials(name)}
+                            </span>
                             {index < 3 && (
-                              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">
+                              <span className="absolute -top-1 -right-1 grid size-5 place-items-center rounded-full bg-brand-500 text-[10px] font-bold text-white">
                                 {index + 1}
                               </span>
                             )}
                           </div>
-                          <div>
-                            <h2 className="text-base font-semibold text-foreground">{name}</h2>
-                            <p className="text-sm text-foreground/60 flex items-center gap-1">
-                              <Mail className="w-3 h-3" />
+
+                          <div className="min-w-0">
+                            <h2 className="truncate font-bold">{name}</h2>
+                            <p className="mt-0.5 flex items-center gap-1.5 truncate text-sm text-muted-foreground">
+                              <Mail className="size-3.5 shrink-0" />
                               {email}
                             </p>
                             {skills.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-2">
-                                {skills.slice(0, 4).map((skill: string) => (
-                                  <Badge key={skill} variant="secondary" className="text-xs">
-                                    {skill}
-                                  </Badge>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {skills.slice(0, 5).map((skill: string) => (
+                                  <SkillTag key={skill} skill={skill} size="sm" />
                                 ))}
-                                {skills.length > 4 && (
-                                  <span className="text-xs text-foreground/50">
-                                    +{skills.length - 4}
+                                {skills.length > 5 && (
+                                  <span className="self-center text-[11px] text-muted-foreground">
+                                    +{skills.length - 5}
                                   </span>
                                 )}
                               </div>
@@ -280,72 +308,59 @@ export default function EmployerCandidatesPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-                          <span
-                            className={`px-3 py-1.5 rounded-full text-sm font-bold border flex items-center gap-1.5 ${matchBadgeStyle(app.matchingScore)}`}
-                          >
-                            ⚡ {app.matchingScore > 0 ? `${app.matchingScore}% khớp` : 'Chưa có điểm'}
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          <MatchBadge
+                            score={app.matchingScore > 0 ? app.matchingScore : null}
+                            size="lg"
+                          />
+                          <StatusBadge status={app.status} />
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="size-3.5" />
+                            {formatRelativeTime(app.appliedAt)}
                           </span>
-
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium border ${statusCfg.classes}`}
-                          >
-                            {statusCfg.label}
-                          </span>
-
-                          <span className="text-xs text-foreground/50 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {app.appliedAt
-                              ? new Date(app.appliedAt).toLocaleDateString('vi-VN')
-                              : '—'}
-                          </span>
-
                           <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1"
-                            onClick={() =>
-                              setExpandedId(isExpanded ? null : app._id)
-                            }
+                            onClick={() => setExpandedId(isExpanded ? null : app._id)}
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye />
                             {isExpanded ? 'Thu gọn' : 'Xem hồ sơ'}
-                            {isExpanded ? (
-                              <ChevronUp className="w-3 h-3" />
-                            ) : (
-                              <ChevronDown className="w-3 h-3" />
-                            )}
+                            {isExpanded ? <ChevronUp /> : <ChevronDown />}
                           </Button>
                         </div>
                       </div>
 
                       {isExpanded && (
-                        <div className="border-t border-border bg-foreground/[0.02] p-5">
-                          <div className="grid md:grid-cols-2 gap-6">
+                        <div className="border-t border-border bg-muted/40 p-4 sm:p-5">
+                          <div className="grid gap-6 md:grid-cols-2">
                             <div>
-                              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                                <Briefcase className="w-4 h-4 text-primary" />
-                                Thông tin ứng viên
+                              <h3 className="mb-3 flex items-center gap-2 font-bold">
+                                <Briefcase className="size-4 text-brand-600" />
+                                Thông tin liên hệ
                               </h3>
-                              <div className="space-y-2 text-sm text-foreground/80">
+                              <div className="space-y-2 text-sm">
                                 {app.cvProfileId?.phone && (
                                   <p className="flex items-center gap-2">
-                                    <Phone className="w-3.5 h-3.5 text-foreground/40" />
+                                    <Phone className="size-3.5 text-muted-foreground" />
                                     {app.cvProfileId.phone}
                                   </p>
                                 )}
                                 <p className="flex items-center gap-2">
-                                  <Mail className="w-3.5 h-3.5 text-foreground/40" />
+                                  <Mail className="size-3.5 text-muted-foreground" />
                                   {email}
+                                </p>
+                                <p className="flex items-center gap-2 text-muted-foreground">
+                                  <Clock className="size-3.5" />
+                                  Nộp ngày {formatDate(app.appliedAt)}
                                 </p>
                               </div>
 
                               {app.cvProfileId?.summary && (
                                 <div className="mt-4">
-                                  <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wide mb-1">
-                                    Mục tiêu
+                                  <p className="mb-1 text-xs font-bold tracking-wide text-muted-foreground uppercase">
+                                    Mục tiêu nghề nghiệp
                                   </p>
-                                  <p className="text-sm text-foreground/80 leading-relaxed">
+                                  <p className="text-sm leading-relaxed text-foreground/85">
                                     {app.cvProfileId.summary}
                                   </p>
                                 </div>
@@ -353,45 +368,40 @@ export default function EmployerCandidatesPage() {
 
                               {skills.length > 0 && (
                                 <div className="mt-4">
-                                  <p className="text-xs font-semibold text-foreground/60 uppercase tracking-wide mb-2">
-                                    Kỹ năng
+                                  <p className="mb-2 text-xs font-bold tracking-wide text-muted-foreground uppercase">
+                                    Toàn bộ kỹ năng
                                   </p>
                                   <div className="flex flex-wrap gap-1.5">
                                     {skills.map((skill: string) => (
-                                      <span
-                                        key={skill}
-                                        className="px-2 py-1 rounded text-xs bg-primary/10 text-primary border border-primary/20"
-                                      >
-                                        {skill}
-                                      </span>
+                                      <SkillTag key={skill} skill={skill} variant="match" size="sm" />
                                     ))}
                                   </div>
                                 </div>
                               )}
                             </div>
 
-                            <div>
+                            <div className="space-y-5">
                               {app.cvProfileId?.experience &&
                                 app.cvProfileId.experience.length > 0 && (
-                                  <div className="mb-4">
-                                    <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                                      <Briefcase className="w-4 h-4 text-primary" />
-                                      Kinh nghiệm
+                                  <div>
+                                    <h3 className="mb-2.5 flex items-center gap-2 font-bold">
+                                      <Briefcase className="size-4 text-brand-600" />
+                                      Kinh nghiệm làm việc
                                     </h3>
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                       {app.cvProfileId.experience.map((exp: any, i: number) => (
                                         <div
                                           key={i}
-                                          className="text-sm border-l-2 border-primary/30 pl-3"
+                                          className="border-l-2 border-brand-300 pl-3 text-sm"
                                         >
-                                          <p className="font-medium text-foreground">
+                                          <p className="font-semibold">
                                             {exp.position || 'Xem chi tiết'}
                                           </p>
                                           {exp.company && (
-                                            <p className="text-foreground/60">{exp.company}</p>
+                                            <p className="text-muted-foreground">{exp.company}</p>
                                           )}
                                           {exp.description && (
-                                            <p className="text-foreground/70 text-xs mt-1">
+                                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                                               {exp.description}
                                             </p>
                                           )}
@@ -404,24 +414,24 @@ export default function EmployerCandidatesPage() {
                               {app.cvProfileId?.education &&
                                 app.cvProfileId.education.length > 0 && (
                                   <div>
-                                    <h3 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-                                      <GraduationCap className="w-4 h-4 text-primary" />
+                                    <h3 className="mb-2.5 flex items-center gap-2 font-bold">
+                                      <GraduationCap className="size-4 text-brand-600" />
                                       Học vấn
                                     </h3>
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                       {app.cvProfileId.education.map((edu: any, i: number) => (
                                         <div
                                           key={i}
-                                          className="text-sm border-l-2 border-blue-300 pl-3"
+                                          className="border-l-2 border-border pl-3 text-sm"
                                         >
-                                          <p className="font-medium text-foreground">
+                                          <p className="font-semibold">
                                             {edu.major || edu.school || 'Xem chi tiết'}
                                           </p>
                                           {edu.school && edu.major && (
-                                            <p className="text-foreground/60">{edu.school}</p>
+                                            <p className="text-muted-foreground">{edu.school}</p>
                                           )}
                                           {edu.gpa && (
-                                            <p className="text-xs text-foreground/50">
+                                            <p className="text-xs text-muted-foreground">
                                               GPA: {edu.gpa}
                                             </p>
                                           )}
@@ -433,47 +443,33 @@ export default function EmployerCandidatesPage() {
                             </div>
                           </div>
 
-                          <div className="mt-6 pt-4 border-t border-border flex flex-wrap gap-3 items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <p className="text-sm text-foreground/60">
-                                Trạng thái hiện tại:{' '}
-                                <span className={`font-medium ${
-                                  app.status === 'accepted' ? 'text-green-600' :
-                                  app.status === 'rejected' ? 'text-red-600' :
-                                  app.status === 'reviewed' ? 'text-purple-600' :
-                                  'text-blue-600'
-                                }`}>
-                                  {statusCfg.label}
-                                </span>
-                              </p>
-                              {app.cvProfileId?.pdfUrl && (
+                          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                            {app.cvProfileId?.pdfUrl ? (
+                              <Button asChild variant="outline" size="sm">
                                 <a
                                   href={app.cvProfileId.pdfUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
-                                  <Button variant="outline" size="sm" className="gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50">
-                                    <FileText className="w-3.5 h-3.5" />
-                                    Xem CV PDF
-                                  </Button>
+                                  <FileText />
+                                  Xem CV bản PDF
                                 </a>
-                              )}
-                            </div>
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Ứng viên không đính kèm file CV
+                              </span>
+                            )}
 
-                            <div className="flex gap-2 flex-wrap">
+                            <div className="flex flex-wrap gap-2">
                               {app.status !== 'reviewed' && (
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50"
                                   disabled={isUpdating}
                                   onClick={() => handleUpdateStatus(app._id, 'reviewed')}
                                 >
-                                  {isUpdating ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <Eye className="w-3.5 h-3.5" />
-                                  )}
+                                  {isUpdating ? <Loader2 className="animate-spin" /> : <Eye />}
                                   Đang xem xét
                                 </Button>
                               )}
@@ -482,30 +478,24 @@ export default function EmployerCandidatesPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
                                   disabled={isUpdating}
                                   onClick={() => handleUpdateStatus(app._id, 'interview')}
                                 >
-                                  {isUpdating ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <Phone className="w-3.5 h-3.5" />
-                                  )}
-                                  Phỏng vấn
+                                  {isUpdating ? <Loader2 className="animate-spin" /> : <Phone />}
+                                  Mời phỏng vấn
                                 </Button>
                               )}
 
                               {app.status !== 'accepted' && (
                                 <Button
                                   size="sm"
-                                  className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
                                   disabled={isUpdating}
                                   onClick={() => handleUpdateStatus(app._id, 'accepted')}
                                 >
                                   {isUpdating ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <Loader2 className="animate-spin" />
                                   ) : (
-                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <CheckCircle2 />
                                   )}
                                   Chấp nhận
                                 </Button>
@@ -513,17 +503,13 @@ export default function EmployerCandidatesPage() {
 
                               {app.status !== 'rejected' && (
                                 <Button
-                                  variant="outline"
+                                  variant="ghost"
                                   size="sm"
-                                  className="gap-1.5 border-red-200 text-red-600 hover:bg-red-50"
+                                  className="text-danger-foreground hover:bg-danger/10 hover:text-danger-foreground"
                                   disabled={isUpdating}
                                   onClick={() => handleUpdateStatus(app._id, 'rejected')}
                                 >
-                                  {isUpdating ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <XCircle className="w-3.5 h-3.5" />
-                                  )}
+                                  {isUpdating ? <Loader2 className="animate-spin" /> : <XCircle />}
                                   Từ chối
                                 </Button>
                               )}
@@ -531,14 +517,14 @@ export default function EmployerCandidatesPage() {
                           </div>
                         </div>
                       )}
-                    </Card>
+                    </article>
                   )
                 })}
               </div>
             )}
           </>
         )}
-      </div>
+      </PageContainer>
     </EmployerLayout>
   )
 }

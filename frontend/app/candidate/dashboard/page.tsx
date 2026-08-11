@@ -1,17 +1,29 @@
 'use client'
 
 import React, { useCallback, useEffect, useState } from 'react'
-import CandidateLayout from '@/layouts/CandidateLayout'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import JobCard from '@/components/JobCard'
-import AIBadge from '@/components/AIBadge'
-import { Briefcase, CheckSquare, Zap, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
+import CandidateLayout from '@/layouts/CandidateLayout'
+import PageContainer from '@/components/dashboard/PageContainer'
+import PageHeader from '@/components/dashboard/PageHeader'
+import StatCard from '@/components/dashboard/StatCard'
+import JobCard, { JobCardSkeleton } from '@/components/JobCard'
+import StatusBadge from '@/components/StatusBadge'
+import EmptyState from '@/components/EmptyState'
+import ApplyCVModal from '@/components/ApplyCVModal'
+import { Button } from '@/components/ui/button'
+import {
+  Briefcase,
+  ClipboardCheck,
+  Sparkles,
+  CheckCircle2,
+  ArrowRight,
+  FileText,
+  Search,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { getStoredUser } from '@/lib/auth-storage'
-import ApplyCVModal from '@/components/ApplyCVModal'
+import { formatDate } from '@/lib/format'
 
 type ApiJob = {
   _id: string
@@ -20,6 +32,8 @@ type ApiJob = {
   requirements?: string[]
   location?: string
   createdAt: string
+  expiresAt?: string
+  previewScore?: number | null
   employerId?: { email?: string } | string
 }
 
@@ -34,48 +48,44 @@ type ApiApplication = {
 function employerLabel(job: ApiJob): string {
   const e = job.employerId
   if (e && typeof e === 'object' && 'email' in e && e.email) return e.email
-  return 'Employer'
-}
-
-function statusBadgeClasses(status: string) {
-  if (status === 'reviewed') return 'bg-purple-50 text-purple-700'
-  if (status === 'accepted') return 'bg-green-50 text-green-700'
-  if (status === 'rejected') return 'bg-red-50 text-red-700'
-  return 'bg-blue-50 text-blue-700'
-}
-
-function statusLabel(status: string) {
-  const map: Record<string, string> = {
-    pending: 'Pending',
-    reviewed: 'Reviewed',
-    accepted: 'Accepted',
-    rejected: 'Rejected',
-  }
-  return map[status] || status
+  return 'Nhà tuyển dụng'
 }
 
 export default function CandidateDashboardPage() {
-  const [welcome, setWelcome] = useState('Candidate')
-  const [openJobs, setOpenJobs] = useState<ApiJob[]>([])
+  const [welcome, setWelcome] = useState('bạn')
+  const [jobs, setJobs] = useState<ApiJob[]>([])
   const [applications, setApplications] = useState<ApiApplication[]>([])
+  const [hasEmbedding, setHasEmbedding] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [applyModal, setApplyModal] = useState<{ jobId: string; jobTitle: string } | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
+
+    // Ưu tiên endpoint có điểm phù hợp; nếu không khả dụng thì lấy danh sách thường
     try {
-      const jobsRes = await apiFetch<{ data: ApiJob[] }>('/api/jobs')
-      setOpenJobs(jobsRes.data || [])
+      const res = await apiFetch<{ data: ApiJob[]; hasEmbedding?: boolean }>(
+        '/api/jobs/match-preview',
+      )
+      setJobs(res.data || [])
+      setHasEmbedding(res.hasEmbedding ?? null)
     } catch {
-      toast.error('Không tải danh sách việc làm (kiểm tra backend đang chạy).')
-      setOpenJobs([])
+      try {
+        const res = await apiFetch<{ data: ApiJob[] }>('/api/jobs')
+        setJobs(res.data || [])
+      } catch {
+        toast.error('Không tải được danh sách việc làm. Kiểm tra kết nối tới máy chủ.')
+        setJobs([])
+      }
     }
+
     try {
       const appRes = await apiFetch<{ data: ApiApplication[] }>('/api/applications/me')
       setApplications(appRes.data || [])
     } catch {
       setApplications([])
     }
+
     setLoading(false)
   }, [])
 
@@ -85,215 +95,231 @@ export default function CandidateDashboardPage() {
     loadData()
   }, [loadData])
 
-  const appliedPending = applications.filter((a) => a.status === 'pending').length
-  const reviewingCount = applications.filter((a) => a.status === 'reviewed').length
+  const pendingCount = applications.filter((a) => a.status === 'pending').length
+  const reviewedCount = applications.filter((a) => a.status === 'reviewed').length
   const acceptedCount = applications.filter((a) => a.status === 'accepted').length
-  const averageMatch =
-    applications.length > 0
-      ? Math.round(
+  const averageMatch = applications.length
+    ? Math.round(
         applications.reduce((s, a) => s + (a.matchingScore || 0), 0) / applications.length,
       )
-      : 0
+    : 0
 
-  const recommendedJobs = openJobs.slice(0, 3)
+  const appliedIds = new Set(
+    applications.map((a) => (typeof a.jobId === 'object' && a.jobId ? a.jobId._id : a.jobId)),
+  )
 
-  const handleApply = (jobId: string, jobTitle: string) => {
-    setApplyModal({ jobId, jobTitle })
-  }
+  const recommended = [...jobs]
+    .sort((a, b) => (b.previewScore ?? -1) - (a.previewScore ?? -1))
+    .slice(0, 3)
 
   return (
     <>
-    <CandidateLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
-            Welcome, {welcome}
-          </h1>
-          <p className="text-foreground/70">
-            You&apos;re on track to find your perfect role. Here&apos;s your activity snapshot.
-          </p>
-        </div>
+      <CandidateLayout>
+        <PageContainer>
+          <PageHeader
+            title={`Xin chào, ${welcome}`}
+            description="Đây là bức tranh tổng quan về hành trình tìm việc của bạn."
+            actions={
+              <Button asChild>
+                <Link href="/candidate/matches">
+                  <Search />
+                  Tìm việc làm
+                </Link>
+              </Button>
+            }
+          />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card className="p-6 border border-border">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-foreground/70 mb-1">Pending applications</p>
-                <p className="text-3xl font-bold text-foreground">{appliedPending}</p>
+          {hasEmbedding === false && (
+            <div className="mb-6 flex flex-col gap-3 rounded-xl border border-brand-200 bg-brand-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <FileText className="mt-0.5 size-5 shrink-0 text-brand-600" />
+                <div>
+                  <p className="font-semibold text-brand-800">CV của bạn chưa được AI phân tích</p>
+                  <p className="mt-0.5 text-sm text-brand-800/80">
+                    Tải CV lên để hệ thống chấm điểm phù hợp cho từng tin tuyển dụng.
+                  </p>
+                </div>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                <Briefcase className="w-5 h-5 text-blue-600" />
-              </div>
+              <Button asChild size="sm" className="shrink-0">
+                <Link href="/candidate/cv">Cập nhật CV ngay</Link>
+              </Button>
             </div>
-            <p className="text-xs text-foreground/60">Awaiting employer review</p>
-          </Card>
+          )}
 
-          <Card className="p-6 border border-border">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-foreground/70 mb-1">Under review</p>
-                <p className="text-3xl font-bold text-foreground">{reviewingCount}</p>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
-                <MessageSquare className="w-5 h-5 text-purple-600" />
-              </div>
-            </div>
-            <p className="text-xs text-foreground/60">Employer reviewed</p>
-          </Card>
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label="Chờ phản hồi"
+              value={pendingCount}
+              icon={Briefcase}
+              tone="info"
+              hint="Nhà tuyển dụng chưa xem"
+              loading={loading}
+            />
+            <StatCard
+              label="Đã được xem"
+              value={reviewedCount}
+              icon={ClipboardCheck}
+              tone="violet"
+              hint="Hồ sơ đã được mở"
+              loading={loading}
+            />
+            <StatCard
+              label="Trúng tuyển"
+              value={acceptedCount}
+              icon={CheckCircle2}
+              tone="brand"
+              hint="Chúc mừng bạn!"
+              loading={loading}
+            />
+            <StatCard
+              label="Điểm phù hợp trung bình"
+              value={applications.length ? `${averageMatch}%` : '—'}
+              icon={Sparkles}
+              tone="warning"
+              hint="Tính trên các hồ sơ đã nộp"
+              loading={loading}
+            />
+          </section>
 
-          <Card className="p-6 border border-border">
-            <div className="flex items-start justify-between mb-4">
+          {/* Việc làm gợi ý */}
+          <section className="mt-8">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <p className="text-sm text-foreground/70 mb-1">Accepted</p>
-                <p className="text-3xl font-bold text-foreground">{acceptedCount}</p>
-              </div>
-              <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
-                <CheckSquare className="w-5 h-5 text-orange-600" />
-              </div>
-            </div>
-            <p className="text-xs text-foreground/60">Offers / next steps</p>
-          </Card>
-
-          <Card className="p-6 border border-border">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm text-foreground/70 mb-1">Avg match</p>
-                <p className="text-3xl font-bold text-foreground">
-                  {applications.length ? `${averageMatch}%` : '—'}
+                <h2 className="text-lg font-bold">Việc làm gợi ý cho bạn</h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Sắp xếp theo mức độ phù hợp với hồ sơ của bạn
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-green-600" />
+              <Button asChild variant="brandOutline" size="sm">
+                <Link href="/candidate/matches">
+                  Xem tất cả
+                  <ArrowRight />
+                </Link>
+              </Button>
+            </div>
+
+            {loading ? (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <JobCardSkeleton key={i} />
+                ))}
               </div>
-            </div>
-            <p className="text-xs text-foreground/60">From AI similarity</p>
-          </Card>
-        </div>
-
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-                Open roles (from API)
-                {/* <AIBadge size="sm" /> */}
-              </h2>
-              <p className="text-foreground/70 mt-1">
-                Jobs with status open — upload a CV first for match scoring when you apply.
-              </p>
-            </div>
-            <Button asChild variant="outline">
-              <Link href="/candidate/matches">View matches UI</Link>
-            </Button>
-          </div>
-
-          {loading ? (
-            <p className="text-foreground/70">Loading jobs…</p>
-          ) : recommendedJobs.length === 0 ? (
-            <Card className="p-8 border border-border text-center text-foreground/70">
-              No open jobs yet. Ask your instructor to post one from the employer account.
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {recommendedJobs.map((job) => (
-                <div key={job._id} className="flex flex-col gap-3">
+            ) : recommended.length === 0 ? (
+              <div className="surface-card">
+                <EmptyState
+                  icon={Briefcase}
+                  title="Chưa có tin tuyển dụng nào"
+                  description="Hiện chưa có vị trí nào đang mở. Hãy quay lại sau hoặc bật thông báo việc làm để không bỏ lỡ."
+                  action={{ label: 'Cài đặt thông báo', href: '/candidate/notification-settings' }}
+                />
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {recommended.map((job) => (
                   <JobCard
+                    key={job._id}
                     id={job._id}
                     title={job.title}
                     company={employerLabel(job)}
-                    location={job.location || '—'}
-                    skills={(job.requirements || []).slice(0, 8)}
-                    workType="remote"
-                    aiInsight="Apply to compute match score if your CV has an embedding."
-                    postedDate={new Date(job.createdAt)}
+                    location={job.location || 'Chưa cập nhật'}
+                    skills={job.requirements || []}
+                    matchScore={job.previewScore ?? undefined}
+                    postedDate={job.createdAt}
+                    expiresAt={job.expiresAt}
+                    applied={appliedIds.has(job._id)}
+                    onApply={() => setApplyModal({ jobId: job._id, jobTitle: job.title })}
                   />
-                  <Button type="button" onClick={() => handleApply(job._id, job.title)}>
-                    Apply now
-                  </Button>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Hồ sơ đã ứng tuyển */}
+          <section className="mt-8">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <h2 className="text-lg font-bold">Hồ sơ ứng tuyển gần đây</h2>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/candidate/applications">Xem tất cả</Link>
+              </Button>
             </div>
-          )}
-        </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-foreground">Recent applications</h2>
-            <Button asChild variant="outline">
-              <Link href="/candidate/applications">View all</Link>
-            </Button>
-          </div>
-
-          <Card className="border border-border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-foreground/5 border-b border-border">
-                  <tr>
-                    <th className="px-6 py-4 text-left font-semibold text-foreground">Job</th>
-                    <th className="px-6 py-4 text-left font-semibold text-foreground">Company</th>
-                    <th className="px-6 py-4 text-left font-semibold text-foreground">Match</th>
-                    <th className="px-6 py-4 text-left font-semibold text-foreground">Status</th>
-                    <th className="px-6 py-4 text-left font-semibold text-foreground">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {applications.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-foreground/70">
-                        You haven&apos;t applied to any job yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    applications.slice(0, 5).map((app) => {
-                      const job =
-                        typeof app.jobId === 'object' && app.jobId !== null ? app.jobId : null
-                      return (
-                        <tr
-                          key={app._id}
-                          className="border-b border-border hover:bg-foreground/5 transition"
-                        >
-                          <td className="px-6 py-4 font-medium text-foreground">
-                            {job?.title || '—'}
-                          </td>
-                          <td className="px-6 py-4 text-foreground/70">
-                            {job ? employerLabel(job) : '—'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-green-700 font-semibold">
+            <div className="surface-card overflow-hidden">
+              {applications.length === 0 ? (
+                <EmptyState
+                  icon={ClipboardCheck}
+                  size="sm"
+                  title="Bạn chưa ứng tuyển vị trí nào"
+                  description="Hãy xem danh sách việc làm phù hợp và ứng tuyển vị trí đầu tiên của bạn."
+                  action={{ label: 'Khám phá việc làm', href: '/candidate/matches' }}
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/60 text-left">
+                        <th className="px-5 py-3 font-semibold">Vị trí</th>
+                        <th className="px-5 py-3 font-semibold">Nhà tuyển dụng</th>
+                        <th className="px-5 py-3 font-semibold">Độ phù hợp</th>
+                        <th className="px-5 py-3 font-semibold">Trạng thái</th>
+                        <th className="px-5 py-3 font-semibold">Ngày nộp</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applications.slice(0, 5).map((app) => {
+                        const job =
+                          typeof app.jobId === 'object' && app.jobId !== null ? app.jobId : null
+                        return (
+                          <tr
+                            key={app._id}
+                            className="border-b border-border transition-colors last:border-0 hover:bg-muted/40"
+                          >
+                            <td className="px-5 py-3.5 font-semibold">
+                              {job ? (
+                                <Link
+                                  href={`/candidate/jobs/${job._id}`}
+                                  className="transition-colors hover:text-brand-600"
+                                >
+                                  {job.title}
+                                </Link>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 text-muted-foreground">
+                              {job ? employerLabel(job) : '—'}
+                            </td>
+                            <td className="px-5 py-3.5 font-bold text-salary tabular-nums">
                               {app.matchingScore ?? 0}%
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${statusBadgeClasses(app.status)}`}
-                            >
-                              {statusLabel(app.status)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-foreground/70">
-                            {app.appliedAt
-                              ? new Date(app.appliedAt).toLocaleDateString()
-                              : '—'}
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <StatusBadge status={app.status} size="sm" />
+                            </td>
+                            <td className="px-5 py-3.5 text-muted-foreground tabular-nums">
+                              {formatDate(app.appliedAt)}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          </Card>
-        </div>
-      </div>
-    </CandidateLayout>
+          </section>
+        </PageContainer>
+      </CandidateLayout>
 
-    {applyModal && (
-      <ApplyCVModal
-        jobId={applyModal.jobId}
-        jobTitle={applyModal.jobTitle}
-        onClose={() => setApplyModal(null)}
-        onSuccess={() => { loadData(); setApplyModal(null) }}
-      />
-    )}
-  </>
+      {applyModal && (
+        <ApplyCVModal
+          jobId={applyModal.jobId}
+          jobTitle={applyModal.jobTitle}
+          onClose={() => setApplyModal(null)}
+          onSuccess={() => {
+            loadData()
+            setApplyModal(null)
+          }}
+        />
+      )}
+    </>
   )
 }

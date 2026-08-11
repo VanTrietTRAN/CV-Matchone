@@ -4,7 +4,9 @@ import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import EmployerLayout from '@/layouts/EmployerLayout'
-import { Card } from '@/components/ui/card'
+import PageContainer from '@/components/dashboard/PageContainer'
+import PageHeader from '@/components/dashboard/PageHeader'
+import SkillTag from '@/components/SkillTag'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,8 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Loader2, Sparkles, Briefcase, FileText, Target, MapPin } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { formatSalary, WORK_TYPE_LABEL } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 const initialFormData = {
   title: '',
@@ -25,7 +29,7 @@ const initialFormData = {
   location: '',
   salaryMin: '',
   salaryMax: '',
-  currency: 'USD',
+  currency: 'VND',
   description: '',
   requiredSkills: '',
   niceToHaveSkills: '',
@@ -33,6 +37,77 @@ const initialFormData = {
   education: '',
   deadline: '',
   duration: '',
+}
+
+const INDUSTRIES = [
+  { value: 'technology', label: 'Công nghệ thông tin' },
+  { value: 'finance', label: 'Tài chính / Ngân hàng' },
+  { value: 'healthcare', label: 'Y tế / Dược phẩm' },
+  { value: 'marketing', label: 'Marketing / Truyền thông' },
+  { value: 'education', label: 'Giáo dục / Đào tạo' },
+  { value: 'manufacturing', label: 'Sản xuất' },
+  { value: 'logistics', label: 'Logistics / Vận tải' },
+  { value: 'other', label: 'Lĩnh vực khác' },
+]
+
+const EXPERIENCE_LEVELS = [
+  { value: 'entry', label: 'Mới tốt nghiệp / dưới 1 năm' },
+  { value: 'mid', label: 'Từ 1 – 3 năm' },
+  { value: 'senior', label: 'Từ 3 – 5 năm' },
+  { value: 'expert', label: 'Trên 5 năm' },
+]
+
+function FormSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ElementType
+  title: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="surface-card p-5 sm:p-6">
+      <div className="mb-5 flex items-start gap-3 border-b border-border pb-4">
+        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+          <Icon className="size-5" />
+        </span>
+        <div>
+          <h2 className="font-bold">{title}</h2>
+          {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+    </section>
+  )
+}
+
+function Field({
+  label,
+  htmlFor,
+  required,
+  hint,
+  full,
+  children,
+}: {
+  label: string
+  htmlFor?: string
+  required?: boolean
+  hint?: string
+  full?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className={cn(full && 'sm:col-span-2')}>
+      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-semibold">
+        {label} {required && <span className="text-danger">*</span>}
+      </label>
+      {children}
+      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  )
 }
 
 export default function PostJobPage() {
@@ -49,27 +124,32 @@ export default function PostJobPage() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  const splitSkills = (value: string) =>
+    value
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
 
-    const reqSkills = formData.requiredSkills
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    const niceSkills = formData.niceToHaveSkills
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
+    const reqSkills = splitSkills(formData.requiredSkills)
+    const niceSkills = splitSkills(formData.niceToHaveSkills)
     const requirements = [...reqSkills, ...niceSkills]
 
+    // Các trường chưa có cột riêng trong model job được ghi kèm vào mô tả
     let extra = ''
-    if (formData.industry) extra += `\nIndustry: ${formData.industry}`
-    if (formData.workType) extra += `\nWork type: ${formData.workType}`
-    if (formData.experienceLevel) extra += `\nExperience: ${formData.experienceLevel}`
-    if (formData.education) extra += `\nEducation: ${formData.education}`
+    if (formData.industry) {
+      extra += `\nNgành nghề: ${INDUSTRIES.find((i) => i.value === formData.industry)?.label ?? formData.industry}`
+    }
+    if (formData.workType) extra += `\nHình thức: ${WORK_TYPE_LABEL[formData.workType] ?? formData.workType}`
+    if (formData.experienceLevel) {
+      extra += `\nKinh nghiệm: ${EXPERIENCE_LEVELS.find((l) => l.value === formData.experienceLevel)?.label ?? formData.experienceLevel}`
+    }
+    if (formData.education) extra += `\nHọc vấn: ${formData.education}`
     if (formData.salaryMin || formData.salaryMax) {
-      extra += `\nSalary: ${formData.currency} ${formData.salaryMin || '?'} – ${formData.salaryMax || '?'}`
+      extra += `\nMức lương: ${formatSalary(Number(formData.salaryMin), Number(formData.salaryMax), formData.currency)}`
     }
 
     let expiresAt: string | undefined
@@ -103,300 +183,316 @@ export default function PostJobPage() {
     }
   }
 
+  const previewSkills = splitSkills(formData.requiredSkills)
+
   return (
     <EmployerLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">Post a New Job</h1>
-          <p className="text-foreground/70">Create a job posting and find AI-matched candidates</p>
-        </div>
+      <PageContainer>
+        <PageHeader
+          title="Đăng tin tuyển dụng"
+          description="Mô tả càng rõ ràng, AI càng chấm điểm phù hợp chính xác và giới thiệu đúng ứng viên."
+          breadcrumbs={[{ label: 'Tổng quan', href: '/employer/dashboard' }, { label: 'Đăng tin' }]}
+        />
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <Card className="p-6 sm:p-8 border border-border">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground mb-4">Job Basics</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Job Title *
-                      </label>
-                      <Input
-                        type="text"
-                        name="title"
-                        value={formData.title}
-                        onChange={handleChange}
-                        placeholder="e.g., Senior React Developer"
-                        required
-                      />
-                    </div>
+        <form onSubmit={handleSubmit} className="grid gap-5 lg:grid-cols-[1fr_340px] lg:items-start">
+          <div className="space-y-5">
+            <FormSection
+              icon={Briefcase}
+              title="Thông tin cơ bản"
+              description="Những thông tin ứng viên nhìn thấy đầu tiên"
+            >
+              <Field label="Tiêu đề tin tuyển dụng" htmlFor="title" required full>
+                <Input
+                  id="title"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleChange}
+                  placeholder="Ví dụ: Lập trình viên Frontend (ReactJS)"
+                  required
+                />
+              </Field>
 
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Industry
-                        </label>
-                        <Select value={formData.industry} onValueChange={(value) => handleSelect('industry', value)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select industry" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="technology">Technology</SelectItem>
-                            <SelectItem value="finance">Finance</SelectItem>
-                            <SelectItem value="healthcare">Healthcare</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Work Type
-                        </label>
-                        <Select value={formData.workType} onValueChange={(value) => handleSelect('workType', value)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select work type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="remote">Remote</SelectItem>
-                            <SelectItem value="hybrid">Hybrid</SelectItem>
-                            <SelectItem value="onsite">On-site</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+              <Field label="Ngành nghề">
+                <Select
+                  value={formData.industry || undefined}
+                  onValueChange={(v) => handleSelect('industry', v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn ngành nghề" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INDUSTRIES.map((i) => (
+                      <SelectItem key={i.value} value={i.value}>
+                        {i.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
 
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Location
-                        </label>
-                        <Input
-                          type="text"
-                          name="location"
-                          value={formData.location}
-                          onChange={handleChange}
-                          placeholder="e.g., San Francisco, CA"
-                        />
-                      </div>
-                    </div>
+              <Field label="Hình thức làm việc">
+                <Select
+                  value={formData.workType || undefined}
+                  onValueChange={(v) => handleSelect('workType', v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn hình thức" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="onsite">Tại văn phòng</SelectItem>
+                    <SelectItem value="hybrid">Linh hoạt (hybrid)</SelectItem>
+                    <SelectItem value="remote">Làm từ xa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
 
-                    <div className="grid sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Salary Min
-                        </label>
-                        <Input
-                          type="number"
-                          name="salaryMin"
-                          value={formData.salaryMin}
-                          onChange={handleChange}
-                          placeholder="100000"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Salary Max
-                        </label>
-                        <Input
-                          type="number"
-                          name="salaryMax"
-                          value={formData.salaryMax}
-                          onChange={handleChange}
-                          placeholder="150000"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Currency
-                        </label>
-                        <Select value={formData.currency} onValueChange={(value) => handleSelect('currency', value)}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="USD">USD</SelectItem>
-                            <SelectItem value="VND">VND</SelectItem>
-                            <SelectItem value="EUR">EUR</SelectItem>
-                            <SelectItem value="GBP">GBP</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <Field label="Địa điểm làm việc" htmlFor="location" full>
+                <Input
+                  id="location"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleChange}
+                  placeholder="Ví dụ: Cầu Giấy, Hà Nội"
+                />
+              </Field>
 
-                <div className="border-t border-border pt-6">
-                  <h2 className="text-xl font-semibold text-foreground mb-4">Job Description</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Job Description *
-                      </label>
-                      <Textarea
-                        name="description"
-                        value={formData.description}
-                        onChange={handleChange}
-                        placeholder="Describe the role, responsibilities, and what you're looking for..."
-                        rows={6}
-                        required
-                      />
-                    </div>
+              <Field label="Lương tối thiểu" htmlFor="salaryMin">
+                <Input
+                  id="salaryMin"
+                  type="number"
+                  name="salaryMin"
+                  min={0}
+                  value={formData.salaryMin}
+                  onChange={handleChange}
+                  placeholder="15000000"
+                />
+              </Field>
 
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Required Skills (comma-separated)
-                      </label>
-                      <Input
-                        type="text"
-                        name="requiredSkills"
-                        value={formData.requiredSkills}
-                        onChange={handleChange}
-                        placeholder="React, TypeScript, Node.js"
-                      />
-                    </div>
+              <Field label="Lương tối đa" htmlFor="salaryMax">
+                <Input
+                  id="salaryMax"
+                  type="number"
+                  name="salaryMax"
+                  min={0}
+                  value={formData.salaryMax}
+                  onChange={handleChange}
+                  placeholder="25000000"
+                />
+              </Field>
 
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Nice-to-Have Skills (comma-separated)
-                      </label>
-                      <Input
-                        type="text"
-                        name="niceToHaveSkills"
-                        value={formData.niceToHaveSkills}
-                        onChange={handleChange}
-                        placeholder="AWS, Docker, GraphQL"
-                      />
-                    </div>
+              <Field
+                label="Đơn vị tiền tệ"
+                hint="Để trống mức lương nếu muốn hiển thị “Thoả thuận”."
+                full
+              >
+                <Select
+                  value={formData.currency}
+                  onValueChange={(v) => handleSelect('currency', v)}
+                >
+                  <SelectTrigger className="w-full sm:w-52">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VND">VND (đồng)</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="JPY">JPY</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </FormSection>
 
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Hạn nộp hồ sơ (tùy chọn)
-                        </label>
-                        <Input
-                          type="date"
-                          name="deadline"
-                          value={formData.deadline}
-                          onChange={handleChange}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Hoặc số ngày hiển thị tin
-                        </label>
-                        <Input
-                          type="number"
-                          name="duration"
-                          min={1}
-                          value={formData.duration}
-                          onChange={handleChange}
-                          placeholder="Ví dụ: 30"
-                        />
-                      </div>
-                    </div>
+            <FormSection
+              icon={FileText}
+              title="Mô tả công việc"
+              description="Nội dung này được dùng để tính điểm phù hợp với CV ứng viên"
+            >
+              <Field
+                label="Mô tả chi tiết"
+                htmlFor="description"
+                required
+                hint="Nêu rõ trách nhiệm chính, sản phẩm/dự án, quy trình làm việc và quyền lợi."
+                full
+              >
+                <Textarea
+                  id="description"
+                  name="description"
+                  rows={8}
+                  value={formData.description}
+                  onChange={handleChange}
+                  placeholder="Mô tả công việc, trách nhiệm chính, quyền lợi..."
+                  required
+                />
+              </Field>
+            </FormSection>
 
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Experience Level
-                        </label>
-                        <Select value={formData.experienceLevel} onValueChange={(value) => handleSelect('experienceLevel', value)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select level" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="entry">Entry Level</SelectItem>
-                            <SelectItem value="mid">Mid Level</SelectItem>
-                            <SelectItem value="senior">Senior</SelectItem>
-                            <SelectItem value="expert">Expert</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Education
-                        </label>
-                        <Input
-                          type="text"
-                          name="education"
-                          value={formData.education}
-                          onChange={handleChange}
-                          placeholder="Bachelor's in CS or equivalent"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <FormSection
+              icon={Target}
+              title="Yêu cầu ứng viên"
+              description="Kỹ năng ghi càng cụ thể, kết quả so khớp càng chính xác"
+            >
+              <Field
+                label="Kỹ năng bắt buộc"
+                htmlFor="requiredSkills"
+                hint="Ngăn cách bằng dấu phẩy. Ví dụ: ReactJS, TypeScript, REST API"
+                full
+              >
+                <Input
+                  id="requiredSkills"
+                  name="requiredSkills"
+                  value={formData.requiredSkills}
+                  onChange={handleChange}
+                  placeholder="ReactJS, TypeScript, NodeJS"
+                />
+              </Field>
 
-                <div className="border-t border-border pt-6 flex gap-4">
-                  <Button type="submit" size="lg" disabled={submitting}>
-                    {submitting ? 'Đang đăng...' : 'Publish Job'}
-                  </Button>
-                  <Button type="button" variant="outline" size="lg" disabled={submitting}>
-                    Save as Draft
-                  </Button>
-                </div>
-              </form>
-            </Card>
+              <Field
+                label="Kỹ năng là lợi thế"
+                htmlFor="niceToHaveSkills"
+                hint="Ngăn cách bằng dấu phẩy."
+                full
+              >
+                <Input
+                  id="niceToHaveSkills"
+                  name="niceToHaveSkills"
+                  value={formData.niceToHaveSkills}
+                  onChange={handleChange}
+                  placeholder="AWS, Docker, GraphQL"
+                />
+              </Field>
+
+              <Field label="Kinh nghiệm yêu cầu">
+                <Select
+                  value={formData.experienceLevel || undefined}
+                  onValueChange={(v) => handleSelect('experienceLevel', v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn mức kinh nghiệm" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXPERIENCE_LEVELS.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>
+                        {l.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field label="Yêu cầu học vấn" htmlFor="education">
+                <Input
+                  id="education"
+                  name="education"
+                  value={formData.education}
+                  onChange={handleChange}
+                  placeholder="Cử nhân CNTT hoặc tương đương"
+                />
+              </Field>
+
+              <Field label="Hạn nộp hồ sơ" htmlFor="deadline">
+                <Input
+                  id="deadline"
+                  type="date"
+                  name="deadline"
+                  value={formData.deadline}
+                  onChange={handleChange}
+                />
+              </Field>
+
+              <Field
+                label="Hoặc số ngày hiển thị tin"
+                htmlFor="duration"
+                hint="Dùng khi bạn không chọn ngày cụ thể."
+              >
+                <Input
+                  id="duration"
+                  type="number"
+                  name="duration"
+                  min={1}
+                  value={formData.duration}
+                  onChange={handleChange}
+                  placeholder="30"
+                />
+              </Field>
+            </FormSection>
+
+            <div className="surface-card flex flex-col-reverse gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Tin sẽ hiển thị ngay với ứng viên sau khi đăng. Bạn có thể đóng tin bất cứ lúc nào ở
+                trang Tổng quan.
+              </p>
+              <Button type="submit" size="lg" disabled={submitting} className="shrink-0">
+                {submitting && <Loader2 className="animate-spin" />}
+                {submitting ? 'Đang đăng tin...' : 'Đăng tin tuyển dụng'}
+              </Button>
+            </div>
           </div>
 
-          <div>
-            <Card className="p-6 border border-border sticky top-8">
-              <h3 className="font-semibold text-foreground mb-4">Job Preview</h3>
-              <div className="space-y-3 text-sm">
-                {formData.title && (
-                  <>
-                    <div>
-                      <p className="font-semibold text-foreground">{formData.title}</p>
-                      <p className="text-foreground/70 text-xs">TechCorp</p>
-                    </div>
-                  </>
-                )}
+          {/* Xem trước tin đăng */}
+          <aside className="lg:sticky lg:top-[calc(var(--header-h)+16px)]">
+            <div className="surface-card p-5">
+              <h3 className="flex items-center gap-2 text-sm font-bold">
+                <Sparkles className="size-4 text-brand-600" />
+                Xem trước tin đăng
+              </h3>
 
-                {formData.workType && formData.location && (
-                  <div className="p-3 bg-foreground/5 rounded-lg">
-                    <p className="text-xs text-foreground/70">
-                      {formData.workType.charAt(0).toUpperCase() + formData.workType.slice(1)} • {formData.location}
-                    </p>
-                  </div>
-                )}
+              <div className="mt-4 rounded-xl border border-border p-4">
+                <p className="text-[15px] leading-snug font-bold">
+                  {formData.title || 'Tiêu đề tin tuyển dụng'}
+                </p>
 
-                {formData.salaryMin && formData.salaryMax && (
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <p className="text-xs font-medium text-green-700">
-                      {formData.currency} {formData.salaryMin} - {formData.salaryMax}
-                    </p>
-                  </div>
-                )}
-
-                {formData.requiredSkills && (
-                  <div>
-                    <p className="text-xs font-medium text-foreground mb-2">Required Skills:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {formData.requiredSkills
-                        .split(',')
-                        .slice(0, 3)
-                        .map((skill) => (
-                          <span
-                            key={skill}
-                            className="px-2 py-1 rounded text-xs bg-blue-50 text-blue-700"
-                          >
-                            {skill.trim()}
-                          </span>
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex gap-2">
-                  <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-700">Preview updates as you fill the form</p>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <span className="rounded-md bg-brand-50 px-2 py-1 text-xs font-bold text-salary">
+                    {formatSalary(
+                      Number(formData.salaryMin) || undefined,
+                      Number(formData.salaryMax) || undefined,
+                      formData.currency,
+                    )}
+                  </span>
+                  {formData.location && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground/70">
+                      <MapPin className="size-3" />
+                      {formData.location}
+                    </span>
+                  )}
+                  {formData.workType && (
+                    <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground/70">
+                      {WORK_TYPE_LABEL[formData.workType]}
+                    </span>
+                  )}
                 </div>
+
+                {previewSkills.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {previewSkills.slice(0, 5).map((skill, i) => (
+                      <SkillTag key={`${skill}-${i}`} skill={skill} size="sm" />
+                    ))}
+                    {previewSkills.length > 5 && (
+                      <span className="self-center text-[11px] text-muted-foreground">
+                        +{previewSkills.length - 5}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {formData.description && (
+                  <p className="mt-3 line-clamp-4 text-xs leading-relaxed text-muted-foreground">
+                    {formData.description}
+                  </p>
+                )}
               </div>
-            </Card>
-          </div>
-        </div>
-      </div>
+
+              <div className="mt-4 flex gap-2 rounded-lg border border-brand-100 bg-brand-50/60 p-3">
+                <AlertCircle className="mt-0.5 size-4 shrink-0 text-brand-600" />
+                <p className="text-xs leading-relaxed text-brand-800">
+                  Bản xem trước cập nhật theo nội dung bạn nhập. Mô tả và kỹ năng là dữ liệu chính
+                  để AI so khớp với CV ứng viên.
+                </p>
+              </div>
+            </div>
+          </aside>
+        </form>
+      </PageContainer>
     </EmployerLayout>
   )
 }

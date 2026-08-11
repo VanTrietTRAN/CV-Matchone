@@ -1,72 +1,67 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Logo from '@/components/brand/Logo'
+import SidebarNav, { type NavItem } from '@/components/dashboard/SidebarNav'
 import { Button } from '@/components/ui/button'
 import {
-  Briefcase,
-  Home,
-  Plus,
+  LayoutDashboard,
+  PlusCircle,
   Users,
-  Building,
-  Settings,
-  LogOut,
+  Star,
+  Building2,
+  Bell,
   Share2,
+  Mail,
   ArrowLeftRight,
   Loader2,
-  Bell,
-  Star,
+  LogOut,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { clearAuth, setAuth } from '@/lib/auth-storage'
 import { apiFetch, apiLogout } from '@/lib/api'
+import { useUnreadCount } from '@/hooks/use-unread-count'
+import { setAuth } from '@/lib/auth-storage'
 import { toast } from 'sonner'
 
-const navItems = [
-  { label: 'Dashboard', href: '/employer/dashboard', icon: Home },
-  { label: 'Post a Job', href: '/employer/post-job', icon: Plus },
-  { label: 'Candidates', href: '/employer/candidates', icon: Users },
+const baseItems: NavItem[] = [
+  { label: 'Tổng quan', href: '/employer/dashboard', icon: LayoutDashboard },
+  { label: 'Đăng tin tuyển dụng', href: '/employer/post-job', icon: PlusCircle },
+  { label: 'Hồ sơ ứng viên', href: '/employer/candidates', icon: Users },
   { label: 'Đánh giá công ty', href: '/employer/reviews', icon: Star },
-  { label: 'Company Profile', href: '/employer/company-profile', icon: Building },
+  { label: 'Trang công ty', href: '/employer/company-profile', icon: Building2 },
   { label: 'Thông báo', href: '/employer/notifications', icon: Bell },
-  { label: 'Social Posts', href: '/fb-generator', icon: Share2 },
-  { label: 'Email Settings', href: '/employer/email-settings', icon: Settings },
+  { label: 'Bài đăng mạng xã hội', href: '/fb-generator', icon: Share2 },
+  { label: 'Cài đặt email', href: '/employer/email-settings', icon: Mail },
 ]
 
 export default function EmployerSidebar() {
-  const pathname = usePathname()
   const router = useRouter()
   const [switching, setSwitching] = useState(false)
-  const [hasUnread, setHasUnread] = useState(false)
+  const unread = useUnreadCount()
 
-  // Poll unread count mỗi 30s
-  useEffect(() => {
-    const checkUnread = async () => {
-      try {
-        const data = await apiFetch<{ count: number }>('/api/notifications/unread-count')
-        setHasUnread((data.count || 0) > 0)
-      } catch { /* silent */ }
-    }
-    checkUnread()
-    const interval = setInterval(checkUnread, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  const items = baseItems.map((item) =>
+    item.href === '/employer/notifications' ? { ...item, badge: unread } : item,
+  )
 
   const signOut = async () => {
-    await apiLogout() // Gọi backend để xóa cookie + clearAuth localStorage
+    await apiLogout()
     router.push('/login?role=employer')
   }
 
   const handleSwitchRole = async () => {
     setSwitching(true)
     try {
-      const res = await apiFetch<{ data: { _id: string; email: string; role: string } }>('/api/users/me/switch-role', {
-        method: 'PATCH',
-      })
+      const res = await apiFetch<{ data: { _id: string; email: string; role: string } }>(
+        '/api/users/me/switch-role',
+        { method: 'PATCH' },
+      )
       const user = res.data
-      setAuth({ id: user._id, email: user.email, role: user.role as 'candidate' | 'employer' | 'admin' })
-      toast.success('Đã chuyển sang giao diện Ứng viên!')
+      setAuth({
+        id: user._id,
+        email: user.email,
+        role: user.role as 'candidate' | 'employer' | 'admin',
+      })
+      toast.success('Đã chuyển sang giao diện Ứng viên')
       router.push('/candidate/dashboard')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Đổi vai trò thất bại')
@@ -76,64 +71,48 @@ export default function EmployerSidebar() {
   }
 
   return (
-    <aside className="h-screen flex flex-col bg-foreground/5">
-      <div className="hidden lg:flex items-center gap-2 p-6 border-b border-border">
-        <span className="font-bold text-primary text-xl">Smart Recruit</span>
+    <div className="flex h-full flex-col bg-sidebar">
+      <div
+        className="flex shrink-0 items-center border-b border-sidebar-border px-5"
+        style={{ height: 'var(--header-h)' }}
+      >
+        <Logo size="sm" />
       </div>
 
-      <nav className="flex-1 px-3 py-6 space-y-2 overflow-y-auto">
-        {navItems.map((item) => {
-          const Icon = item.icon
-          const isActive = pathname === item.href || pathname.startsWith(item.href)
-          const isNotification = item.href === '/employer/notifications'
+      <div className="flex-1 overflow-y-auto px-3 py-4">
+        <p className="mb-2 px-3 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+          Nhà tuyển dụng
+        </p>
+        <SidebarNav items={items} />
+      </div>
 
-          return (
-            <Link key={item.href} href={item.href}>
-              <Button
-                variant="ghost"
-                className={cn(
-                  'w-full justify-start gap-3 text-foreground/70 hover:text-foreground relative',
-                  isActive && 'bg-primary/10 text-primary hover:bg-primary/15 font-medium'
-                )}
-              >
-                <span className="relative flex-shrink-0">
-                  <Icon className="h-5 w-5" />
-                  {isNotification && hasUnread && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
-                  )}
-                </span>
-                <span className="hidden lg:inline">{item.label}</span>
-              </Button>
-            </Link>
-          )
-        })}
-      </nav>
-
-      <div className="border-t border-border p-3 space-y-2">
+      <div className="shrink-0 space-y-1 border-t border-sidebar-border p-3">
         <Button
           type="button"
-          variant="ghost"
-          className="w-full justify-start gap-3 text-green-600 hover:text-green-700 hover:bg-green-50"
+          variant="soft"
+          className="w-full justify-start gap-3"
           onClick={handleSwitchRole}
           disabled={switching}
         >
-          {switching ? <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin" /> : <ArrowLeftRight className="h-5 w-5 flex-shrink-0" />}
-          <span className="hidden lg:inline">Chuyển sang Ứng viên</span>
+          {switching ? (
+            <Loader2 className="size-[18px] animate-spin" />
+          ) : (
+            <ArrowLeftRight className="size-[18px]" />
+          )}
+          Chuyển sang Ứng viên
         </Button>
 
         <Button
           type="button"
           variant="ghost"
-          className="w-full justify-start gap-3 text-foreground/70 hover:text-foreground"
+          className="w-full justify-start gap-3 font-medium"
           onClick={signOut}
         >
-          <LogOut className="h-5 w-5 flex-shrink-0" />
-          <span className="hidden lg:inline">Đăng xuất</span>
+          <LogOut className="size-[18px]" />
+          Đăng xuất
         </Button>
-        <p className="text-xs text-foreground/50 px-3 hidden lg:block">
-          Smart Recruit v1.0
-        </p>
+        <p className="px-3 pt-1 text-[11px] text-muted-foreground">Smart Recruit v1.0</p>
       </div>
-    </aside>
+    </div>
   )
 }

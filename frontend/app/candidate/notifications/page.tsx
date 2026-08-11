@@ -3,19 +3,17 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import CandidateLayout from '@/layouts/CandidateLayout'
+import PageContainer from '@/components/dashboard/PageContainer'
+import PageHeader from '@/components/dashboard/PageHeader'
+import EmptyState from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
-import {
-  Bell,
-  BellOff,
-  Trash2,
-  ExternalLink,
-  CheckCheck,
-  Zap,
-  ChevronDown,
-} from 'lucide-react'
+import { BellOff, Trash2, ExternalLink, CheckCheck, Zap, ChevronDown, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatRelativeTime } from '@/lib/format'
+import { matchTone } from '@/components/MatchBadge'
+import { refreshUnreadCount } from '@/hooks/use-unread-count'
 
 type Notification = {
   _id: string
@@ -33,23 +31,6 @@ type Group = {
   key: string
   job: { _id: string; title: string; location?: string } | null
   items: Notification[]
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'Vừa xong'
-  if (mins < 60) return `${mins} phút trước`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} giờ trước`
-  const days = Math.floor(hours / 24)
-  return `${days} ngày trước`
-}
-
-function scoreClass(score: number) {
-  if (score >= 70) return 'bg-green-500/15 text-green-600'
-  if (score >= 50) return 'bg-yellow-500/15 text-yellow-600'
-  return 'bg-muted text-foreground/50'
 }
 
 /** Gộp các thông báo cùng một job thành 1 nhóm. Thông báo không gắn job thì đứng riêng. */
@@ -94,6 +75,7 @@ export default function CandidateNotificationsPage() {
     try {
       await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' })
       setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)))
+      refreshUnreadCount()
     } catch {
       toast.error('Không thể đánh dấu đã đọc')
     }
@@ -109,6 +91,7 @@ export default function CandidateNotificationsPage() {
     try {
       await apiFetch('/api/notifications/read-all', { method: 'PATCH' })
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+      refreshUnreadCount()
       toast.success('Đã đánh dấu tất cả là đã đọc')
     } catch {
       toast.error('Có lỗi xảy ra')
@@ -119,16 +102,18 @@ export default function CandidateNotificationsPage() {
     try {
       await apiFetch(`/api/notifications/${id}`, { method: 'DELETE' })
       setNotifications((prev) => prev.filter((n) => n._id !== id))
-      toast.success('Đã xóa thông báo')
+      refreshUnreadCount()
+      toast.success('Đã xoá thông báo')
     } catch {
-      toast.error('Không thể xóa thông báo')
+      toast.error('Không thể xoá thông báo')
     }
   }
 
   const toggleExpand = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
@@ -139,61 +124,53 @@ export default function CandidateNotificationsPage() {
 
   /** Một dòng thông báo (dùng cho cả thẻ đơn lẫn item trong nhóm). */
   const NotifRow = ({ notif, nested }: { notif: Notification; nested?: boolean }) => (
-    <div className={cn(nested && 'pt-3 mt-3 border-t border-border/60')}>
-      <p
-        className={cn(
-          'font-medium text-sm leading-snug',
-          notif.isRead ? 'text-foreground/80' : 'text-foreground'
-        )}
-      >
+    <div className={cn(nested && 'mt-3 border-t border-border pt-3')}>
+      <p className={cn('text-sm leading-snug font-semibold', notif.isRead && 'text-foreground/75')}>
         {notif.title}
       </p>
+
       {notif.body && (
-        <p className="text-xs text-foreground/60 mt-0.5 leading-snug">{notif.body}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{notif.body}</p>
       )}
+
       {notif.cvProfileId?.fullName && (
-        <p className="text-xs text-foreground/50 mt-1 flex items-center gap-1">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary/40" />
-          Dựa trên CV:{' '}
-          <span className="font-semibold text-foreground/75">{notif.cvProfileId.fullName}</span>
+        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-brand-400" />
+          Dựa trên CV:
+          <span className="font-semibold text-foreground/80">{notif.cvProfileId.fullName}</span>
         </p>
       )}
 
-      <div className="flex items-center gap-3 mt-2 flex-wrap">
+      <div className="mt-2 flex flex-wrap items-center gap-2.5">
         {notif.matchingScore != null && (
           <span
             className={cn(
-              'text-xs font-semibold px-2 py-0.5 rounded-full',
-              scoreClass(notif.matchingScore)
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold',
+              matchTone(notif.matchingScore),
             )}
           >
-            ⚡ {notif.matchingScore}% phù hợp
+            <Zap className="size-3" />
+            {notif.matchingScore}% phù hợp
           </span>
         )}
-        <span className="text-xs text-foreground/40">{timeAgo(notif.createdAt)}</span>
-        {!notif.isRead && <span className="w-2 h-2 rounded-full bg-red-500" />}
+        <span className="text-xs text-muted-foreground">{formatRelativeTime(notif.createdAt)}</span>
       </div>
 
-      <div className="flex items-center gap-2 mt-3 flex-wrap">
+      <div className="mt-2 flex flex-wrap items-center gap-1">
         {!notif.isRead && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-xs gap-1.5 text-foreground/60"
-            onClick={() => handleMarkRead(notif._id)}
-          >
-            <CheckCheck className="w-3 h-3" />
-            Đánh dấu đã đọc
+          <Button size="xs" variant="ghost" onClick={() => handleMarkRead(notif._id)}>
+            <CheckCheck />
+            Đã đọc
           </Button>
         )}
         <Button
-          size="sm"
+          size="xs"
           variant="ghost"
-          className="h-7 text-xs gap-1.5 text-red-500 hover:text-red-600 hover:bg-red-50"
+          className="text-danger-foreground hover:bg-danger/10 hover:text-danger-foreground"
           onClick={() => handleDelete(notif._id)}
         >
-          <Trash2 className="w-3 h-3" />
-          Xóa
+          <Trash2 />
+          Xoá
         </Button>
       </div>
     </div>
@@ -201,41 +178,44 @@ export default function CandidateNotificationsPage() {
 
   return (
     <CandidateLayout>
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Bell className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Thông báo</h1>
-              <p className="text-sm text-foreground/60">
-                {unreadCount > 0 ? `${unreadCount} chưa đọc` : 'Tất cả đã đọc'}
-              </p>
-            </div>
-          </div>
+      <PageContainer size="md">
+        <PageHeader
+          title="Thông báo"
+          description={
+            unreadCount > 0
+              ? `Bạn có ${unreadCount} thông báo chưa đọc`
+              : 'Bạn đã đọc hết thông báo'
+          }
+          actions={
+            <>
+              {unreadCount > 0 && (
+                <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
+                  <CheckCheck />
+                  Đánh dấu tất cả đã đọc
+                </Button>
+              )}
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/candidate/notification-settings">
+                  <Settings />
+                  Cài đặt
+                </Link>
+              </Button>
+            </>
+          }
+        />
 
-          {unreadCount > 0 && (
-            <Button variant="outline" size="sm" onClick={handleMarkAllRead} className="gap-2">
-              <CheckCheck className="w-4 h-4" />
-              Đánh dấu tất cả đã đọc
-            </Button>
-          )}
-        </div>
-
-        <div className="flex gap-2 mb-6">
+        <div className="mb-5 flex gap-2">
           {(['all', 'unread'] as const).map((f) => (
             <button
               key={f}
+              type="button"
+              data-active={filter === f}
               onClick={() => setFilter(f)}
-              className={cn(
-                'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-                filter === f
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-foreground/60 hover:bg-muted/80'
-              )}
+              className="chip"
             >
-              {f === 'all' ? 'Tất cả' : `Chưa đọc${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+              {f === 'all'
+                ? `Tất cả (${notifications.length})`
+                : `Chưa đọc${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
             </button>
           ))}
         </div>
@@ -243,15 +223,25 @@ export default function CandidateNotificationsPage() {
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 rounded-xl bg-muted animate-pulse" />
+              <div key={i} className="skeleton h-24 rounded-xl" />
             ))}
           </div>
         ) : groups.length === 0 ? (
-          <div className="text-center py-20">
-            <BellOff className="w-12 h-12 text-foreground/20 mx-auto mb-3" />
-            <p className="text-foreground/50 font-medium">
-              {filter === 'unread' ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo nào'}
-            </p>
+          <div className="surface-card">
+            <EmptyState
+              icon={BellOff}
+              title={filter === 'unread' ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo nào'}
+              description={
+                filter === 'unread'
+                  ? 'Bạn đã xử lý hết thông báo. Quay lại tab “Tất cả” để xem lịch sử.'
+                  : 'Bật thông báo việc làm để nhận tin ngay khi có vị trí phù hợp với hồ sơ của bạn.'
+              }
+              action={
+                filter === 'all'
+                  ? { label: 'Cài đặt thông báo', href: '/candidate/notification-settings' }
+                  : undefined
+              }
+            />
           </div>
         ) : (
           <div className="space-y-3">
@@ -260,109 +250,93 @@ export default function CandidateNotificationsPage() {
               const isGroup = group.items.length > 1
               const latest = group.items[0]
 
-              // Thẻ đơn (1 thông báo) — giữ giao diện như cũ
+              const cardClass = cn(
+                'surface-card p-4 transition-colors',
+                groupUnread && 'border-brand-200 bg-brand-50/40',
+              )
+
+              // Thẻ đơn: 1 thông báo
               if (!isGroup) {
                 return (
-                  <div
-                    key={group.key}
-                    className={cn(
-                      'relative rounded-xl border p-4 transition-all',
-                      latest.isRead ? 'bg-card border-border' : 'bg-primary/5 border-primary/20 shadow-sm'
-                    )}
-                  >
+                  <div key={group.key} className={cardClass}>
                     <div className="flex gap-3">
-                      <div
+                      <span
                         className={cn(
-                          'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5',
+                          'mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg',
                           latest.matchingScore && latest.matchingScore >= 70
-                            ? 'bg-green-500/15'
-                            : 'bg-primary/10'
+                            ? 'bg-brand-500 text-white'
+                            : 'bg-brand-50 text-brand-600',
                         )}
                       >
-                        <Zap
-                          className={cn(
-                            'w-4 h-4',
-                            latest.matchingScore && latest.matchingScore >= 70
-                              ? 'text-green-500'
-                              : 'text-primary'
-                          )}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
+                        <Zap className="size-4" />
+                      </span>
+
+                      <div className="min-w-0 flex-1">
                         <NotifRow notif={latest} />
                         {latest.jobId && (
-                          <Link href={`/candidate/jobs/${latest.jobId._id}`} className="inline-block mt-2">
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5">
-                              <ExternalLink className="w-3 h-3" />
-                              Xem chi tiết job
-                            </Button>
-                          </Link>
+                          <Button asChild size="xs" variant="outline" className="mt-2">
+                            <Link href={`/candidate/jobs/${latest.jobId._id}`}>
+                              <ExternalLink />
+                              Xem tin tuyển dụng
+                            </Link>
+                          </Button>
                         )}
                       </div>
+
+                      {!latest.isRead && (
+                        <span className="mt-1.5 size-2 shrink-0 rounded-full bg-danger" />
+                      )}
                     </div>
                   </div>
                 )
               }
 
-              // Thẻ nhóm (nhiều thông báo cùng 1 job)
+              // Thẻ nhóm: nhiều thông báo cùng một tin tuyển dụng
               const isOpen = expanded.has(group.key)
               const visibleItems = isOpen ? group.items : group.items.slice(0, 1)
+
               return (
-                <div
-                  key={group.key}
-                  className={cn(
-                    'rounded-xl border transition-all overflow-hidden',
-                    groupUnread ? 'bg-primary/5 border-primary/20 shadow-sm' : 'bg-card border-border'
-                  )}
-                >
-                  <div className="flex items-start gap-3 p-4">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Zap className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm text-foreground">
-                          {group.job?.title || 'Thông báo'}
-                        </p>
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                <div key={group.key} className={cardClass}>
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+                      <Zap className="size-4" />
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-bold">{group.job?.title || 'Thông báo'}</p>
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">
                           {group.items.length} cập nhật
                         </span>
-                        {groupUnread && <span className="w-2 h-2 rounded-full bg-red-500" />}
+                        {groupUnread && <span className="size-2 rounded-full bg-danger" />}
                       </div>
+
                       {group.job?.location && (
-                        <p className="text-xs text-foreground/50 mt-0.5">{group.job.location}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{group.job.location}</p>
                       )}
 
-                      <div className="flex items-center gap-2 mt-3 flex-wrap">
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                         {group.job && (
-                          <Link href={`/candidate/jobs/${group.job._id}`}>
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5">
-                              <ExternalLink className="w-3 h-3" />
-                              Xem chi tiết job
-                            </Button>
-                          </Link>
+                          <Button asChild size="xs" variant="outline">
+                            <Link href={`/candidate/jobs/${group.job._id}`}>
+                              <ExternalLink />
+                              Xem tin tuyển dụng
+                            </Link>
+                          </Button>
                         )}
                         {groupUnread && (
                           <Button
-                            size="sm"
+                            size="xs"
                             variant="ghost"
-                            className="h-7 text-xs gap-1.5 text-foreground/60"
                             onClick={() => handleMarkGroupRead(group.items)}
                           >
-                            <CheckCheck className="w-3 h-3" />
+                            <CheckCheck />
                             Đánh dấu nhóm đã đọc
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs gap-1.5 text-foreground/60"
-                          onClick={() => toggleExpand(group.key)}
-                        >
-                          <ChevronDown
-                            className={cn('w-3.5 h-3.5 transition-transform', isOpen && 'rotate-180')}
-                          />
-                          {isOpen ? 'Thu gọn' : `Xem ${group.items.length - 1} thông báo khác`}
+                        <Button size="xs" variant="ghost" onClick={() => toggleExpand(group.key)}>
+                          <ChevronDown className={cn('transition-transform', isOpen && 'rotate-180')} />
+                          {isOpen ? 'Thu gọn' : `Xem thêm ${group.items.length - 1} thông báo`}
                         </Button>
                       </div>
 
@@ -378,7 +352,7 @@ export default function CandidateNotificationsPage() {
             })}
           </div>
         )}
-      </div>
+      </PageContainer>
     </CandidateLayout>
   )
 }

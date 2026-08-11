@@ -1,37 +1,54 @@
 import React from 'react'
+import { Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface MatchBadgeProps {
-  score: number // 0-100
+  /** 0–100. null = chưa tính được điểm (CV chưa có embedding) */
+  score: number | null
   size?: 'sm' | 'md' | 'lg'
   showLabel?: boolean
   className?: string
 }
 
-export default function MatchBadge({ score, size = 'md', showLabel = true, className }: MatchBadgeProps) {
-  const getColor = (score: number) => {
-    if (score >= 80) return 'bg-green-100 text-green-700 border-green-200'
-    if (score >= 60) return 'bg-yellow-100 text-yellow-700 border-yellow-200'
-    return 'bg-gray-100 text-gray-700 border-gray-200'
-  }
+const sizeClasses = {
+  sm: 'h-6 px-2 text-[11px] gap-1',
+  md: 'h-7 px-2.5 text-xs gap-1',
+  lg: 'h-9 px-3.5 text-sm gap-1.5',
+} as const
 
-  const sizeClasses = {
-    sm: 'px-2 py-1 text-xs',
-    md: 'px-3 py-1.5 text-sm',
-    lg: 'px-4 py-2 text-base',
-  }
+const iconSize = {
+  sm: 'size-3',
+  md: 'size-3.5',
+  lg: 'size-4',
+} as const
 
+export function matchTone(score: number | null) {
+  if (score === null) return 'bg-muted text-muted-foreground'
+  if (score >= 80) return 'bg-brand-500 text-white'
+  if (score >= 60) return 'bg-success-surface text-success-foreground'
+  if (score >= 40) return 'bg-warning-surface text-warning-foreground'
+  return 'bg-muted text-muted-foreground'
+}
+
+export default function MatchBadge({
+  score,
+  size = 'md',
+  showLabel = true,
+  className,
+}: MatchBadgeProps) {
   return (
-    <div
+    <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full font-semibold border',
-        getColor(score),
+        'inline-flex items-center rounded-full font-bold whitespace-nowrap tabular-nums',
+        matchTone(score),
         sizeClasses[size],
-        className
+        className,
       )}
+      title={score === null ? 'Chưa có điểm phù hợp' : `Độ phù hợp ${score}%`}
     >
-      <span>{score}%</span>
-      {showLabel && <span>Match</span>}
-    </div>
+      <Zap className={cn(iconSize[size], 'shrink-0')} />
+      {score === null ? 'Chưa chấm' : `${score}%`}
+      {showLabel && score !== null && <span className="font-semibold">phù hợp</span>}
+    </span>
   )
 }

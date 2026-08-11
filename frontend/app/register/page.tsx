@@ -1,101 +1,100 @@
 import React from 'react'
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import PublicLayout from '@/layouts/PublicLayout'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Users, Briefcase, ArrowRight, ArrowLeft } from 'lucide-react'
+import { UserRound, Building2, ArrowRight, CheckCircle2 } from 'lucide-react'
+
+export const metadata: Metadata = {
+  title: 'Đăng ký tài khoản',
+  description: 'Chọn loại tài khoản để bắt đầu với Smart Recruit: ứng viên tìm việc hoặc nhà tuyển dụng.',
+}
+
+const options = [
+  {
+    href: '/register/candidate',
+    icon: UserRound,
+    eyebrow: 'Miễn phí trọn đời',
+    title: 'Tôi đang tìm việc',
+    description:
+      'Tạo hồ sơ, tải CV lên và nhận danh sách việc làm được chấm điểm phù hợp với năng lực của bạn.',
+    benefits: [
+      'Điểm phù hợp cho từng tin tuyển dụng',
+      'Quản lý nhiều CV, chọn CV khi ứng tuyển',
+      'Theo dõi trạng thái hồ sơ đã nộp',
+      'Thông báo khi có việc làm mới phù hợp',
+    ],
+    cta: 'Đăng ký ứng viên',
+  },
+  {
+    href: '/register/employer',
+    icon: Building2,
+    eyebrow: 'Dành cho doanh nghiệp',
+    title: 'Tôi đang tuyển dụng',
+    description:
+      'Đăng tin tuyển dụng và nhận danh sách ứng viên đã được xếp hạng theo mức độ phù hợp với mô tả công việc.',
+    benefits: [
+      'Ứng viên xếp hạng tự động theo điểm phù hợp',
+      'Đăng tin tuyển dụng không giới hạn',
+      'Trang công ty riêng kèm đánh giá',
+      'Tạo bài đăng mạng xã hội từ tin tuyển dụng',
+    ],
+    cta: 'Đăng ký nhà tuyển dụng',
+  },
+]
 
 export default function RegisterPage() {
   return (
     <PublicLayout>
-      <div className="min-h-screen flex items-center justify-center px-4 py-20">
-        <div className="max-w-2xl w-full">
-          <Link href="/" className="inline-block mb-8">
-            <Button variant="ghost" className="-ml-2 text-foreground/70">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-foreground mb-3">Choose Your Account Type</h1>
-            <p className="text-lg text-foreground/70">
-              Get started with Smart Recruit in just a few minutes
+      <div className="hero-surface min-h-[calc(100vh-var(--header-h))] py-14 lg:py-20">
+        <div className="container-page">
+          <div className="mx-auto max-w-2xl text-center">
+            <h1 className="text-3xl font-bold sm:text-4xl">Bạn muốn bắt đầu với vai trò nào?</h1>
+            <p className="mt-3 text-muted-foreground">
+              Chọn loại tài khoản phù hợp — bạn có thể chuyển đổi vai trò sau khi đăng ký.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
-            <Card className="p-8 border-2 border-border hover:border-primary hover:shadow-lg transition-all cursor-pointer group">
-              <Link href="/register/candidate" className="block h-full">
-                <div className="mb-6 w-16 h-16 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition">
-                  <Users className="w-8 h-8 text-blue-600" />
-                </div>
-                <h2 className="text-2xl font-bold text-foreground mb-3">Find a Job</h2>
-                <p className="text-foreground/70 mb-8">
-                  I&apos;m looking for my next career opportunity. Get AI-powered job recommendations tailored to my profile.
-                </p>
+          <div className="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
+            {options.map(({ href, icon: Icon, eyebrow, title, description, benefits, cta }) => (
+              <Link
+                key={href}
+                href={href}
+                className="surface-card surface-hover group flex flex-col p-6 lg:p-7"
+              >
+                <span className="grid size-12 place-items-center rounded-xl bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-500 group-hover:text-white">
+                  <Icon className="size-6" />
+                </span>
 
-                <ul className="space-y-3 mb-8">
-                  {[
-                    'Personalized job matches',
-                    'Track applications easily',
-                    'AI insights on every job',
-                    'Interview notifications',
-                  ].map((item) => (
-                    <li key={item} className="flex items-center gap-3 text-sm text-foreground/70">
-                      <span className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs text-green-600 font-bold">✓</span>
-                      </span>
-                      {item}
+                <p className="mt-5 text-[11px] font-bold tracking-wider text-brand-600 uppercase">
+                  {eyebrow}
+                </p>
+                <h2 className="mt-1.5 text-xl font-bold">{title}</h2>
+                <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">{description}</p>
+
+                <ul className="mt-5 flex-1 space-y-2.5">
+                  {benefits.map((benefit) => (
+                    <li key={benefit} className="flex items-start gap-2.5 text-sm">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-brand-500" />
+                      <span className="leading-relaxed text-foreground/80">{benefit}</span>
                     </li>
                   ))}
                 </ul>
 
-                <Button className="w-full group-hover:bg-primary/90" size="lg">
-                  Sign Up as Candidate
-                  <ArrowRight className="ml-2 w-4 h-4" />
+                <Button asChild className="mt-6 w-full" size="lg" tabIndex={-1}>
+                  <span>
+                    {cta}
+                    <ArrowRight />
+                  </span>
                 </Button>
               </Link>
-            </Card>
-
-            <Card className="p-8 border-2 border-border hover:border-primary hover:shadow-lg transition-all cursor-pointer group">
-              <Link href="/register/employer" className="block h-full">
-                <div className="mb-6 w-16 h-16 rounded-lg bg-purple-50 flex items-center justify-center group-hover:bg-purple-100 transition">
-                  <Briefcase className="w-8 h-8 text-purple-600" />
-                </div>
-                <h2 className="text-2xl font-bold text-foreground mb-3">Hire Talent</h2>
-                <p className="text-foreground/70 mb-8">
-                  I&apos;m hiring. Find and connect with pre-screened candidates matched to my job requirements.
-                </p>
-
-                <ul className="space-y-3 mb-8">
-                  {[
-                    'AI-matched candidates',
-                    'Post jobs in minutes',
-                    'Manage applicants easily',
-                    'Social media integration',
-                  ].map((item) => (
-                    <li key={item} className="flex items-center gap-3 text-sm text-foreground/70">
-                      <span className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs text-green-600 font-bold">✓</span>
-                      </span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-
-                <Button className="w-full group-hover:bg-primary/90" size="lg">
-                  Sign Up as Employer
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-            </Card>
+            ))}
           </div>
 
-          <p className="text-center text-sm text-foreground/60 mt-8">
-            Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:underline font-medium">
-              Sign in here
+          <p className="mt-8 text-center text-sm text-muted-foreground">
+            Đã có tài khoản?{' '}
+            <Link href="/login" className="link-brand">
+              Đăng nhập ngay
             </Link>
           </p>
         </div>

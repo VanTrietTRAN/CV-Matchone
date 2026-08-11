@@ -1,13 +1,20 @@
+'use client'
+
 import React from 'react'
 import Link from 'next/link'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import MatchBadge from '@/components/MatchBadge'
 import SkillTag from '@/components/SkillTag'
 import AIBadge from '@/components/AIBadge'
-import { MapPin, DollarSign, Calendar } from 'lucide-react'
+import { MapPin, Clock, Building2, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  formatRelativeTime,
+  formatSalary,
+  daysUntil,
+  initials,
+  WORK_TYPE_LABEL,
+} from '@/lib/format'
 
 interface JobCardProps {
   id: string
@@ -18,14 +25,21 @@ interface JobCardProps {
   salaryMin?: number
   salaryMax?: number
   currency?: string
-  workType: 'remote' | 'hybrid' | 'onsite'
-  skills: string[]
-  matchScore?: number
+  workType?: 'remote' | 'hybrid' | 'onsite'
+  skills?: string[]
+  matchScore?: number | null
   aiInsight?: string
-  postedDate?: Date
+  postedDate?: Date | string
+  expiresAt?: Date | string
+  /** Link tới trang chi tiết; mặc định /candidate/jobs/[id] */
+  href?: string
+  applied?: boolean
+  onApply?: (id: string) => void
   onClick?: () => void
   className?: string
   showActions?: boolean
+  /** Huy hiệu thứ hạng (#1, #2…) cho danh sách gợi ý AI */
+  rank?: number
 }
 
 export default function JobCard({
@@ -36,111 +50,185 @@ export default function JobCard({
   location,
   salaryMin,
   salaryMax,
-  currency = 'USD',
+  currency = 'VND',
   workType,
-  skills,
+  skills = [],
   matchScore,
   aiInsight,
   postedDate,
+  expiresAt,
+  href,
+  applied = false,
+  onApply,
   onClick,
   className,
-  showActions = false,
+  showActions = true,
+  rank,
 }: JobCardProps) {
-  const workTypeColor = {
-    remote: 'bg-blue-50 text-blue-700 border-blue-200',
-    hybrid: 'bg-purple-50 text-purple-700 border-purple-200',
-    onsite: 'bg-gray-50 text-gray-700 border-gray-200',
-  }
+  const detailHref = href ?? `/candidate/jobs/${id}`
+  const remaining = daysUntil(expiresAt)
+  const isUrgent = remaining !== null && remaining >= 0 && remaining <= 5
 
   return (
-    <Card
-      className={cn(
-        'p-6 hover:shadow-lg transition-all cursor-pointer border border-border',
-        className
-      )}
+    <article
       onClick={onClick}
+      className={cn(
+        'surface-card surface-hover group relative flex flex-col gap-3.5 p-4 sm:p-5',
+        onClick && 'cursor-pointer',
+        className,
+      )}
     >
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div className="flex items-start gap-4 flex-1">
-          {logo && (
+      {typeof rank === 'number' && (
+        <span className="absolute -top-2.5 -left-2.5 grid size-7 place-items-center rounded-full bg-brand-500 text-xs font-bold text-white shadow-[var(--shadow-brand)]">
+          #{rank}
+        </span>
+      )}
+
+      <div className="flex items-start gap-3.5">
+        <div className="logo-box size-14 sm:size-[60px]">
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logo}
               alt={company}
-              className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+              className="size-full object-contain p-1.5"
+              loading="lazy"
             />
+          ) : (
+            <span className="text-sm font-bold text-brand-600">{initials(company)}</span>
           )}
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg text-foreground line-clamp-2">{title}</h3>
-            <p className="text-sm text-foreground/70">{company}</p>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="min-w-0 text-[15px] leading-snug font-bold sm:text-base">
+              <Link
+                href={detailHref}
+                className="line-clamp-2 transition-colors group-hover:text-brand-600"
+                title={title}
+              >
+                {title}
+              </Link>
+            </h3>
+            {matchScore !== undefined && (
+              <MatchBadge score={matchScore} size="sm" showLabel={false} className="shrink-0" />
+            )}
+          </div>
+
+          <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-muted-foreground">
+            <Building2 className="size-3.5 shrink-0" />
+            <span className="truncate" title={company}>
+              {company}
+            </span>
+          </p>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-md bg-brand-50 px-2 py-1 text-xs font-bold text-salary">
+              {formatSalary(salaryMin, salaryMax, currency)}
+            </span>
+            {location && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground/70">
+                <MapPin className="size-3" />
+                {location}
+              </span>
+            )}
+            {workType && (
+              <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground/70">
+                {WORK_TYPE_LABEL[workType] ?? workType}
+              </span>
+            )}
           </div>
         </div>
-        {matchScore !== undefined && (
-          <div className="flex-shrink-0">
-            <MatchBadge score={matchScore} size="sm" />
-          </div>
-        )}
       </div>
-
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="flex items-center gap-1 text-sm text-foreground/70">
-          <MapPin className="w-4 h-4" />
-          {location}
-        </div>
-        <Badge variant="outline" className={cn('border', workTypeColor[workType])}>
-          {workType.charAt(0).toUpperCase() + workType.slice(1)}
-        </Badge>
-      </div>
-
-      {(salaryMin || salaryMax) && (
-        <div className="flex items-center gap-1 mb-4 text-sm font-semibold text-green-700">
-          <DollarSign className="w-4 h-4" />
-          {salaryMin && salaryMax
-            ? `${salaryMin.toLocaleString()}-${salaryMax.toLocaleString()} ${currency}`
-            : salaryMin
-              ? `${salaryMin.toLocaleString()}+ ${currency}`
-              : `${salaryMax?.toLocaleString()} ${currency}`}
-        </div>
-      )}
 
       {aiInsight && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-start gap-2">
-            <AIBadge size="sm" text="AI Insight" className="flex-shrink-0" />
-            <p className="text-sm text-blue-700">{aiInsight}</p>
-          </div>
+        <div className="flex items-start gap-2 rounded-lg border border-brand-100 bg-brand-50/60 p-2.5">
+          <AIBadge size="sm" className="mt-px" />
+          <p className="line-clamp-2 text-xs leading-relaxed text-brand-800">{aiInsight}</p>
         </div>
       )}
 
-      <div className="mb-4">
-        <div className="flex items-center flex-wrap gap-2">
+      {skills.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
           {skills.slice(0, 4).map((skill, index) => (
-            <SkillTag key={`${skill}-${index}`} skill={skill} />
+            <SkillTag key={`${skill}-${index}`} skill={skill} size="sm" />
           ))}
           {skills.length > 4 && (
-            <span className="text-xs text-foreground/60">+{skills.length - 4} more</span>
+            <span className="self-center text-[11px] font-medium text-muted-foreground">
+              +{skills.length - 4}
+            </span>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="flex items-center justify-between pt-4 border-t border-border">
-        {postedDate && (
-          <p className="text-xs text-foreground/50">
-            Posted{' '}
-            {Math.floor(
-              (new Date().getTime() - new Date(postedDate).getTime()) / (1000 * 60 * 60 * 24)
-            )}{' '}
-            days ago
-          </p>
-        )}
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-3">
+        <div className="min-w-0 text-xs text-muted-foreground">
+          {isUrgent ? (
+            <span className="inline-flex items-center gap-1 font-semibold text-hot-600">
+              <Clock className="size-3.5" />
+              Còn {remaining} ngày để ứng tuyển
+            </span>
+          ) : (
+            postedDate && (
+              <span className="inline-flex items-center gap-1">
+                <Clock className="size-3.5" />
+                {formatRelativeTime(postedDate)}
+              </span>
+            )
+          )}
+        </div>
+
         {showActions && (
-          <div className="flex gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link href={`/jobs/${id}`}>View Details</Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={detailHref}>Chi tiết</Link>
             </Button>
-            <Button size="sm">Apply Now</Button>
+            {applied ? (
+              <Button size="sm" variant="soft" disabled>
+                <CheckCircle2 />
+                Đã ứng tuyển
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onApply?.(id)
+                }}
+              >
+                Ứng tuyển
+              </Button>
+            )}
           </div>
         )}
       </div>
-    </Card>
+    </article>
+  )
+}
+
+export function JobCardSkeleton() {
+  return (
+    <div className="surface-card flex flex-col gap-3.5 p-4 sm:p-5">
+      <div className="flex gap-3.5">
+        <div className="skeleton size-14 shrink-0 rounded-lg sm:size-[60px]" />
+        <div className="flex-1 space-y-2">
+          <div className="skeleton h-4 w-3/4" />
+          <div className="skeleton h-3 w-1/2" />
+          <div className="flex gap-1.5 pt-1">
+            <div className="skeleton h-6 w-24" />
+            <div className="skeleton h-6 w-20" />
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-1.5">
+        <div className="skeleton h-5 w-16" />
+        <div className="skeleton h-5 w-20" />
+        <div className="skeleton h-5 w-14" />
+      </div>
+      <div className="flex items-center justify-between border-t border-border pt-3">
+        <div className="skeleton h-3 w-24" />
+        <div className="skeleton h-9 w-32" />
+      </div>
+    </div>
   )
 }

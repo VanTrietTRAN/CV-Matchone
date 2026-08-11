@@ -1,25 +1,28 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import CandidateLayout from '@/layouts/CandidateLayout'
-import { Card } from '@/components/ui/card'
+import PageContainer from '@/components/dashboard/PageContainer'
+import PageHeader from '@/components/dashboard/PageHeader'
+import StatCard from '@/components/dashboard/StatCard'
+import StatusBadge from '@/components/StatusBadge'
+import EmptyState from '@/components/EmptyState'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Calendar, Loader2, RefreshCw, X, MapPin, Briefcase } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { RefreshCw, ClipboardCheck, Clock, Eye, CheckCircle2, Building2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
 import { ReviewCompanyButton } from '@/components/reviews/CompanyReview'
+import { formatDate, formatRelativeTime } from '@/lib/format'
+import { matchTone } from '@/components/MatchBadge'
+import { cn } from '@/lib/utils'
 
 type ApiJob = {
   _id: string
   title: string
-  description?: string
   location?: string
-  requirements?: string[]
-  salary?: string
-  jobType?: string
-  experience?: string
   employerId?: { _id?: string; email?: string } | string
 }
 
@@ -31,18 +34,22 @@ type Application = {
   appliedAt: string
 }
 
+const TABS = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'pending', label: 'Chờ duyệt' },
+  { value: 'reviewed', label: 'Đã xem' },
+  { value: 'interview', label: 'Phỏng vấn' },
+  { value: 'accepted', label: 'Trúng tuyển' },
+  { value: 'rejected', label: 'Từ chối' },
+]
+
 function getJob(app: Application): ApiJob | null {
-  if (typeof app.jobId === 'object' && app.jobId !== null) return app.jobId
-  return null
+  return typeof app.jobId === 'object' && app.jobId !== null ? app.jobId : null
 }
 
 function getJobId(app: Application): string {
   const j = getJob(app)
   return j ? j._id : typeof app.jobId === 'string' ? app.jobId : ''
-}
-
-function getJobTitle(app: Application): string {
-  return getJob(app)?.title || '—'
 }
 
 function getEmployerEmail(app: Application): string {
@@ -57,34 +64,12 @@ function getEmployerId(app: Application): string {
   return typeof e === 'string' ? e : ''
 }
 
-function statusLabel(status: string) {
-  const map: Record<string, string> = {
-    pending: 'Chờ duyệt',
-    reviewed: 'Đang xem xét',
-    interview: 'Phỏng vấn',
-    accepted: 'Chấp nhận',
-    rejected: 'Từ chối',
-  }
-  return map[status] || status
-}
-
-function statusClasses(status: string) {
-  if (status === 'reviewed') return 'bg-purple-50 text-purple-700'
-  if (status === 'interview') return 'bg-amber-50 text-amber-700'
-  if (status === 'accepted') return 'bg-green-50 text-green-700'
-  if (status === 'rejected') return 'bg-red-50 text-red-700'
-  return 'bg-blue-50 text-blue-700'
-}
-
-function matchColor(score: number) {
-  if (score >= 70) return 'text-green-700 font-semibold'
-  if (score >= 40) return 'text-yellow-700 font-semibold'
-  return 'text-foreground/50'
-}
-
 export default function ApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState('all')
+  const [cancelTarget, setCancelTarget] = useState<Application | null>(null)
+  const [cancelling, setCancelling] = useState(false)
 
   const loadApplications = useCallback(async () => {
     setLoading(true)
@@ -99,171 +84,205 @@ export default function ApplicationsPage() {
     }
   }, [])
 
-  useEffect(() => { loadApplications() }, [loadApplications])
+  useEffect(() => {
+    loadApplications()
+  }, [loadApplications])
 
-  const handleCancelApplication = async (appId: string) => {
-    if (!confirm('Bạn có chắc chắn muốn hủy đơn ứng tuyển này?')) return
+  const counts = useMemo(() => {
+    const map: Record<string, number> = { all: applications.length }
+    for (const t of TABS.slice(1)) {
+      map[t.value] = applications.filter((a) => a.status === t.value).length
+    }
+    return map
+  }, [applications])
+
+  const visible = tab === 'all' ? applications : applications.filter((a) => a.status === tab)
+
+  const handleCancel = async () => {
+    if (!cancelTarget) return
+    setCancelling(true)
     try {
-      await apiFetch(`/api/applications/${appId}`, { method: 'DELETE' })
-      toast.success('Đã hủy đơn ứng tuyển thành công')
+      await apiFetch(`/api/applications/${cancelTarget._id}`, { method: 'DELETE' })
+      toast.success('Đã huỷ đơn ứng tuyển')
+      setCancelTarget(null)
       loadApplications()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Không thể hủy đơn ứng tuyển')
+      toast.error(e instanceof Error ? e.message : 'Không thể huỷ đơn ứng tuyển')
+    } finally {
+      setCancelling(false)
     }
   }
 
-  const byStatus = (status: string) => applications.filter((a) => a.status === status)
-  const statusList = ['pending', 'reviewed', 'interview', 'accepted', 'rejected']
-
-  const AppTable = ({ apps }: { apps: Application[] }) => (
-    <Card className="border border-border overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-foreground/5 border-b border-border">
-            <tr>
-              <th className="px-6 py-4 text-left font-semibold text-foreground">Vị trí & Công ty</th>
-              <th className="px-6 py-4 text-left font-semibold text-foreground">Điểm AI</th>
-              <th className="px-6 py-4 text-left font-semibold text-foreground">Trạng thái</th>
-              <th className="px-6 py-4 text-left font-semibold text-foreground">Ngày nộp</th>
-              <th className="px-6 py-4 text-right font-semibold text-foreground">Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {apps.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-foreground/70">
-                  Chưa có đơn ứng tuyển trong mục này.
-                </td>
-              </tr>
-            ) : (
-              apps.map((app) => (
-                <tr key={app._id} className="border-b border-border hover:bg-foreground/5 transition">
-                  <td className="px-6 py-4">
-                    <Link
-                      href={`/candidate/jobs/${getJobId(app)}`}
-                      className="text-left group block"
-                    >
-                      <p className="font-medium text-foreground group-hover:text-primary transition-colors underline-offset-2 group-hover:underline">
-                        {getJobTitle(app)}
-                      </p>
-                      <p className="text-xs text-foreground/60 mt-0.5">{getEmployerEmail(app)}</p>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={matchColor(app.matchingScore || 0)}>
-                      {app.matchingScore ? `${app.matchingScore}%` : '—'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusClasses(app.status)}`}>
-                      {statusLabel(app.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-foreground/70">
-                    <div className="flex items-center gap-1 text-xs">
-                      <Calendar className="w-3 h-3" />
-                      {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString('vi-VN') : '—'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 flex-wrap">
-                      {['reviewed', 'interview', 'accepted'].includes(app.status) && getEmployerId(app) && (
-                        <ReviewCompanyButton
-                          companyUserId={getEmployerId(app)}
-                          companyName={getEmployerEmail(app)}
-                        />
-                      )}
-                      {['pending', 'reviewed'].includes(app.status) && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive/90 hover:bg-destructive/10 text-xs h-8"
-                          onClick={() => handleCancelApplication(app._id)}
-                        >
-                          Hủy đơn
-                        </Button>
-                      )}
-                      {app.status === 'rejected' && (
-                        <span className="text-xs text-foreground/40">—</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  )
-
   return (
     <CandidateLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
-              Theo dõi đơn ứng tuyển
-            </h1>
-            <p className="text-foreground/70">
-              Xem trạng thái tất cả đơn ứng tuyển và điểm khớp AI
-            </p>
-          </div>
-          <Button variant="outline" onClick={loadApplications} disabled={loading} className="gap-2">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới
-          </Button>
+      <PageContainer>
+        <PageHeader
+          title="Việc làm đã ứng tuyển"
+          description="Theo dõi trạng thái từng hồ sơ và điểm phù hợp tại thời điểm ứng tuyển."
+          actions={
+            <Button variant="outline" onClick={loadApplications} disabled={loading}>
+              <RefreshCw className={loading ? 'animate-spin' : ''} />
+              Làm mới
+            </Button>
+          }
+        />
+
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Tổng hồ sơ"
+            value={counts.all}
+            icon={ClipboardCheck}
+            tone="neutral"
+            loading={loading}
+          />
+          <StatCard
+            label="Chờ duyệt"
+            value={counts.pending ?? 0}
+            icon={Clock}
+            tone="info"
+            loading={loading}
+          />
+          <StatCard
+            label="Đã được xem"
+            value={counts.reviewed ?? 0}
+            icon={Eye}
+            tone="violet"
+            loading={loading}
+          />
+          <StatCard
+            label="Trúng tuyển"
+            value={counts.accepted ?? 0}
+            icon={CheckCircle2}
+            tone="brand"
+            loading={loading}
+          />
+        </section>
+
+        <div className="mt-7">
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="h-auto w-full flex-wrap justify-start gap-1 p-1">
+              {TABS.map((t) => (
+                <TabsTrigger key={t.value} value={t.value} className="flex-none px-3 py-2">
+                  {t.label}
+                  <span className="ml-1 text-xs opacity-70">({counts[t.value] ?? 0})</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <span className="ml-3 text-foreground/70">Đang tải đơn ứng tuyển...</span>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-              <Card className="p-4 border border-border text-center">
-                <p className="text-2xl font-bold text-foreground">{applications.length}</p>
-                <p className="text-xs text-foreground/70 mt-1">Tổng đơn</p>
-              </Card>
-              <Card className="p-4 border border-border text-center">
-                <p className="text-2xl font-bold text-blue-600">{byStatus('pending').length}</p>
-                <p className="text-xs text-foreground/70 mt-1">Chờ duyệt</p>
-              </Card>
-              <Card className="p-4 border border-border text-center">
-                <p className="text-2xl font-bold text-purple-600">{byStatus('reviewed').length}</p>
-                <p className="text-xs text-foreground/70 mt-1">Đang xem xét</p>
-              </Card>
-              <Card className="p-4 border border-border text-center">
-                <p className="text-2xl font-bold text-green-600">{byStatus('accepted').length}</p>
-                <p className="text-xs text-foreground/70 mt-1">Chấp nhận</p>
-              </Card>
-            </div>
-
-            <Tabs defaultValue="all" className="mb-6">
-              <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6">
-                <TabsTrigger value="all">Tất cả ({applications.length})</TabsTrigger>
-                <TabsTrigger value="pending">Chờ ({byStatus('pending').length})</TabsTrigger>
-                <TabsTrigger value="reviewed">Xem xét ({byStatus('reviewed').length})</TabsTrigger>
-                <TabsTrigger value="interview">Phỏng vấn ({byStatus('interview').length})</TabsTrigger>
-                <TabsTrigger value="accepted">Chấp nhận ({byStatus('accepted').length})</TabsTrigger>
-                <TabsTrigger value="rejected">Từ chối ({byStatus('rejected').length})</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="all" className="mt-6">
-                <AppTable apps={applications} />
-              </TabsContent>
-              {statusList.map((status) => (
-                <TabsContent key={status} value={status} className="mt-6">
-                  <AppTable apps={byStatus(status)} />
-                </TabsContent>
+        <div className="surface-card mt-4 overflow-hidden">
+          {loading ? (
+            <div className="space-y-3 p-5">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="skeleton h-14 w-full" />
               ))}
-            </Tabs>
-          </>
-        )}
-      </div>
+            </div>
+          ) : visible.length === 0 ? (
+            <EmptyState
+              icon={ClipboardCheck}
+              title={
+                tab === 'all' ? 'Bạn chưa ứng tuyển vị trí nào' : 'Không có hồ sơ ở trạng thái này'
+              }
+              description={
+                tab === 'all'
+                  ? 'Khám phá danh sách việc làm phù hợp và ứng tuyển vị trí đầu tiên.'
+                  : 'Hãy chọn tab khác để xem các hồ sơ còn lại.'
+              }
+              action={tab === 'all' ? { label: 'Tìm việc làm', href: '/candidate/matches' } : undefined}
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/60 text-left">
+                    <th className="px-5 py-3 font-semibold">Vị trí &amp; nhà tuyển dụng</th>
+                    <th className="px-5 py-3 font-semibold">Độ phù hợp</th>
+                    <th className="px-5 py-3 font-semibold">Trạng thái</th>
+                    <th className="px-5 py-3 font-semibold">Ngày nộp</th>
+                    <th className="px-5 py-3 text-right font-semibold">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((app) => (
+                    <tr
+                      key={app._id}
+                      className="border-b border-border transition-colors last:border-0 hover:bg-muted/40"
+                    >
+                      <td className="px-5 py-4">
+                        <Link href={`/candidate/jobs/${getJobId(app)}`} className="group block">
+                          <p className="font-semibold transition-colors group-hover:text-brand-600">
+                            {getJob(app)?.title || '—'}
+                          </p>
+                          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Building2 className="size-3" />
+                            {getEmployerEmail(app)}
+                          </p>
+                        </Link>
+                      </td>
 
+                      <td className="px-5 py-4">
+                        <span
+                          className={cn(
+                            'inline-flex rounded-full px-2.5 py-1 text-xs font-bold tabular-nums',
+                            matchTone(app.matchingScore ?? null),
+                          )}
+                        >
+                          {app.matchingScore ? `${app.matchingScore}%` : 'Chưa chấm'}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <StatusBadge status={app.status} size="sm" />
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <p className="tabular-nums">{formatDate(app.appliedAt)}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatRelativeTime(app.appliedAt)}
+                        </p>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {['reviewed', 'interview', 'accepted'].includes(app.status) &&
+                            getEmployerId(app) && (
+                              <ReviewCompanyButton
+                                companyUserId={getEmployerId(app)}
+                                companyName={getEmployerEmail(app)}
+                              />
+                            )}
+                          {['pending', 'reviewed'].includes(app.status) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-danger-foreground hover:bg-danger/10 hover:text-danger-foreground"
+                              onClick={() => setCancelTarget(app)}
+                            >
+                              Huỷ đơn
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </PageContainer>
+
+      <ConfirmDialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        title="Huỷ đơn ứng tuyển?"
+        description={`Đơn ứng tuyển cho vị trí “${getJob(cancelTarget ?? ({} as Application))?.title ?? ''}” sẽ bị xoá khỏi hệ thống. Bạn có thể ứng tuyển lại sau nếu tin vẫn còn hạn.`}
+        actionLabel="Huỷ đơn"
+        destructive
+        loading={cancelling}
+        onConfirm={handleCancel}
+      />
     </CandidateLayout>
   )
 }

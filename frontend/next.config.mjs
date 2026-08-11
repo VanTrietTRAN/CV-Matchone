@@ -5,6 +5,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Ẩn nút Dev Tools của Next.js ở góc màn hình khi chạy `next dev`
+  devIndicators: false,
 };
 
 export default withSentryConfig(nextConfig, {

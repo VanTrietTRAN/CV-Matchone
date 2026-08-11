@@ -28,14 +28,14 @@ type AuditLogItem = {
 
 const ACTION_LABELS: Record<string, { label: string; badgeClass: string }> = {
   LOCK_USER: { label: 'Khóa tài khoản', badgeClass: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  UNLOCK_USER: { label: 'Mở khóa tài khoản', badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  DELETE_USER: { label: 'Xóa tài khoản', badgeClass: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+  UNLOCK_USER: { label: 'Mở khóa tài khoản', badgeClass: 'bg-brand-500/10 text-brand-400 border-brand-500/20' },
+  DELETE_USER: { label: 'Xóa tài khoản', badgeClass: 'bg-red-500/10 text-red-400 border-red-500/20' },
   APPROVE_JOB: { label: 'Duyệt Job', badgeClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   REJECT_JOB: { label: 'Đóng Job', badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  DELETE_JOB: { label: 'Xóa Job', badgeClass: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+  DELETE_JOB: { label: 'Xóa Job', badgeClass: 'bg-red-500/10 text-red-400 border-red-500/20' },
   RETRY_AI_PARSING: { label: 'Chạy lại AI CV', badgeClass: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-  CREATE_SYSTEM_BROADCAST: { label: 'Phát thông báo', badgeClass: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
-  UPDATE_SYSTEM_SETTINGS: { label: 'Sửa cấu hình hệ thống', badgeClass: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
+  CREATE_SYSTEM_BROADCAST: { label: 'Phát thông báo', badgeClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+  UPDATE_SYSTEM_SETTINGS: { label: 'Sửa cấu hình hệ thống', badgeClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
 }
 
 export default function AuditLogsPage() {
@@ -76,13 +76,13 @@ export default function AuditLogsPage() {
     <AdminLayout>
       <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
           <div>
             <div className="flex items-center gap-2">
-              <FileCheck2 className="w-7 h-7 text-violet-400" />
+              <FileCheck2 className="w-7 h-7 text-brand-400" />
               <h1 className="text-2xl font-bold text-white tracking-tight">Nhật ký Audit (System Audit Logs)</h1>
             </div>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-slate-400 text-sm mt-1">
               Ghi vết 100% mọi thao tác quản trị an ninh, thay đổi cấu hình và tác động tài khoản của Admin.
             </p>
           </div>
@@ -91,7 +91,7 @@ export default function AuditLogsPage() {
             onClick={fetchLogs}
             disabled={loading}
             variant="outline"
-            className="border-gray-800 bg-gray-900/60 hover:bg-gray-800 text-gray-300 gap-2 self-start sm:self-auto"
+            className="border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 gap-2 self-start sm:self-auto"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
@@ -99,9 +99,9 @@ export default function AuditLogsPage() {
         </div>
 
         {/* Filters & Search */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-900/40 p-4 rounded-xl border border-gray-800">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-900/40 p-4 rounded-xl border border-slate-800">
           <div className="relative sm:col-span-2">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
+            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
             <Input
               placeholder="Tìm theo email Admin hoặc IP..."
               value={search}
@@ -109,12 +109,12 @@ export default function AuditLogsPage() {
                 setSearch(e.target.value)
                 setPage(1)
               }}
-              className="pl-9 bg-gray-950 border-gray-800 text-white placeholder:text-gray-600 focus:border-violet-500"
+              className="pl-9 bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus:border-brand-500"
             />
           </div>
 
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-500 shrink-0" />
+            <Filter className="w-4 h-4 text-slate-500 shrink-0" />
             <Select
               value={actionFilter}
               onValueChange={(val) => {
@@ -122,10 +122,10 @@ export default function AuditLogsPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="bg-gray-950 border-gray-800 text-white">
+              <SelectTrigger className="bg-slate-950 border-slate-800 text-white">
                 <SelectValue placeholder="Lọc theo hành động" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-800 text-white">
+              <SelectContent className="bg-slate-900 border-slate-800 text-white">
                 <SelectItem value="all">Tất cả hành động</SelectItem>
                 <SelectItem value="LOCK_USER">Khóa tài khoản</SelectItem>
                 <SelectItem value="UNLOCK_USER">Mở khóa tài khoản</SelectItem>
@@ -142,10 +142,10 @@ export default function AuditLogsPage() {
         </div>
 
         {/* Table Content */}
-        <div className="bg-gray-900/40 rounded-xl border border-gray-800 overflow-hidden">
+        <div className="bg-slate-900/40 rounded-xl border border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-300">
-              <thead className="bg-gray-950/80 text-gray-400 text-xs uppercase font-medium border-b border-gray-800">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-950/80 text-slate-400 text-xs uppercase font-medium border-b border-slate-800">
                 <tr>
                   <th className="py-3.5 px-4">Thời gian</th>
                   <th className="py-3.5 px-4">Admin thực hiện</th>
@@ -155,18 +155,18 @@ export default function AuditLogsPage() {
                   <th className="py-3.5 px-4">Chi tiết payload</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/60">
+              <tbody className="divide-y divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-500">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-violet-400" />
+                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-brand-400" />
                       Đang tải nhật ký Audit...
                     </td>
                   </tr>
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-500">
-                      <ShieldAlert className="w-8 h-8 mx-auto mb-2 text-gray-600" />
+                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                      <ShieldAlert className="w-8 h-8 mx-auto mb-2 text-slate-600" />
                       Chưa có ghi vết nhật ký audit nào phù hợp.
                     </td>
                   </tr>
@@ -174,26 +174,26 @@ export default function AuditLogsPage() {
                   logs.map((log) => {
                     const actionInfo = ACTION_LABELS[log.action] || {
                       label: log.action,
-                      badgeClass: 'bg-gray-800 text-gray-400 border-gray-700',
+                      badgeClass: 'bg-slate-800 text-slate-400 border-slate-700',
                     }
 
                     return (
-                      <tr key={log._id} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="py-3.5 px-4 whitespace-nowrap text-xs text-gray-400">
+                      <tr key={log._id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-400">
                           <div className="flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-gray-500" />
+                            <Clock className="w-3.5 h-3.5 text-slate-500" />
                             {new Date(log.createdAt).toLocaleString('vi-VN')}
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-violet-600/20 text-violet-400 flex items-center justify-center text-xs font-bold">
+                            <div className="w-6 h-6 rounded-full bg-brand-600/20 text-brand-400 flex items-center justify-center text-xs font-bold">
                               <User className="w-3.5 h-3.5" />
                             </div>
                             <div>
                               <p className="text-white text-xs font-medium">{log.adminId?.fullName || log.adminId?.email || 'System'}</p>
-                              <p className="text-gray-500 text-[11px]">{log.adminId?.email}</p>
+                              <p className="text-slate-500 text-[11px]">{log.adminId?.email}</p>
                             </div>
                           </div>
                         </td>
@@ -207,25 +207,25 @@ export default function AuditLogsPage() {
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap text-xs">
-                          <span className="text-violet-300 font-medium">{log.targetModel}</span>
+                          <span className="text-brand-300 font-medium">{log.targetModel}</span>
                           {log.targetId && (
-                            <span className="text-gray-500 block font-mono text-[10px]">
+                            <span className="text-slate-500 block font-mono text-[10px]">
                               ID: {log.targetId.substring(0, 12)}...
                             </span>
                           )}
                         </td>
 
-                        <td className="py-3.5 px-4 whitespace-nowrap font-mono text-xs text-gray-400">
+                        <td className="py-3.5 px-4 whitespace-nowrap font-mono text-xs text-slate-400">
                           {log.ipAddress}
                         </td>
 
-                        <td className="py-3.5 px-4 text-xs font-mono text-gray-400">
+                        <td className="py-3.5 px-4 text-xs font-mono text-slate-400">
                           {log.details ? (
-                            <div className="bg-gray-950 p-2 rounded border border-gray-800 max-w-xs overflow-x-auto text-[11px] text-emerald-400/90">
+                            <div className="bg-slate-950 p-2 rounded border border-slate-800 max-w-xs overflow-x-auto text-[11px] text-brand-400/90">
                               {JSON.stringify(log.details)}
                             </div>
                           ) : (
-                            <span className="text-gray-600">—</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
                       </tr>
@@ -238,7 +238,7 @@ export default function AuditLogsPage() {
 
           {/* Pagination */}
           {pages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-gray-800 text-xs text-gray-400">
+            <div className="flex items-center justify-between p-4 border-t border-slate-800 text-xs text-slate-400">
               <p>Tổng số <strong>{total}</strong> bản ghi nhật ký</p>
               <div className="flex items-center gap-2">
                 <Button
@@ -246,7 +246,7 @@ export default function AuditLogsPage() {
                   variant="outline"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => p - 1)}
-                  className="border-gray-800 bg-gray-950 text-gray-300 hover:bg-gray-800"
+                  className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
                 >
                   Trang trước
                 </Button>
@@ -258,7 +258,7 @@ export default function AuditLogsPage() {
                   variant="outline"
                   disabled={page >= pages}
                   onClick={() => setPage((p) => p + 1)}
-                  className="border-gray-800 bg-gray-950 text-gray-300 hover:bg-gray-800"
+                  className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
                 >
                   Trang sau
                 </Button>

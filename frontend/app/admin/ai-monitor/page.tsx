@@ -106,13 +106,13 @@ export default function AiMonitorPage() {
     <AdminLayout>
       <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
           <div>
             <div className="flex items-center gap-2">
               <Cpu className="w-7 h-7 text-purple-400" />
               <h1 className="text-2xl font-bold text-white tracking-tight">AI Worker & CV Processing Monitor</h1>
             </div>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-slate-400 text-sm mt-1">
               Giám sát tiến trình bóc tách CV qua AI / OCR và ép chạy lại (Re-try) cho các hồ sơ gặp sự cố mạng hoặc rate-limit.
             </p>
           </div>
@@ -131,7 +131,7 @@ export default function AiMonitorPage() {
               onClick={fetchAiMonitor}
               disabled={loading}
               variant="outline"
-              className="border-gray-800 bg-gray-900/60 hover:bg-gray-800 text-gray-300 gap-2"
+              className="border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 gap-2"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Làm mới
@@ -141,50 +141,50 @@ export default function AiMonitorPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-gray-900/40 p-4 rounded-xl border border-gray-800 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+          <div className="bg-slate-900/40 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-gray-400 text-xs font-medium">Đã bóc tách AI thành công</p>
+              <p className="text-slate-400 text-xs font-medium">Đã bóc tách AI thành công</p>
               <p className="text-2xl font-bold text-white mt-0.5">{stats.ready}</p>
             </div>
           </div>
 
-          <div className="bg-gray-900/40 p-4 rounded-xl border border-gray-800 flex items-center gap-4">
+          <div className="bg-slate-900/40 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center">
               <AlertTriangle className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-gray-400 text-xs font-medium">Xử lý thất bại (Lỗi)</p>
+              <p className="text-slate-400 text-xs font-medium">Xử lý thất bại (Lỗi)</p>
               <p className="text-2xl font-bold text-red-400 mt-0.5">{stats.failed}</p>
             </div>
           </div>
 
-          <div className="bg-gray-900/40 p-4 rounded-xl border border-gray-800 flex items-center gap-4">
+          <div className="bg-slate-900/40 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
               <Zap className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <p className="text-gray-400 text-xs font-medium">Đang xử lý AI</p>
+              <p className="text-slate-400 text-xs font-medium">Đang xử lý AI</p>
               <p className="text-2xl font-bold text-white mt-0.5">{stats.processing}</p>
             </div>
           </div>
 
-          <div className="bg-gray-900/40 p-4 rounded-xl border border-gray-800 flex items-center gap-4">
+          <div className="bg-slate-900/40 p-4 rounded-xl border border-slate-800 flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-gray-400 text-xs font-medium">Đang xếp hàng (Queued)</p>
+              <p className="text-slate-400 text-xs font-medium">Đang xếp hàng (Queued)</p>
               <p className="text-2xl font-bold text-white mt-0.5">{stats.queued}</p>
             </div>
           </div>
         </div>
 
         {/* Filter */}
-        <div className="flex items-center justify-between bg-gray-900/40 p-4 rounded-xl border border-gray-800">
-          <p className="text-sm font-medium text-gray-300">Danh sách hồ sơ CV</p>
+        <div className="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800">
+          <p className="text-sm font-medium text-slate-300">Danh sách hồ sơ CV</p>
           <div className="w-56">
             <Select
               value={statusFilter}
@@ -193,10 +193,10 @@ export default function AiMonitorPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="bg-gray-950 border-gray-800 text-white">
+              <SelectTrigger className="bg-slate-950 border-slate-800 text-white">
                 <SelectValue placeholder="Lọc theo trạng thái" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-900 border-gray-800 text-white">
+              <SelectContent className="bg-slate-900 border-slate-800 text-white">
                 <SelectItem value="all">Tất cả trạng thái</SelectItem>
                 <SelectItem value="failed">Lỗi (Failed)</SelectItem>
                 <SelectItem value="ready">Thành công (Ready)</SelectItem>
@@ -208,10 +208,10 @@ export default function AiMonitorPage() {
         </div>
 
         {/* Table Content */}
-        <div className="bg-gray-900/40 rounded-xl border border-gray-800 overflow-hidden">
+        <div className="bg-slate-900/40 rounded-xl border border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-300">
-              <thead className="bg-gray-950/80 text-gray-400 text-xs uppercase font-medium border-b border-gray-800">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-950/80 text-slate-400 text-xs uppercase font-medium border-b border-slate-800">
                 <tr>
                   <th className="py-3.5 px-4">Ứng viên / Hồ sơ</th>
                   <th className="py-3.5 px-4">Trạng thái AI</th>
@@ -221,18 +221,18 @@ export default function AiMonitorPage() {
                   <th className="py-3.5 px-4 text-right">Thao tác Admin</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/60">
+              <tbody className="divide-y divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-500">
+                    <td colSpan={6} className="py-12 text-center text-slate-500">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-purple-400" />
                       Đang tải danh sách AI Monitor...
                     </td>
                   </tr>
                 ) : cvs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-500">
-                      <FileText className="w-8 h-8 mx-auto mb-2 text-gray-600" />
+                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                      <FileText className="w-8 h-8 mx-auto mb-2 text-slate-600" />
                       Không tìm thấy hồ sơ CV nào khớp với bộ lọc.
                     </td>
                   </tr>
@@ -243,18 +243,18 @@ export default function AiMonitorPage() {
                     const isProcessing = cv.processingStatus === 'processing'
 
                     return (
-                      <tr key={cv._id} className="hover:bg-gray-800/30 transition-colors">
+                      <tr key={cv._id} className="hover:bg-slate-800/30 transition-colors">
                         <td className="py-3.5 px-4">
                           <div>
                             <p className="text-white text-sm font-medium">{cv.fullName}</p>
-                            <p className="text-gray-400 text-xs">{cv.email}</p>
-                            {cv.headline && <p className="text-gray-500 text-[11px] truncate max-w-xs">{cv.headline}</p>}
+                            <p className="text-slate-400 text-xs">{cv.email}</p>
+                            {cv.headline && <p className="text-slate-500 text-[11px] truncate max-w-xs">{cv.headline}</p>}
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           {isReady && (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20">
                               <CheckCircle2 className="w-3.5 h-3.5" /> Thành công
                             </span>
                           )}
@@ -281,13 +281,13 @@ export default function AiMonitorPage() {
                               {cv.processingError}
                             </span>
                           ) : (
-                            <span className="text-gray-600 text-xs">—</span>
+                            <span className="text-slate-600 text-xs">—</span>
                           )}
                         </td>
 
-                        <td className="py-3.5 px-4 font-mono text-xs text-gray-300">{cv.attempts || 0} lần</td>
+                        <td className="py-3.5 px-4 font-mono text-xs text-slate-300">{cv.attempts || 0} lần</td>
 
-                        <td className="py-3.5 px-4 whitespace-nowrap text-xs text-gray-400">
+                        <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-400">
                           {new Date(cv.updatedAt).toLocaleString('vi-VN')}
                         </td>
 
@@ -297,7 +297,7 @@ export default function AiMonitorPage() {
                             variant="outline"
                             disabled={retryingId === cv._id}
                             onClick={() => handleRetrySingle(cv._id)}
-                            className="border-gray-800 bg-gray-950 text-purple-300 hover:bg-purple-900/30 hover:text-purple-200 border-purple-500/20 gap-1.5"
+                            className="border-slate-800 bg-slate-950 text-purple-300 hover:bg-purple-900/30 hover:text-purple-200 border-purple-500/20 gap-1.5"
                           >
                             <RotateCcw className={`w-3.5 h-3.5 ${retryingId === cv._id ? 'animate-spin' : ''}`} />
                             Chạy lại AI
@@ -313,7 +313,7 @@ export default function AiMonitorPage() {
 
           {/* Pagination */}
           {pages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-gray-800 text-xs text-gray-400">
+            <div className="flex items-center justify-between p-4 border-t border-slate-800 text-xs text-slate-400">
               <p>Tổng số CV: {stats.total}</p>
               <div className="flex items-center gap-2">
                 <Button
@@ -321,7 +321,7 @@ export default function AiMonitorPage() {
                   variant="outline"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => p - 1)}
-                  className="border-gray-800 bg-gray-950 text-gray-300 hover:bg-gray-800"
+                  className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
                 >
                   Trang trước
                 </Button>
@@ -333,7 +333,7 @@ export default function AiMonitorPage() {
                   variant="outline"
                   disabled={page >= pages}
                   onClick={() => setPage((p) => p + 1)}
-                  className="border-gray-800 bg-gray-950 text-gray-300 hover:bg-gray-800"
+                  className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800"
                 >
                   Trang sau
                 </Button>

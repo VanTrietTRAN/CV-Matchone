@@ -3,80 +3,190 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* =========================================================
+   SMART RECRUIT — DESIGN SYSTEM
+   Benchmark: topcv.vn
+   - Brand green #00B14F  = oklch(0.664 0.185 149.5)
+   - Page background xám nhạt + card trắng (đặc trưng TopCV)
+   - Text navy-slate #212F3F thay vì đen tuyệt đối
+   ========================================================= */
+
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* ---------- Brand scale (green) ---------- */
+  --brand-50: oklch(0.972 0.028 149.5);
+  --brand-100: oklch(0.94 0.058 149.5);
+  --brand-200: oklch(0.892 0.095 149.5);
+  --brand-300: oklch(0.826 0.13 149.5);
+  --brand-400: oklch(0.748 0.161 149.5);
+  --brand-500: oklch(0.664 0.185 149.5);
+  --brand-600: oklch(0.596 0.166 149.5);
+  --brand-700: oklch(0.505 0.14 149.5);
+  --brand-800: oklch(0.42 0.112 149.5);
+  --brand-900: oklch(0.35 0.09 149.5);
+
+  /* ---------- Accent scale (orange – tin hot / nhấn phụ) ---------- */
+  --accent-50: oklch(0.968 0.022 45);
+  --accent-100: oklch(0.935 0.045 45);
+  --accent-200: oklch(0.888 0.078 45);
+  --accent-500: oklch(0.72 0.16 45);
+  --accent-600: oklch(0.655 0.166 40);
+  --accent-700: oklch(0.565 0.152 36);
+
+  /* ---------- Semantic ---------- */
+  --success: oklch(0.664 0.185 149.5);
+  --success-foreground: oklch(0.42 0.112 149.5);
+  --success-surface: oklch(0.955 0.04 149.5);
+
+  --warning: oklch(0.79 0.155 78);
+  --warning-foreground: oklch(0.5 0.115 68);
+  --warning-surface: oklch(0.965 0.045 85);
+
+  --danger: oklch(0.598 0.215 27);
+  --danger-foreground: oklch(0.485 0.19 27);
+  --danger-surface: oklch(0.958 0.03 25);
+
+  --info: oklch(0.635 0.16 250);
+  --info-foreground: oklch(0.5 0.16 254);
+  --info-surface: oklch(0.958 0.028 250);
+
+  /* Lương – TopCV luôn hiển thị lương bằng màu brand */
+  --salary: oklch(0.565 0.16 149.5);
+
+  /* ---------- Surfaces ---------- */
+  --background: oklch(0.969 0.003 250);
+  --foreground: oklch(0.305 0.025 253);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.305 0.025 253);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.305 0.025 253);
+
+  --primary: var(--brand-500);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.955 0.006 250);
+  --secondary-foreground: oklch(0.34 0.025 253);
+  --muted: oklch(0.962 0.005 250);
+  --muted-foreground: oklch(0.556 0.02 253);
+  --accent: oklch(0.955 0.028 149.5);
+  --accent-foreground: oklch(0.46 0.13 149.5);
+  --destructive: oklch(0.598 0.215 27);
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(0.906 0.006 250);
+  --input: oklch(0.888 0.008 250);
+  --ring: var(--brand-500);
+
+  /* ---------- Charts ---------- */
+  --chart-1: oklch(0.664 0.185 149.5);
+  --chart-2: oklch(0.635 0.16 250);
+  --chart-3: oklch(0.72 0.16 45);
+  --chart-4: oklch(0.62 0.19 300);
+  --chart-5: oklch(0.72 0.13 195);
+
+  /* ---------- Sidebar ---------- */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.42 0.022 253);
+  --sidebar-primary: var(--brand-500);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.955 0.028 149.5);
+  --sidebar-accent-foreground: oklch(0.46 0.13 149.5);
+  --sidebar-border: oklch(0.916 0.005 250);
+  --sidebar-ring: var(--brand-500);
+
+  /* ---------- Shape & elevation ---------- */
+  --radius: 0.5rem;
+  --shadow-card: 0 1px 2px 0 oklch(0.3 0.02 253 / 0.04), 0 1px 3px 0 oklch(0.3 0.02 253 / 0.06);
+  --shadow-card-hover: 0 4px 12px -2px oklch(0.3 0.02 253 / 0.1), 0 2px 6px -2px oklch(0.3 0.02 253 / 0.06);
+  --shadow-pop: 0 12px 32px -8px oklch(0.3 0.02 253 / 0.18);
+  --shadow-brand: 0 6px 16px -6px oklch(0.664 0.185 149.5 / 0.45);
+
+  /* Chiều cao header dùng chung cho sticky offset */
+  --header-h: 3.75rem;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --brand-50: oklch(0.28 0.055 149.5);
+  --brand-100: oklch(0.33 0.07 149.5);
+  --brand-200: oklch(0.39 0.09 149.5);
+  --brand-300: oklch(0.48 0.115 149.5);
+  --brand-400: oklch(0.575 0.15 149.5);
+  --brand-500: oklch(0.68 0.175 149.5);
+  --brand-600: oklch(0.745 0.16 149.5);
+  --brand-700: oklch(0.81 0.13 149.5);
+  --brand-800: oklch(0.87 0.1 149.5);
+  --brand-900: oklch(0.93 0.06 149.5);
+
+  --accent-50: oklch(0.3 0.05 45);
+  --accent-100: oklch(0.35 0.07 45);
+  --accent-200: oklch(0.42 0.1 45);
+  --accent-500: oklch(0.74 0.155 45);
+  --accent-600: oklch(0.79 0.14 45);
+  --accent-700: oklch(0.85 0.11 45);
+
+  --success: oklch(0.7 0.17 149.5);
+  --success-foreground: oklch(0.85 0.13 149.5);
+  --success-surface: oklch(0.3 0.06 149.5);
+
+  --warning: oklch(0.8 0.15 80);
+  --warning-foreground: oklch(0.88 0.13 85);
+  --warning-surface: oklch(0.33 0.06 80);
+
+  --danger: oklch(0.65 0.2 27);
+  --danger-foreground: oklch(0.8 0.14 27);
+  --danger-surface: oklch(0.32 0.08 27);
+
+  --info: oklch(0.68 0.15 250);
+  --info-foreground: oklch(0.82 0.11 250);
+  --info-surface: oklch(0.31 0.06 250);
+
+  --salary: oklch(0.75 0.16 149.5);
+
+  --background: oklch(0.176 0.012 253);
+  --foreground: oklch(0.955 0.004 250);
+  --card: oklch(0.219 0.014 253);
+  --card-foreground: oklch(0.955 0.004 250);
+  --popover: oklch(0.219 0.014 253);
+  --popover-foreground: oklch(0.955 0.004 250);
+
+  --primary: var(--brand-500);
+  --primary-foreground: oklch(0.16 0.02 149.5);
+  --secondary: oklch(0.276 0.014 253);
+  --secondary-foreground: oklch(0.955 0.004 250);
+  --muted: oklch(0.268 0.013 253);
+  --muted-foreground: oklch(0.7 0.014 253);
+  --accent: oklch(0.3 0.055 149.5);
+  --accent-foreground: oklch(0.86 0.12 149.5);
+  --destructive: oklch(0.65 0.2 27);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --border: oklch(0.312 0.014 253);
+  --input: oklch(0.35 0.015 253);
+  --ring: var(--brand-500);
+
+  --chart-1: oklch(0.7 0.17 149.5);
+  --chart-2: oklch(0.68 0.15 250);
+  --chart-3: oklch(0.75 0.15 45);
+  --chart-4: oklch(0.68 0.18 300);
+  --chart-5: oklch(0.75 0.12 195);
+
+  --sidebar: oklch(0.205 0.013 253);
+  --sidebar-foreground: oklch(0.88 0.008 250);
+  --sidebar-primary: var(--brand-500);
+  --sidebar-primary-foreground: oklch(0.16 0.02 149.5);
+  --sidebar-accent: oklch(0.3 0.055 149.5);
+  --sidebar-accent-foreground: oklch(0.86 0.12 149.5);
+  --sidebar-border: oklch(0.3 0.014 253);
+  --sidebar-ring: var(--brand-500);
+
+  --shadow-card: 0 1px 2px 0 oklch(0 0 0 / 0.4);
+  --shadow-card-hover: 0 6px 16px -4px oklch(0 0 0 / 0.5);
+  --shadow-pop: 0 12px 32px -8px oklch(0 0 0 / 0.6);
+  --shadow-brand: 0 6px 16px -6px oklch(0.68 0.175 149.5 / 0.35);
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-app-sans), 'Segoe UI', system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -96,15 +206,45 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+
+  --color-hot-50: var(--accent-50);
+  --color-hot-100: var(--accent-100);
+  --color-hot-200: var(--accent-200);
+  --color-hot-500: var(--accent-500);
+  --color-hot-600: var(--accent-600);
+  --color-hot-700: var(--accent-700);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-surface: var(--warning-surface);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-surface: var(--danger-surface);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-surface: var(--info-surface);
+  --color-salary: var(--salary);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -113,13 +253,172 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-2xl: calc(var(--radius) + 12px);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+    scroll-padding-top: calc(var(--header-h) + 1rem);
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: 'cv02', 'cv03', 'cv04';
+    text-rendering: optimizeLegibility;
   }
+
+  /* Tiêu đề: chữ Việt có dấu cần line-height thoáng hơn mặc định */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-foreground;
+    line-height: 1.32;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background-color: var(--brand-100);
+    color: var(--brand-800);
+  }
+
+  /* Scrollbar mảnh, đồng bộ token */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--input);
+  }
+}
+
+@layer components {
+  /* Bề rộng nội dung chuẩn — TopCV dùng ~1170–1250px */
+  .container-page {
+    @apply mx-auto w-full max-w-[1240px] px-4 sm:px-6 lg:px-8;
+  }
+
+  .container-narrow {
+    @apply mx-auto w-full max-w-3xl px-4 sm:px-6;
+  }
+
+  /* Card nền trắng trên nền xám — pattern chủ đạo của TopCV */
+  .surface-card {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .surface-hover {
+    transition:
+      border-color 0.18s ease,
+      box-shadow 0.18s ease,
+      transform 0.18s ease;
+  }
+
+  .surface-hover:hover {
+    border-color: var(--brand-300);
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  /* Chip lọc kiểu TopCV */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground/75 transition-colors;
+  }
+
+  .chip:hover {
+    border-color: var(--brand-300);
+    color: var(--brand-700);
+    background-color: var(--brand-50);
+  }
+
+  .chip[data-active='true'] {
+    border-color: var(--brand-500);
+    background-color: var(--brand-50);
+    color: var(--brand-700);
+  }
+
+  /* Gradient nền hero */
+  .hero-surface {
+    background:
+      radial-gradient(1200px 420px at 12% -10%, var(--brand-100) 0%, transparent 62%),
+      radial-gradient(900px 380px at 92% 0%, var(--accent-50) 0%, transparent 58%),
+      linear-gradient(180deg, var(--brand-50) 0%, var(--background) 100%);
+  }
+
+  .brand-gradient {
+    background-image: linear-gradient(135deg, var(--brand-500) 0%, var(--brand-700) 100%);
+  }
+
+  /* Khung logo công ty — TopCV luôn bo viền, nền trắng, object-contain */
+  .logo-box {
+    @apply flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-card;
+  }
+
+  /* Link nhấn brand */
+  .link-brand {
+    @apply font-medium text-brand-600 underline-offset-4 transition-colors hover:text-brand-700 hover:underline;
+  }
+
+  /* Skeleton nhịp nhàng hơn animate-pulse mặc định */
+  .skeleton {
+    @apply rounded-md bg-muted;
+    animation: sr-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes sr-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes sr-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-fade-up {
+  animation: sr-fade-up 0.32s ease-out both;
 }

@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import PublicLayout from '@/layouts/PublicLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
-import { KeyRound, ArrowLeft, Mail, CheckCircle2 } from 'lucide-react'
+import { KeyRound, ArrowLeft, Mail, MailCheck, Loader2 } from 'lucide-react'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -30,74 +30,89 @@ export default function ForgotPasswordPage() {
       toast.success(res.message || 'Đã gửi hướng dẫn đặt lại mật khẩu!')
       setSubmitted(true)
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Không thể gửi yêu cầu đặt lại mật khẩu'
-      toast.error(errorMsg)
+      toast.error(err instanceof Error ? err.message : 'Không thể gửi yêu cầu đặt lại mật khẩu')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-950 via-gray-900 to-slate-950 text-white">
-      <Card className="w-full max-w-md bg-gray-900/80 border-gray-800 backdrop-blur-xl shadow-2xl">
-        <CardHeader className="space-y-2 text-center pb-4">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-violet-600/20 text-violet-400 flex items-center justify-center border border-violet-500/30 mb-2">
-            <KeyRound className="w-6 h-6" />
-          </div>
-          <CardTitle className="text-2xl font-bold tracking-tight text-white">Quên Mật khẩu?</CardTitle>
-          <CardDescription className="text-gray-400 text-sm">
-            Nhập email tài khoản của bạn để nhận hướng dẫn đặt lại mật khẩu khẩn cấp từ Smart Recruit.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent>
+    <PublicLayout hideFooter>
+      <div className="hero-surface flex min-h-[calc(100vh-var(--header-h))] items-center justify-center px-4 py-14">
+        <div className="surface-card w-full max-w-md p-6 sm:p-8">
           {submitted ? (
-            <div className="space-y-4 text-center py-4">
-              <div className="mx-auto w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-              <p className="text-sm text-gray-300 leading-relaxed">
-                Nếu email <strong className="text-violet-300">{email}</strong> tồn tại trên hệ thống, chúng tôi đã gửi đường dẫn khôi phục mật khẩu có hiệu lực trong vòng 60 phút.
+            <div className="text-center">
+              <span className="mx-auto grid size-14 place-items-center rounded-full bg-brand-50 text-brand-600">
+                <MailCheck className="size-7" />
+              </span>
+              <h1 className="mt-5 text-xl font-bold">Kiểm tra hộp thư của bạn</h1>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                Nếu <strong className="text-foreground">{email}</strong> đã đăng ký trên hệ thống,
+                chúng tôi vừa gửi một đường dẫn đặt lại mật khẩu có hiệu lực trong 60 phút.
               </p>
-              <p className="text-xs text-gray-500">Vui lòng kiểm tra Hòm thư đến (Inbox) hoặc hộp thư Rác (Spam).</p>
+              <p className="mt-2.5 text-xs text-muted-foreground">
+                Không thấy email? Hãy kiểm tra cả thư mục Spam / Quảng cáo.
+              </p>
+
+              <div className="mt-6 flex flex-col gap-2.5">
+                <Button asChild size="lg">
+                  <Link href="/login">Quay lại đăng nhập</Link>
+                </Button>
+                <Button variant="ghost" onClick={() => setSubmitted(false)}>
+                  Gửi lại với email khác
+                </Button>
+              </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-300">Địa chỉ Email *</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@example.com"
-                    required
-                    className="pl-9 bg-gray-950 border-gray-800 text-white placeholder:text-gray-600 focus:border-violet-500"
-                  />
+            <>
+              <span className="grid size-12 place-items-center rounded-xl bg-brand-50 text-brand-600">
+                <KeyRound className="size-6" />
+              </span>
+
+              <h1 className="mt-5 text-2xl font-bold">Quên mật khẩu?</h1>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Nhập email đã đăng ký, chúng tôi sẽ gửi đường dẫn để bạn tạo mật khẩu mới.
+              </p>
+
+              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                <div>
+                  <label htmlFor="email" className="mb-1.5 block text-sm font-semibold">
+                    Địa chỉ email <span className="text-danger">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="ban@email.com"
+                      className="pl-10"
+                      required
+                    />
+                  </div>
                 </div>
+
+                <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                  {loading && <Loader2 className="animate-spin" />}
+                  {loading ? 'Đang gửi...' : 'Gửi đường dẫn đặt lại'}
+                </Button>
+              </form>
+
+              <div className="mt-6 border-t border-border pt-5 text-center">
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-brand-600"
+                >
+                  <ArrowLeft className="size-4" />
+                  Quay lại trang đăng nhập
+                </Link>
               </div>
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-violet-600 hover:bg-violet-500 text-white font-medium shadow-lg shadow-violet-600/20"
-              >
-                {loading ? 'Đang gửi email khôi phục...' : 'Gửi đường dẫn Đặt lại Mật khẩu'}
-              </Button>
-            </form>
+            </>
           )}
-        </CardContent>
-
-        <CardFooter className="flex justify-center border-t border-gray-800/80 pt-4">
-          <Link
-            href="/login"
-            className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" /> Quay lại trang Đăng nhập
-          </Link>
-        </CardFooter>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </PublicLayout>
   )
 }

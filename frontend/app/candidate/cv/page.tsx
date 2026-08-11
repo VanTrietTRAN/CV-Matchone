@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 import CandidateLayout from '@/layouts/CandidateLayout'
+import PageContainer from '@/components/dashboard/PageContainer'
+import PageHeader from '@/components/dashboard/PageHeader'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -501,31 +503,29 @@ export default function CVPage() {
   if (loading) {
     return (
       <CandidateLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="ml-3 text-foreground/70">{labels.loadingText}</span>
-        </div>
+        <PageContainer>
+          <div className="flex h-64 items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="size-6 animate-spin text-brand-500" />
+            {labels.loadingText}
+          </div>
+        </PageContainer>
       </CandidateLayout>
     )
   }
 
   return (
     <CandidateLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-        <div className="mb-6 flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">{labels.pageTitle}</h1>
-            <p className="text-foreground/70">{labels.pageSubtitle}</p>
-          </div>
-          <Button onClick={handleSave} size="lg" className="gap-2" disabled={saving}>
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            {cvId ? 'Cập nhật hồ sơ' : 'Lưu hồ sơ'}
-          </Button>
-        </div>
+      <PageContainer>
+        <PageHeader
+          title={labels.pageTitle}
+          description={labels.pageSubtitle}
+          actions={
+            <Button onClick={handleSave} size="lg" disabled={saving}>
+              {saving ? <Loader2 className="animate-spin" /> : <Save />}
+              {cvId ? 'Cập nhật hồ sơ' : 'Lưu hồ sơ'}
+            </Button>
+          }
+        />
 
         {cvList.length > 0 && (
           <Card className="p-5 border border-border mb-6">
@@ -552,8 +552,8 @@ export default function CVPage() {
                     key={cv._id}
                     className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-all cursor-pointer ${
                       isEditing
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-border hover:border-primary/40 hover:bg-foreground/[0.02]'
+                        ? 'border-brand-500 bg-brand-50/60 ring-1 ring-brand-500/20'
+                        : 'border-border hover:border-brand-300 hover:bg-muted/50'
                     }`}
                     onClick={() => handleSelectCV(cv)}
                   >
@@ -565,12 +565,12 @@ export default function CVPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm text-foreground truncate">{cv.name || 'CV chưa đặt tên'}</span>
                         {cv.isPrimary && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                            <Star className="w-3 h-3 fill-amber-500 stroke-amber-500" /> CV chính
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warning-surface text-warning-foreground border border-transparent">
+                            <Star className="w-3 h-3 fill-current stroke-current" /> CV chính
                           </span>
                         )}
                         {isEditing && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-50 text-brand-700 border border-brand-200">
                             <CheckCircle className="w-3 h-3" /> Đang chỉnh sửa
                           </span>
                         )}
@@ -579,25 +579,25 @@ export default function CVPage() {
                         {cv.headline && <span className="text-xs text-foreground/50 truncate">{cv.headline}</span>}
 
                         {cv.processingStatus === 'queued' && (
-                          <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1 font-medium">
+                          <span className="text-xs text-info-foreground animate-pulse flex items-center gap-1 font-medium">
                             ⏳ Đang chờ bóc tách AI...
                           </span>
                         )}
                         {cv.processingStatus === 'processing' && (
-                          <span className="text-xs text-amber-500 flex items-center gap-1 font-medium">
+                          <span className="text-xs text-warning-foreground flex items-center gap-1 font-medium">
                             <Loader2 className="w-3 h-3 animate-spin" /> AI đang xử lý...
                           </span>
                         )}
                         {cv.processingStatus === 'failed' && (
-                          <span className="text-xs text-red-500 flex items-center gap-1 font-medium" title={cv.processingError}>
+                          <span className="text-xs text-danger-foreground flex items-center gap-1 font-medium" title={cv.processingError}>
                             ⚠️ Lỗi bóc tách AI
                           </span>
                         )}
                         {(cv.processingStatus === 'ready' || !cv.processingStatus) && (
                           cv.hasEmbedding ? (
-                            <span className="text-xs text-green-600 flex items-center gap-0.5">⚡ AI ready</span>
+                            <span className="text-xs text-success-foreground flex items-center gap-0.5">⚡ AI ready</span>
                           ) : (
-                            <span className="text-xs text-amber-600">Chưa có AI embedding</span>
+                            <span className="text-xs text-warning-foreground">Chưa có AI embedding</span>
                           )
                         )}
 
@@ -614,7 +614,7 @@ export default function CVPage() {
                         <button
                           type="button"
                           onClick={() => cv._id && handleRetryAi(cv._id)}
-                          className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors"
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium bg-warning-surface text-warning-foreground hover:brightness-95 transition-colors"
                           title="Thử lại bóc tách AI"
                         >
                           Thử lại AI
@@ -625,7 +625,7 @@ export default function CVPage() {
                           href={`${getApiBase()}/api/cv/${cv._id}/download`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg text-foreground/40 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                          className="p-1.5 rounded-lg text-foreground/40 hover:text-info-foreground hover:bg-info-surface transition-colors"
                           title="Xem PDF"
                         >
                           <Eye className="w-4 h-4" />
@@ -637,7 +637,7 @@ export default function CVPage() {
                           title="Đặt làm CV chính"
                           disabled={!!settingPrimary}
                           onClick={() => cv._id && handleSetPrimary(cv._id)}
-                          className="p-1.5 rounded-lg text-foreground/40 hover:text-amber-500 hover:bg-amber-50 transition-colors disabled:opacity-50"
+                          className="p-1.5 rounded-lg text-foreground/40 hover:text-warning-foreground hover:bg-warning-surface transition-colors disabled:opacity-50"
                         >
                           {isSettingThis ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
                         </button>
@@ -647,7 +647,7 @@ export default function CVPage() {
                         title="Xóa CV này"
                         disabled={!!deletingId}
                         onClick={() => cv._id && handleDeleteCV(cv._id)}
-                        className="p-1.5 rounded-lg text-foreground/40 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        className="p-1.5 rounded-lg text-foreground/40 hover:text-danger-foreground hover:bg-danger-surface transition-colors disabled:opacity-50"
                       >
                         {isDeletingThis ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                       </button>
@@ -924,7 +924,7 @@ export default function CVPage() {
             </div>
           </div>
         </div>
-      </div>
+      </PageContainer>
     </CandidateLayout>
   )
 }

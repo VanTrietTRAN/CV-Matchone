@@ -201,15 +201,17 @@ export default function JobAlertsManager() {
 
   return (
     <div>
-      <div className="flex items-end justify-between mb-5 gap-4 flex-wrap border-t border-border pt-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Thông báo việc làm của bạn</h2>
-          <p className="text-foreground/70 max-w-xl mt-1">
-            Tạo bộ tiêu chí để hệ thống tự gửi email khi có việc làm phù hợp (từ khoá, địa điểm, mức lương...).
+          <h2 className="font-bold">Thông báo việc làm của bạn</h2>
+          <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Tạo bộ tiêu chí riêng (từ khoá, địa điểm, mức lương…) để hệ thống gửi email khi có việc
+            làm khớp với mong muốn của bạn.
           </p>
         </div>
         <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-2" /> Tạo mới
+          <Plus />
+          Tạo thông báo
         </Button>
       </div>
 
@@ -234,8 +236,8 @@ export default function JobAlertsManager() {
             <Card key={a._id} className="p-5 border border-border">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <BellRing className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">
+                    <BellRing className="w-5 h-5 text-brand-600" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">{a.keyword}</h3>
@@ -282,7 +284,7 @@ export default function JobAlertsManager() {
                     variant="ghost"
                     size="icon"
                     onClick={() => remove(a)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="text-danger-foreground hover:text-danger-foreground hover:bg-danger-surface"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -304,7 +306,7 @@ export default function JobAlertsManager() {
           <div className="space-y-4 mt-2">
             <div>
               <label className="block text-sm font-semibold text-foreground mb-1.5">
-                Từ khoá tìm kiếm <span className="text-red-500">*</span>
+                Từ khoá tìm kiếm <span className="text-danger">*</span>
               </label>
               <Input
                 value={form.keyword}
@@ -315,7 +317,7 @@ export default function JobAlertsManager() {
 
             <div>
               <label className="block text-sm font-semibold text-foreground mb-1.5">
-                Email nhận thông báo <span className="text-red-500">*</span>
+                Email nhận thông báo <span className="text-danger">*</span>
               </label>
               <Input
                 type="email"
@@ -424,7 +426,7 @@ export default function JobAlertsManager() {
               />
               <span className="text-sm text-foreground/80">
                 Tôi đồng ý cho phép Smart Recruit thu thập và sử dụng dữ liệu cá nhân của tôi để gửi
-                các email thông báo việc làm phù hợp với nhu cầu của tôi. <span className="text-red-500">*</span>
+                các email thông báo việc làm phù hợp với nhu cầu của tôi. <span className="text-danger">*</span>
               </span>
             </label>
           </div>
@@ -434,7 +436,7 @@ export default function JobAlertsManager() {
               Hủy
             </Button>
             <Button
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              className="flex-1"
               onClick={handleSubmit}
               disabled={saving}
             >
