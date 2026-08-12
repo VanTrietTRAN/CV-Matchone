@@ -38,3 +38,6 @@ backend/uploads/
 docs/
 Data/
 .cursor/
+
+# ─── Tài liệu deploy (chứa credential thật: mật khẩu DB, key R2, SMTP) ───────
+DEPLOYMENT.md
