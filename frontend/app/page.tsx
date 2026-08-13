@@ -113,7 +113,7 @@ const faqs = [
   },
   {
     q: 'Tôi vừa là ứng viên vừa muốn tuyển dụng thì sao?',
-    a: 'Một tài khoản có thể chuyển đổi giữa hai vai trò. Trong khu vực nhà tuyển dụng có nút “Chuyển sang Ứng viên” ở cuối thanh điều hướng bên trái.',
+    a: 'Mỗi tài khoản gắn với một vai trò. Bạn hãy đăng ký thêm một tài khoản nhà tuyển dụng bằng email khác, rồi đăng nhập vào đúng khu vực tương ứng.',
   },
 ]
 

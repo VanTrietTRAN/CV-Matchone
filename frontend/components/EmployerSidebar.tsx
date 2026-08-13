@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React from 'react'
 import { useRouter } from 'next/navigation'
 import Logo from '@/components/brand/Logo'
 import SidebarNav, { type NavItem } from '@/components/dashboard/SidebarNav'
@@ -15,14 +15,10 @@ import {
   Share2,
   Mail,
   KeyRound,
-  ArrowLeftRight,
-  Loader2,
   LogOut,
 } from 'lucide-react'
-import { apiFetch, apiLogout } from '@/lib/api'
+import { apiLogout } from '@/lib/api'
 import { useUnreadCount } from '@/hooks/use-unread-count'
-import { setAuth } from '@/lib/auth-storage'
-import { toast } from 'sonner'
 
 const baseItems: NavItem[] = [
   { label: 'Tổng quan', href: '/employer/dashboard', icon: LayoutDashboard },
@@ -38,7 +34,6 @@ const baseItems: NavItem[] = [
 
 export default function EmployerSidebar() {
   const router = useRouter()
-  const [switching, setSwitching] = useState(false)
   const unread = useUnreadCount()
 
   const items = baseItems.map((item) =>
@@ -48,28 +43,6 @@ export default function EmployerSidebar() {
   const signOut = async () => {
     await apiLogout()
     router.push('/login?role=employer')
-  }
-
-  const handleSwitchRole = async () => {
-    setSwitching(true)
-    try {
-      const res = await apiFetch<{ data: { _id: string; email: string; role: string } }>(
-        '/api/users/me/switch-role',
-        { method: 'PATCH' },
-      )
-      const user = res.data
-      setAuth({
-        id: user._id,
-        email: user.email,
-        role: user.role as 'candidate' | 'employer' | 'admin',
-      })
-      toast.success('Đã chuyển sang giao diện Ứng viên')
-      router.push('/candidate/dashboard')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Đổi vai trò thất bại')
-    } finally {
-      setSwitching(false)
-    }
   }
 
   return (
@@ -89,21 +62,6 @@ export default function EmployerSidebar() {
       </div>
 
       <div className="shrink-0 space-y-1 border-t border-sidebar-border p-3">
-        <Button
-          type="button"
-          variant="soft"
-          className="w-full justify-start gap-3"
-          onClick={handleSwitchRole}
-          disabled={switching}
-        >
-          {switching ? (
-            <Loader2 className="size-[18px] animate-spin" />
-          ) : (
-            <ArrowLeftRight className="size-[18px]" />
-          )}
-          Chuyển sang Ứng viên
-        </Button>
-
         <Button
           type="button"
           variant="ghost"
