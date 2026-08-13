@@ -14,6 +14,7 @@ import {
   Bell,
   Share2,
   Mail,
+  KeyRound,
   ArrowLeftRight,
   Loader2,
   LogOut,
@@ -32,6 +33,7 @@ const baseItems: NavItem[] = [
   { label: 'Thông báo', href: '/employer/notifications', icon: Bell },
   { label: 'Bài đăng mạng xã hội', href: '/fb-generator', icon: Share2 },
   { label: 'Cài đặt email', href: '/employer/email-settings', icon: Mail },
+  { label: 'Tài khoản & bảo mật', href: '/employer/account-settings', icon: KeyRound },
 ]
 
 export default function EmployerSidebar() {

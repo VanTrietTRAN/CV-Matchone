@@ -471,6 +471,66 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// ─── Đổi mật khẩu (dành cho người ĐANG đăng nhập) ─────────────────────────────
+// Khác với forgotPassword/resetPassword: luồng kia dành cho người đã mất quyền
+// truy cập và xác thực qua link gửi email. Luồng này xác thực bằng chính mật
+// khẩu hiện tại, không gửi email, áp dụng cho mọi role.
+const changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  try {
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới.' });
+    }
+
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: 'Mật khẩu mới cần ít nhất 6 ký tự.' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải khác mật khẩu hiện tại.' });
+    }
+
+    // protect() nạp user bằng .select('-password') nên phải lấy lại kèm mật khẩu
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) {
+      return res.status(404).json({ message: 'Không tìm thấy tài khoản.' });
+    }
+
+    // Tài khoản tạo qua Google/Facebook chưa từng đặt mật khẩu
+    if (!user.password) {
+      return res.status(400).json({
+        message:
+          'Tài khoản này đăng nhập bằng mạng xã hội nên chưa có mật khẩu. ' +
+          'Dùng chức năng "Quên mật khẩu" để đặt mật khẩu lần đầu.',
+      });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Mật khẩu hiện tại không chính xác.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+
+    // Vô hiệu hoá link đặt lại mật khẩu đang treo (nếu người dùng vừa bấm quên
+    // mật khẩu rồi lại đổi tại đây) — tránh để link cũ còn hiệu lực
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    // Cấp lại cookie để phiên hiện tại tiếp tục hoạt động sau khi đổi
+    return sendTokenCookie(user, 200, res, { message: 'Đổi mật khẩu thành công.' });
+  } catch (error) {
+    console.error('[ChangePassword Error]:', error.message);
+    res.status(500).json({ message: 'Lỗi máy chủ khi đổi mật khẩu.' });
+  }
+};
+
 module.exports = {
     register,
     login,
@@ -482,4 +542,5 @@ module.exports = {
     facebookCallback,
     forgotPassword,
     resetPassword,
+    changePassword,
 };

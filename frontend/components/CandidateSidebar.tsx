@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   Bell,
   Settings,
+  KeyRound,
   LogOut,
 } from 'lucide-react'
 import { apiLogout } from '@/lib/api'
@@ -24,6 +25,7 @@ const baseItems: NavItem[] = [
   { label: 'Hồ sơ & CV', href: '/candidate/cv', icon: FileText },
   { label: 'Thông báo', href: '/candidate/notifications', icon: Bell },
   { label: 'Cài đặt thông báo', href: '/candidate/notification-settings', icon: Settings },
+  { label: 'Tài khoản & bảo mật', href: '/candidate/account-settings', icon: KeyRound },
 ]
 
 export default function CandidateSidebar() {
