@@ -7,5 +7,10 @@ node_modules
 .DS_Store
 .vercel/
 
+# Cache biên dịch tăng dần của TypeScript — không được commit:
+# Railway mount build cache vào đúng đường dẫn này, file thật trong repo
+# khiến BuildKit fail "not a directory" trước cả khi npm run build chạy
+*.tsbuildinfo
+
 # Sentry Config File
 .env.sentry-build-plugin
