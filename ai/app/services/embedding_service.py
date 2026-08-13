@@ -1,7 +1,12 @@
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # ─── Cấu hình Gemini Embedding API ────────────────────────────────────────────
+# SDK: google-genai (package `google.genai`).
+# KHÔNG dùng lại `google.generativeai` — package đó đã ngừng hỗ trợ hoàn toàn,
+# không còn nhận cập nhật lẫn vá lỗi.
+#
 # Lưu ý: Gemini 3.6 Flash (gemini-3.6-flash) là model SINH NỘI DUNG / agent —
 # KHÔNG dùng được cho embedContent. Matching CV↔Job cần model embedding riêng.
 #
@@ -29,9 +34,13 @@ EMBEDDING_DIMS = int(os.environ.get("GEMINI_EMBEDDING_DIMS", "768"))
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+# Client tạo một lần lúc import, tái dùng cho mọi request.
+# Thiếu key thì để None thay vì raise — /health vẫn trả về được trạng thái
+# "degraded" để backend và uptime monitor biết service sống nhưng chưa cấu hình.
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
 else:
+    client = None
     print("WARNING: GEMINI_API_KEY is not set. Embedding will not work.")
 
 
@@ -42,22 +51,24 @@ def generate_embedding(text: str):
     - Khi đạt rate limit (429): trả về None, không tính phí thêm.
     - Khi thành công: trả về list float (len ~= EMBEDDING_DIMS).
     """
-    if not GEMINI_API_KEY:
+    if client is None:
         print("Error: GEMINI_API_KEY is not set.")
         return None
 
     try:
-        result = genai.embed_content(
+        response = client.models.embed_content(
             model=EMBEDDING_MODEL,
-            content=text,
-            task_type="retrieval_document",
-            output_dimensionality=EMBEDDING_DIMS,
+            contents=text,
+            config=types.EmbedContentConfig(
+                task_type="RETRIEVAL_DOCUMENT",
+                output_dimensionality=EMBEDDING_DIMS,
+            ),
         )
-        embedding = result.get("embedding") if isinstance(result, dict) else None
-        if not embedding:
+        embeddings = response.embeddings
+        if not embeddings or not embeddings[0].values:
             print(f"Error: empty embedding response from {EMBEDDING_MODEL}")
             return None
-        return embedding
+        return list(embeddings[0].values)
     except Exception as e:
         error_msg = str(e)
         if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:

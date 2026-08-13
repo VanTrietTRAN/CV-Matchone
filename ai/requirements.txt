@@ -27,7 +27,8 @@ pydantic==2.13.1
 pydantic_core==2.46.1
 
 # Gemini AI API (thay thế local model)
-google-generativeai>=0.8.0
+# SDK mới. `google-generativeai` cũ đã ngừng hỗ trợ — đừng quay lại.
+google-genai>=1.0.0
 
 # Math (dùng cho cosine similarity trong matching_service)
 numpy==2.4.4
