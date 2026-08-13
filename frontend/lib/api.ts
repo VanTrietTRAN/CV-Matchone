@@ -3,7 +3,10 @@ import { getStoredUser } from '@/lib/auth-storage'
 const DEFAULT_API = 'http://localhost:5000'
 
 export function getApiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL || DEFAULT_API
+  // Cắt mọi dấu "/" thừa ở cuối. Không cắt thì NEXT_PUBLIC_API_URL kết thúc bằng "/"
+  // sẽ tạo ra URL dạng "https://host//api/auth/login" — Express không khớp route
+  // có hai dấu gạch chéo nên trả 404, rất khó đoán vì backend vẫn sống bình thường.
+  return (process.env.NEXT_PUBLIC_API_URL || DEFAULT_API).replace(/\/+$/, '')
 }
 
 export class ApiError extends Error {
