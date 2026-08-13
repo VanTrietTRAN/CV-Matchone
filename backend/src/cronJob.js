@@ -279,15 +279,26 @@ const startCronJobs = async () => {
     }
 
     // 3. Schedule cron task
-    console.log(`[Cron] Đã khởi động tác vụ quét matching gửi email (Lịch trình: ${cronExpression})`);
-    
+    //
+    // Múi giờ phải khai báo tường minh. Không có option này, node-cron dùng giờ
+    // hệ thống của container — Railway chạy UTC, nên "0 7 * * *" mà admin hiểu là
+    // 7h sáng sẽ thực sự chạy lúc 14h chiều giờ Việt Nam. Lỗi lệch 7 tiếng này
+    // không có dấu hiệu nào trong log, chỉ phát hiện khi user hỏi sao nhận mail
+    // vào giờ lạ.
+    const CRON_TIMEZONE = process.env.CRON_TIMEZONE || 'Asia/Ho_Chi_Minh';
+
+    console.log(
+      `[Cron] Đã khởi động tác vụ quét matching gửi email ` +
+      `(Lịch trình: ${cronExpression} — múi giờ ${CRON_TIMEZONE})`
+    );
+
     activeCronTask = cron.schedule(cronExpression, async () => {
       try {
         await runMatchingProcess();
       } catch (err) {
         // already logged
       }
-    });
+    }, { timezone: CRON_TIMEZONE });
   } catch (error) {
     console.error('[Cron] Lỗi khi khởi động tác vụ email cron:', error.message);
   }
