@@ -14,6 +14,7 @@ import {
   FileCheck2,
   Star,
   Server,
+  KeyRound,
   LogOut,
 } from 'lucide-react'
 import { apiLogout } from '@/lib/api'
@@ -27,6 +28,7 @@ const navItems: NavItem[] = [
   { label: 'Nhật ký Audit', href: '/admin/audit-logs', icon: FileCheck2 },
   { label: 'Đánh giá', href: '/admin/reviews', icon: Star },
   { label: 'Hệ thống', href: '/admin/system', icon: Server },
+  { label: 'Tài khoản & bảo mật', href: '/admin/account-settings', icon: KeyRound },
 ]
 
 export default function AdminSidebar() {

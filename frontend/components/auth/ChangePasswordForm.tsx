@@ -10,10 +10,44 @@ import { toast } from 'sonner'
 const MIN_LENGTH = 6
 
 type Field = 'current' | 'next' | 'confirm'
+type Variant = 'light' | 'admin'
 
 const emptyForm = { current: '', next: '', confirm: '' }
 
-export default function ChangePasswordForm() {
+// Khu vực admin dùng hệ màu tối riêng (slate-900/slate-800) khác hẳn phần
+// candidate/employer (surface-card + brand-*). Tách theo variant để hai bên
+// dùng chung toàn bộ logic mà vẫn khớp tông màu của khu vực chứa nó.
+const styles = {
+  light: {
+    card: 'surface-card p-5 sm:p-6',
+    iconBox: 'bg-brand-50 text-brand-600',
+    title: 'font-bold',
+    description: 'mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground',
+    divider: 'mt-5 space-y-4 border-t border-border pt-5',
+    label: 'mb-1.5 block text-sm font-semibold',
+    input: 'pr-10',
+    hint: 'mt-1.5 text-xs text-muted-foreground',
+    eye: 'text-muted-foreground hover:text-foreground',
+    footer: 'mt-4 text-xs text-muted-foreground',
+    link: 'font-semibold text-brand-600 hover:underline',
+  },
+  admin: {
+    card: 'bg-slate-900 border border-slate-800 rounded-2xl p-5',
+    iconBox: 'bg-brand-500/15 text-brand-400',
+    title: 'text-white font-semibold',
+    description: 'mt-1 max-w-xl text-sm leading-relaxed text-slate-400',
+    divider: 'mt-5 space-y-4 border-t border-slate-800 pt-5',
+    label: 'mb-1.5 block text-sm font-medium text-slate-300',
+    input: 'pr-10 bg-slate-900 border-slate-800 text-slate-100',
+    hint: 'mt-1.5 text-xs text-slate-500',
+    eye: 'text-slate-500 hover:text-slate-300',
+    footer: 'mt-4 text-xs text-slate-500',
+    link: 'font-medium text-brand-400 hover:underline',
+  },
+} as const
+
+export default function ChangePasswordForm({ variant = 'light' }: { variant?: Variant } = {}) {
+  const s = styles[variant]
   const [form, setForm] = useState(emptyForm)
   const [visible, setVisible] = useState<Record<Field, boolean>>({
     current: false,
@@ -69,7 +103,7 @@ export default function ChangePasswordForm() {
     hint?: string,
   ) => (
     <div>
-      <label className="mb-1.5 block text-sm font-semibold" htmlFor={`password-${field}`}>
+      <label className={s.label} htmlFor={`password-${field}`}>
         {label}
       </label>
       <div className="relative">
@@ -79,37 +113,37 @@ export default function ChangePasswordForm() {
           value={form[field]}
           onChange={(e) => set(field, e.target.value)}
           autoComplete={autoComplete}
-          className="pr-10"
+          className={s.input}
         />
         <button
           type="button"
           onClick={() => toggle(field)}
           aria-label={visible[field] ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-          className="absolute inset-y-0 right-0 grid w-10 place-items-center text-muted-foreground transition-colors hover:text-foreground"
+          className={`absolute inset-y-0 right-0 grid w-10 place-items-center transition-colors ${s.eye}`}
         >
           {visible[field] ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>
       </div>
-      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p className={s.hint}>{hint}</p>}
     </div>
   )
 
   return (
-    <section className="surface-card p-5 sm:p-6">
+    <section className={s.card}>
       <div className="flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+        <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${s.iconBox}`}>
           <KeyRound className="size-5" />
         </span>
         <div>
-          <h2 className="font-bold">Đổi mật khẩu</h2>
-          <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+          <h2 className={s.title}>Đổi mật khẩu</h2>
+          <p className={s.description}>
             Nhập mật khẩu hiện tại để xác nhận danh tính, sau đó đặt mật khẩu mới. Bạn vẫn giữ
             nguyên phiên đăng nhập sau khi đổi.
           </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-5 space-y-4 border-t border-border pt-5">
+      <form onSubmit={handleSubmit} className={s.divider}>
         {renderField('current', 'Mật khẩu hiện tại', 'current-password')}
         {renderField(
           'next',
@@ -135,9 +169,9 @@ export default function ChangePasswordForm() {
         </div>
       </form>
 
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className={s.footer}>
         Quên mật khẩu hiện tại? Đăng xuất rồi dùng chức năng{' '}
-        <a href="/forgot-password" className="font-semibold text-brand-600 hover:underline">
+        <a href="/forgot-password" className={s.link}>
           Quên mật khẩu
         </a>{' '}
         để nhận link đặt lại qua email.
