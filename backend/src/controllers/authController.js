@@ -4,24 +4,58 @@ const bcrypt = require('bcryptjs');
 const { frontendOrigin } = require('../utils/frontendUrl');
 
 // ─── Helper: tạo token và gắn vào HTTPOnly Cookie ─────────────────────────────
+// Thuộc tính cookie phiên đăng nhập, dùng chung cho cả lúc SET và lúc XOÁ.
+// res.clearCookie chỉ xoá được khi thuộc tính khớp y hệt lúc set — để hai nơi
+// tự khai riêng thì chỉ cần lệch một cờ là đăng xuất không xoá được cookie.
+//
+// Frontend và backend nằm ở hai origin khác nhau nên cookie là cross-site:
+// bắt buộc SameSite=None + Secure.
+//
+// VẤN ĐỀ với hai domain *.up.railway.app: 'up.railway.app' nằm trong Public
+// Suffix List, nên trình duyệt coi frontend và backend là hai SITE khác nhau
+// -> cookie thành cookie BÊN THỨ BA. Trình duyệt chặn cookie bên thứ ba (Brave
+// và Safari mặc định, Chrome khi bật hạn chế, mọi cửa sổ ẩn danh) vẫn cho đăng
+// nhập thành công nhưng KHÔNG gửi cookie kèm request kế tiếp -> request đó trả
+// 401 -> frontend dọn localStorage rồi đá về /login. Triệu chứng đúng như báo
+// cáo: "đăng nhập xong bị văng ra ngay", và khác nhau tuỳ máy/trình duyệt.
+//
+// COOKIE_PARTITIONED=true bật thuộc tính Partitioned (CHIPS) để Chrome/Edge
+// chấp nhận cookie kể cả khi đã hạn chế cookie bên thứ ba.
+//
+// Cách sửa triệt để: đưa frontend và backend về cùng một registrable domain
+// (cvoneclickmatch.com + api.cvoneclickmatch.com). Khi đó cookie thành same-site
+// và KHÔNG cần COOKIE_PARTITIONED nữa — nhớ gỡ cờ này đi.
+const buildCookieOptions = () => {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    const options = {
+        httpOnly: true,                          // Không cho JS client đọc
+        secure: isProduction,                    // Chỉ HTTPS ở production
+        sameSite: isProduction ? 'none' : 'lax', // Cross-site cookie khi production
+        path: '/',
+    };
+
+    if (isProduction && process.env.COOKIE_PARTITIONED === 'true') {
+        options.partitioned = true;
+    }
+
+    // Nếu có COOKIE_DOMAIN (ví dụ: .domain.vn) thì gán để chia sẻ cross-subdomain
+    if (process.env.COOKIE_DOMAIN) {
+        options.domain = process.env.COOKIE_DOMAIN;
+    }
+
+    return options;
+};
+
 const sendTokenCookie = (user, statusCode, res, extraJson = {}) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
         expiresIn: '7d',
     });
 
-    const cookieOptions = {
-        httpOnly: true,                                   // Không cho JS client đọc
-        secure: process.env.NODE_ENV === 'production',   // Chỉ HTTPS ở production
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-site cookie khi production
-        maxAge: 7 * 24 * 60 * 60 * 1000,               // 7 ngày
-    };
-
-    // Nếu có COOKIE_DOMAIN (ví dụ: .domain.vn) thì gán để chia sẻ cross-subdomain
-    if (process.env.COOKIE_DOMAIN) {
-        cookieOptions.domain = process.env.COOKIE_DOMAIN;
-    }
-
-    res.cookie('token', token, cookieOptions);
+    res.cookie('token', token, {
+        ...buildCookieOptions(),
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
+    });
 
     return res.status(statusCode).json({
         _id: user._id,
@@ -123,15 +157,8 @@ const login = async (req, res) => {
 
 // ─── Logout ───────────────────────────────────────────────────────────────────
 const logout = (req, res) => {
-    const cookieOptions = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    };
-    if (process.env.COOKIE_DOMAIN) {
-        cookieOptions.domain = process.env.COOKIE_DOMAIN;
-    }
-    res.clearCookie('token', cookieOptions);
+    // Phải dùng đúng bộ thuộc tính đã set, nếu không trình duyệt bỏ qua lệnh xoá
+    res.clearCookie('token', buildCookieOptions());
     res.status(200).json({ message: 'Đăng xuất thành công' });
 };
 
