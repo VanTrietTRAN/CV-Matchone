@@ -28,6 +28,7 @@ import {
   Gift,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { categoryLabel, positionLabel } from '@/lib/job-categories'
 import { toast } from 'sonner'
 import { CompanyReviews } from '@/components/reviews/CompanyReview'
 import { formatDate, formatRelativeTime, daysUntil, initials } from '@/lib/format'
@@ -43,6 +44,7 @@ type Job = {
   experience: string
   level: string
   industry: string
+  specialization?: string
   benefits: string[]
   expiresAt: string
   createdAt: string
@@ -303,8 +305,19 @@ export default function JobDetailPage() {
                   <InfoItem
                     icon={Briefcase}
                     label="Ngành nghề"
-                    value={job.industry || industryLabels[company?.industry || ''] || '—'}
+                    value={
+                      categoryLabel(job.industry) ||
+                      industryLabels[company?.industry || ''] ||
+                      '—'
+                    }
                   />
+                  {job.specialization && (
+                    <InfoItem
+                      icon={Award}
+                      label="Vị trí chuyên môn"
+                      value={positionLabel(job.specialization)}
+                    />
+                  )}
                   <InfoItem icon={Building2} label="Hình thức" value={job.jobType || '—'} />
                   <InfoItem icon={TrendingUp} label="Kinh nghiệm" value={job.experience || '—'} />
                   <InfoItem icon={Award} label="Cấp bậc" value={job.level || '—'} />

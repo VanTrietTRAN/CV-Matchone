@@ -16,6 +16,8 @@ const jobSchema = new mongoose.Schema({
     experience: { type: String, default: '' },     
     level: { type: String, default: '' },          
     industry: { type: String, default: '' },       
+    // Vị trí chuyên môn (cấp 2 của danh mục nghề) — slug trong frontend/lib/job-categories.ts
+    specialization: { type: String, default: '' },
     benefits: [{ type: String }],                   
 
     embedding: {

@@ -19,12 +19,21 @@ import {
 } from '@/components/ui/select'
 import { AlertCircle, Loader2, Sparkles, Briefcase, FileText, Target, MapPin } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import {
+  JOB_CATEGORIES,
+  categoryLabel,
+  positionLabel,
+  positionsOf,
+  positionBelongsTo,
+} from '@/lib/job-categories'
+import PositionCombobox from '@/components/employer/PositionCombobox'
 import { formatSalary, WORK_TYPE_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const initialFormData = {
   title: '',
   industry: '',
+  specialization: '',
   workType: '',
   location: '',
   salaryMin: '',
@@ -39,16 +48,6 @@ const initialFormData = {
   duration: '',
 }
 
-const INDUSTRIES = [
-  { value: 'technology', label: 'Công nghệ thông tin' },
-  { value: 'finance', label: 'Tài chính / Ngân hàng' },
-  { value: 'healthcare', label: 'Y tế / Dược phẩm' },
-  { value: 'marketing', label: 'Marketing / Truyền thông' },
-  { value: 'education', label: 'Giáo dục / Đào tạo' },
-  { value: 'manufacturing', label: 'Sản xuất' },
-  { value: 'logistics', label: 'Logistics / Vận tải' },
-  { value: 'other', label: 'Lĩnh vực khác' },
-]
 
 const EXPERIENCE_LEVELS = [
   { value: 'entry', label: 'Mới tốt nghiệp / dưới 1 năm' },
@@ -121,7 +120,14 @@ export default function PostJobPage() {
   }
 
   const handleSelect = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value }
+      // Đổi ngành thì vị trí cũ có thể không còn thuộc ngành mới → bỏ đi
+      if (name === 'industry' && prev.specialization) {
+        if (!positionBelongsTo(value, prev.specialization)) next.specialization = ''
+      }
+      return next
+    })
   }
 
   const splitSkills = (value: string) =>
@@ -140,8 +146,9 @@ export default function PostJobPage() {
 
     // Các trường chưa có cột riêng trong model job được ghi kèm vào mô tả
     let extra = ''
-    if (formData.industry) {
-      extra += `\nNgành nghề: ${INDUSTRIES.find((i) => i.value === formData.industry)?.label ?? formData.industry}`
+    if (formData.industry) extra += `\nNgành nghề: ${categoryLabel(formData.industry)}`
+    if (formData.specialization) {
+      extra += `\nVị trí chuyên môn: ${positionLabel(formData.specialization)}`
     }
     if (formData.workType) extra += `\nHình thức: ${WORK_TYPE_LABEL[formData.workType] ?? formData.workType}`
     if (formData.experienceLevel) {
@@ -169,6 +176,10 @@ export default function PostJobPage() {
           description: formData.description + extra,
           requirements,
           location: formData.location || undefined,
+          // Trước đây ngành nghề chỉ được nhét vào mô tả; nay lưu thành cột riêng
+          // để còn lọc và thống kê được.
+          industry: formData.industry || undefined,
+          specialization: formData.specialization || undefined,
           expiresAt,
           isEmailEnabled: true,
           status: 'open',
@@ -220,14 +231,30 @@ export default function PostJobPage() {
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Chọn ngành nghề" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {INDUSTRIES.map((i) => (
-                      <SelectItem key={i.value} value={i.value}>
-                        {i.label}
+                  <SelectContent className="max-h-72">
+                    {JOB_CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </Field>
+
+              <Field
+                label="Vị trí chuyên môn"
+                hint={
+                  formData.industry
+                    ? `${positionsOf(formData.industry).length} vị trí trong ngành này`
+                    : undefined
+                }
+              >
+                <PositionCombobox
+                  positions={positionsOf(formData.industry)}
+                  value={formData.specialization}
+                  onChange={(v) => handleSelect('specialization', v)}
+                  disabled={!formData.industry}
+                />
               </Field>
 
               <Field label="Hình thức làm việc">

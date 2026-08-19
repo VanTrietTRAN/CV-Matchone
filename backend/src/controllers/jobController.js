@@ -151,6 +151,7 @@ const createJob = async (req, res) => {
       experience: req.body.experience || '',
       level: req.body.level || '',
       industry: req.body.industry || '',
+      specialization: req.body.specialization || '',
       benefits: req.body.benefits || [],
       expiresAt: req.body.expiresAt,
       isEmailEnabled:
@@ -195,6 +196,15 @@ const createJobFromOld = async (req, res) => {
       description: req.body.description || oldJob.description,
       requirements: req.body.requirements || oldJob.requirements,
       location: req.body.location || oldJob.location,
+      // Nhân bản phải giữ nguyên phân loại và đãi ngộ của tin gốc,
+      // nếu không tin mới sẽ rỗng ngành nghề và biến mất khỏi thống kê.
+      salary: req.body.salary || oldJob.salary,
+      jobType: req.body.jobType || oldJob.jobType,
+      experience: req.body.experience || oldJob.experience,
+      level: req.body.level || oldJob.level,
+      industry: req.body.industry || oldJob.industry,
+      specialization: req.body.specialization || oldJob.specialization,
+      benefits: req.body.benefits || oldJob.benefits,
       expiresAt: req.body.expiresAt || oldJob.expiresAt,
       isEmailEnabled:
         typeof req.body.isEmailEnabled === "boolean"
