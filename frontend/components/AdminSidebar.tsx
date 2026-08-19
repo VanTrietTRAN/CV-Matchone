@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Users,
   Briefcase,
+  BarChart3,
   Cpu,
   Megaphone,
   FileCheck2,
@@ -21,6 +22,7 @@ import { apiLogout } from '@/lib/api'
 
 const navItems: NavItem[] = [
   { label: 'Tổng quan', href: '/admin/dashboard', icon: LayoutDashboard },
+  { label: 'Thống kê', href: '/admin/analytics', icon: BarChart3 },
   { label: 'Tài khoản', href: '/admin/users', icon: Users },
   { label: 'Tin tuyển dụng', href: '/admin/jobs', icon: Briefcase },
   { label: 'AI Worker & CV', href: '/admin/ai-monitor', icon: Cpu },

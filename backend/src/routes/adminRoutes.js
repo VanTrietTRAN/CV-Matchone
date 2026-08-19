@@ -21,10 +21,18 @@ const {
   getBroadcasts,
   resetUserPasswordByAdmin,
 } = require('../controllers/adminController');
+const {
+  getAnalyticsOverview,
+  getEmployerUsage,
+} = require('../controllers/analyticsController');
 
 router.use(protect, authorize('admin'));
 
 router.get('/stats', getStats);
+
+// Thống kê có lọc theo thời gian + khối lượng sử dụng theo từng doanh nghiệp
+router.get('/analytics', getAnalyticsOverview);
+router.get('/analytics/employers', getEmployerUsage);
 router.get('/audit-logs', getAuditLogs);
 
 router.get('/ai-monitor', getAiMonitor);
