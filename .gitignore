@@ -41,3 +41,8 @@ Data/
 
 # ─── Tài liệu deploy (chứa credential thật: mật khẩu DB, key R2, SMTP) ───────
 DEPLOYMENT.md
+deployp2.md
+
+# ─── Bản gốc dùng để đối chiếu (bản sao repo tại commit 88b6cfa) ───────────
+# Chỉ tồn tại trên máy, không đưa lên remote — commit vào sẽ nhân đôi toàn bộ repo.
+Smart-Recruit/
