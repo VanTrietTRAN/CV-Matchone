@@ -20,18 +20,7 @@ import { toast } from 'sonner'
 import { setAuth } from '@/lib/auth-storage'
 import { apiFetch, type AuthResponse } from '@/lib/api'
 import { cn } from '@/lib/utils'
-
-const industries = [
-  { value: 'technology', label: 'Công nghệ thông tin' },
-  { value: 'finance', label: 'Tài chính / Ngân hàng' },
-  { value: 'healthcare', label: 'Y tế / Dược phẩm' },
-  { value: 'consulting', label: 'Tư vấn' },
-  { value: 'logistics', label: 'Logistics / Vận tải' },
-  { value: 'education', label: 'Giáo dục / Đào tạo' },
-  { value: 'marketing', label: 'Marketing / Truyền thông' },
-  { value: 'manufacturing', label: 'Sản xuất' },
-  { value: 'other', label: 'Lĩnh vực khác' },
-]
+import { COMPANY_SECTORS } from '@/lib/job-categories'
 
 const sizes = [
   { value: 'startup', label: 'Startup (1 - 50 nhân sự)' },
@@ -351,7 +340,7 @@ export default function EmployerSignupPage() {
                     <SelectValue placeholder="Chọn lĩnh vực" />
                   </SelectTrigger>
                   <SelectContent>
-                    {industries.map((item) => (
+                    {COMPANY_SECTORS.map((item) => (
                       <SelectItem key={item.value} value={item.value}>
                         {item.label}
                       </SelectItem>

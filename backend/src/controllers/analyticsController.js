@@ -191,6 +191,11 @@ const getEmployerUsage = async (req, res) => {
                 $expr: { $eq: ['$employerId', '$$uid'] },
                 isDeleted: { $ne: true },
                 createdAt: rangeFilter,
+                // Lọc theo cùng bộ slug ngành nghề mà ứng viên và admin đang dùng
+                ...(req.query.industry ? { industry: req.query.industry } : {}),
+                ...(req.query.specialization
+                  ? { specialization: req.query.specialization }
+                  : {}),
               },
             },
             { $project: { status: 1 } },

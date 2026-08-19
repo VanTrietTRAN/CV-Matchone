@@ -3,6 +3,10 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import AdminLayout from '@/layouts/AdminLayout'
 import { apiFetch } from '@/lib/api'
+import TaxonomyFilter, {
+  applyTaxonomyParams,
+  type TaxonomyValue,
+} from '@/components/filters/TaxonomyFilter'
 import { toast } from 'sonner'
 import { Briefcase, Search, RefreshCw, XCircle, Trash2, ChevronLeft, ChevronRight, MapPin, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -33,6 +37,7 @@ export default function AdminJobsPage() {
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [taxonomy, setTaxonomy] = useState<TaxonomyValue>({ industry: '', specialization: '' })
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -41,6 +46,7 @@ export default function AdminJobsPage() {
       const params = new URLSearchParams({ page: String(page), limit: '15' })
       if (search) params.set('search', search)
       if (statusFilter) params.set('status', statusFilter)
+      applyTaxonomyParams(params, taxonomy)
       const res = await apiFetch<{ data: AdminJob[]; total: number; pages: number }>(`/api/admin/jobs?${params}`)
       setJobs(res.data)
       setTotal(res.total)
@@ -50,7 +56,7 @@ export default function AdminJobsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, search, statusFilter])
+  }, [page, search, statusFilter, taxonomy])
 
   useEffect(() => { load() }, [load])
 
@@ -119,6 +125,17 @@ export default function AdminJobsPage() {
             <option value="closed">Đã đóng</option>
             <option value="archived">Lưu trữ</option>
           </select>
+
+          <TaxonomyFilter
+            value={taxonomy}
+            onChange={(v) => {
+              setTaxonomy(v)
+              setPage(1)
+            }}
+            tone="dark"
+            showLabels={false}
+            className="w-full sm:w-auto"
+          />
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">

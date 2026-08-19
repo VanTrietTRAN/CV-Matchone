@@ -12,6 +12,10 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Briefcase, Users, TrendingUp, Plus, Share2, Lock, Copy, MapPin } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import TaxonomyFilter, {
+  hasTaxonomyFilter,
+  type TaxonomyValue,
+} from '@/components/filters/TaxonomyFilter'
 import { getStoredUser } from '@/lib/auth-storage'
 import { toast } from 'sonner'
 import { formatDate, formatRelativeTime } from '@/lib/format'
@@ -22,6 +26,8 @@ type JobRow = {
   location?: string
   status: string
   createdAt: string
+  industry?: string
+  specialization?: string
 }
 
 export default function EmployerDashboardPage() {
@@ -31,6 +37,7 @@ export default function EmployerDashboardPage() {
   const [stats, setStats] = useState({ totalApplications: 0, avgMatchScore: 0 })
   const [closeTarget, setCloseTarget] = useState<JobRow | null>(null)
   const [closing, setClosing] = useState(false)
+  const [taxonomy, setTaxonomy] = useState<TaxonomyValue>({ industry: '', specialization: '' })
 
   useEffect(() => {
     const u = getStoredUser()
@@ -87,6 +94,12 @@ export default function EmployerDashboardPage() {
       toast.error(e instanceof Error ? e.message : 'Không thể sao chép tin')
     }
   }
+
+  const visibleJobs = jobs.filter(
+    (j) =>
+      (!taxonomy.industry || j.industry === taxonomy.industry) &&
+      (!taxonomy.specialization || j.specialization === taxonomy.specialization),
+  )
 
   const activeJobsCount = jobs.filter((j) => j.status === 'open').length
 
@@ -153,9 +166,24 @@ export default function EmployerDashboardPage() {
             {jobs.length > 0 && (
               <p className="text-sm text-muted-foreground">
                 {activeJobsCount} tin đang mở / {jobs.length} tin
+                {hasTaxonomyFilter(taxonomy) && ` · ${visibleJobs.length} tin khớp lọc`}
               </p>
             )}
           </div>
+
+          {jobs.length > 0 && (
+            <div className="surface-card mb-4 flex flex-wrap items-end gap-3 p-4">
+              <TaxonomyFilter value={taxonomy} onChange={setTaxonomy} className="flex-1" />
+              {hasTaxonomyFilter(taxonomy) && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setTaxonomy({ industry: '', specialization: '' })}
+                >
+                  Xoá lọc
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="surface-card overflow-hidden">
             {loading ? (
@@ -184,7 +212,7 @@ export default function EmployerDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {jobs.map((job) => (
+                    {visibleJobs.map((job) => (
                       <tr
                         key={job._id}
                         className="border-b border-border transition-colors last:border-0 hover:bg-muted/40"

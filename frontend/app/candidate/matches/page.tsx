@@ -20,6 +20,10 @@ import {
 } from '@/components/ui/select'
 import { Search, X, RefreshCw, SlidersHorizontal, FileText, Briefcase } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import TaxonomyFilter, {
+  hasTaxonomyFilter,
+  type TaxonomyValue,
+} from '@/components/filters/TaxonomyFilter'
 import { toast } from 'sonner'
 
 type ApiJob = {
@@ -28,6 +32,8 @@ type ApiJob = {
   description: string
   requirements?: string[]
   location?: string
+  industry?: string
+  specialization?: string
   status: string
   createdAt: string
   expiresAt?: string
@@ -58,6 +64,7 @@ function MatchesContent() {
   const [loading, setLoading] = useState(true)
   const [searchText, setSearchText] = useState('')
   const [locationFilter, setLocationFilter] = useState<string | null>(null)
+  const [taxonomy, setTaxonomy] = useState<TaxonomyValue>({ industry: '', specialization: '' })
   const [sort, setSort] = useState<SortKey>('match')
   const [applyModal, setApplyModal] = useState<{ jobId: string; jobTitle: string } | null>(null)
 
@@ -124,6 +131,13 @@ function MatchesContent() {
       result = result.filter((j) => j.location === locationFilter)
     }
 
+    if (taxonomy.industry) {
+      result = result.filter((j) => j.industry === taxonomy.industry)
+    }
+    if (taxonomy.specialization) {
+      result = result.filter((j) => j.specialization === taxonomy.specialization)
+    }
+
     result.sort((a, b) => {
       if (sort === 'newest') {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -141,12 +155,13 @@ function MatchesContent() {
     })
 
     return result
-  }, [jobs, searchText, locationFilter, sort])
+  }, [jobs, searchText, locationFilter, taxonomy, sort])
 
-  const hasFilter = Boolean(searchText || locationFilter)
+  const hasFilter = Boolean(searchText || locationFilter) || hasTaxonomyFilter(taxonomy)
   const clearFilters = () => {
     setSearchText('')
     setLocationFilter(null)
+    setTaxonomy({ industry: '', specialization: '' })
   }
 
   return (
@@ -211,6 +226,13 @@ function MatchesContent() {
                   ))}
                 </SelectContent>
               </Select>
+
+              <TaxonomyFilter
+                value={taxonomy}
+                onChange={setTaxonomy}
+                showLabels={false}
+                className="w-full sm:w-auto sm:flex-nowrap"
+              />
 
               {hasFilter && (
                 <Button variant="outline" onClick={clearFilters} className="shrink-0">

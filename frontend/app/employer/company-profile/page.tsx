@@ -18,6 +18,7 @@ import {
 import { Plus, Loader2, Building2, CheckCircle } from 'lucide-react'
 import SkillTag from '@/components/SkillTag'
 import { apiFetch } from '@/lib/api'
+import { COMPANY_SECTOR_LABEL } from '@/lib/job-categories'
 import { toast } from 'sonner'
 
 type CompanyFormData = {
@@ -40,18 +41,6 @@ const defaultFormData: CompanyFormData = {
   address: '',
   foundedYear: '',
   benefits: [],
-}
-
-const industryLabels: Record<string, string> = {
-  technology: 'Công nghệ thông tin',
-  finance: 'Tài chính / Ngân hàng',
-  healthcare: 'Y tế / Dược phẩm',
-  consulting: 'Tư vấn / Dịch vụ',
-  logistics: 'Logistics / Vận tải',
-  education: 'Giáo dục / Đào tạo',
-  marketing: 'Marketing / Truyền thông',
-  manufacturing: 'Sản xuất / Chế tạo',
-  other: 'Khác',
 }
 
 const sizeLabels: Record<string, string> = {
@@ -224,13 +213,13 @@ export default function CompanyProfilePage() {
                   <Select value={formData.industry} onValueChange={(v) => setFormData((p) => ({ ...p, industry: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(industryLabels).map(([val, label]) => (
+                      {Object.entries(COMPANY_SECTOR_LABEL).map(([val, label]) => (
                         <SelectItem key={val} value={val}>{label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="text-foreground/70">{industryLabels[formData.industry] || formData.industry}</p>
+                  <p className="text-foreground/70">{COMPANY_SECTOR_LABEL[formData.industry] || formData.industry}</p>
                 )}
               </div>
 

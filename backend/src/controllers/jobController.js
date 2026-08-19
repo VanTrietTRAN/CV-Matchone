@@ -93,9 +93,38 @@ const matchJobWithAllCandidates = async (job) => {
   }
 };
 
+/**
+ * Dựng điều kiện lọc dùng chung cho mọi nơi liệt kê tin tuyển dụng
+ * (ứng viên tìm việc, nhà tuyển dụng xem tin của mình, admin quản lý).
+ *
+ * Cùng một bộ từ khóa cho cả 3 tác nhân: `industry` và `specialization` là slug
+ * trong frontend/lib/job-categories.ts, `q` tìm trong tiêu đề / mô tả / yêu cầu.
+ */
+const escapeRegex = (v) => String(v).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildJobFilter = (query = {}) => {
+  const filter = {};
+
+  if (query.industry) filter.industry = query.industry;
+  if (query.specialization) filter.specialization = query.specialization;
+  if (query.location) filter.location = query.location;
+  if (query.workType) filter.jobType = query.workType;
+
+  const q = escapeRegex(query.q || query.search || '');
+  if (q) {
+    filter.$or = [
+      { title: { $regex: q, $options: 'i' } },
+      { description: { $regex: q, $options: 'i' } },
+      { requirements: { $elemMatch: { $regex: q, $options: 'i' } } },
+    ];
+  }
+
+  return filter;
+};
+
 const getAllOpenJobs = async (req, res) => {
   try {
-    const jobs = await Job.find({ status: "open" })
+    const jobs = await Job.find({ status: "open", isDeleted: { $ne: true }, ...buildJobFilter(req.query) })
       .populate("employerId", "email role")
       .sort({ createdAt: -1 });
 
@@ -107,9 +136,10 @@ const getAllOpenJobs = async (req, res) => {
 
 const getMyJobs = async (req, res) => {
   try {
-    const jobs = await Job.find({ employerId: req.user._id }).sort({
-      createdAt: -1,
-    });
+    const jobs = await Job.find({
+      employerId: req.user._id,
+      ...buildJobFilter(req.query),
+    }).sort({ createdAt: -1 });
     res.json({ data: jobs });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -302,7 +332,7 @@ const closeJob = async (req, res) => {
 
 const getJobsWithMatchPreview = async (req, res) => {
   try {
-    const jobs = await Job.find({ status: "open" })
+    const jobs = await Job.find({ status: "open", isDeleted: { $ne: true }, ...buildJobFilter(req.query) })
       .populate("employerId", "email role")
       .sort({ createdAt: -1 });
 

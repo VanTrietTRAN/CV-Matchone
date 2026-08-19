@@ -28,7 +28,7 @@ import {
   Gift,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
-import { categoryLabel, positionLabel } from '@/lib/job-categories'
+import { categoryLabel, positionLabel, COMPANY_SECTOR_LABEL } from '@/lib/job-categories'
 import { toast } from 'sonner'
 import { CompanyReviews } from '@/components/reviews/CompanyReview'
 import { formatDate, formatRelativeTime, daysUntil, initials } from '@/lib/format'
@@ -78,18 +78,6 @@ const sizeLabels: Record<string, string> = {
   small: 'Nhỏ (51 – 200 nhân sự)',
   medium: 'Vừa (201 – 1.000 nhân sự)',
   large: 'Lớn (trên 1.000 nhân sự)',
-}
-
-const industryLabels: Record<string, string> = {
-  technology: 'Công nghệ thông tin',
-  finance: 'Tài chính / Ngân hàng',
-  healthcare: 'Y tế / Dược phẩm',
-  consulting: 'Tư vấn / Dịch vụ',
-  logistics: 'Logistics / Vận tải',
-  education: 'Giáo dục / Đào tạo',
-  marketing: 'Marketing / Truyền thông',
-  manufacturing: 'Sản xuất / Chế tạo',
-  other: 'Khác',
 }
 
 function Section({
@@ -307,7 +295,7 @@ export default function JobDetailPage() {
                     label="Ngành nghề"
                     value={
                       categoryLabel(job.industry) ||
-                      industryLabels[company?.industry || ''] ||
+                      COMPANY_SECTOR_LABEL[company?.industry || ''] ||
                       '—'
                     }
                   />
@@ -391,7 +379,7 @@ export default function JobDetailPage() {
                     <p className="truncate font-bold">{companyName}</p>
                     {company?.industry && (
                       <p className="truncate text-xs text-muted-foreground">
-                        {industryLabels[company.industry] || company.industry}
+                        {COMPANY_SECTOR_LABEL[company.industry] || company.industry}
                       </p>
                     )}
                   </div>

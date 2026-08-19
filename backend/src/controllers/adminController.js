@@ -232,7 +232,13 @@ const getJobs = async (req, res) => {
 
     const filter = { isDeleted: { $ne: true } };
     if (status) filter.status = status;
-    if (search) filter.title = { $regex: search, $options: 'i' };
+    // Cùng bộ từ khóa với trang tìm việc của ứng viên (slug trong job-categories.ts)
+    if (req.query.industry) filter.industry = req.query.industry;
+    if (req.query.specialization) filter.specialization = req.query.specialization;
+    if (search) {
+      const q = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (q) filter.title = { $regex: q, $options: 'i' };
+    }
 
     const total = await Job.countDocuments(filter);
     const jobs = await Job.find(filter)

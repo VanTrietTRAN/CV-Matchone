@@ -501,3 +501,42 @@ export function positionsOf(categoryValue?: string | null): JobPosition[] {
 export function positionBelongsTo(categoryValue: string, positionValue: string): boolean {
   return positionsOf(categoryValue).some((pos) => pos.value === positionValue)
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * LĨNH VỰC CÔNG TY (CompanyProfile.industry)
+ *
+ * Khác với danh mục nghề ở trên: đây là lĩnh vực hoạt động của DOANH NGHIỆP,
+ * còn JOB_CATEGORIES là ngành nghề của TIN TUYỂN DỤNG. Một công ty công nghệ
+ * vẫn tuyển kế toán, nên hai thứ không gộp làm một được.
+ *
+ * Danh sách phải khớp đúng enum trong backend/src/models/CompanyProfile.js.
+ * Trước đây map này bị chép lại ở 4 file với 3 cách gọi tên khác nhau cho cùng
+ * một slug (consulting = "Tư vấn" / "Tư vấn / Dịch vụ"), khiến cùng một công ty
+ * hiện tên lĩnh vực khác nhau tuỳ trang. Nay chỉ còn định nghĩa ở đây.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export type CompanySector = { value: string; label: string }
+
+export const COMPANY_SECTORS: CompanySector[] = [
+  { value: 'technology', label: 'Công nghệ thông tin' },
+  { value: 'finance', label: 'Tài chính / Ngân hàng' },
+  { value: 'healthcare', label: 'Y tế / Dược phẩm' },
+  { value: 'consulting', label: 'Tư vấn / Dịch vụ' },
+  { value: 'logistics', label: 'Logistics / Vận tải' },
+  { value: 'education', label: 'Giáo dục / Đào tạo' },
+  { value: 'marketing', label: 'Marketing / Truyền thông' },
+  { value: 'manufacturing', label: 'Sản xuất / Chế tạo' },
+  { value: 'other', label: 'Lĩnh vực khác' },
+]
+
+const SECTOR_BY_VALUE = new Map(COMPANY_SECTORS.map((s) => [s.value, s]))
+
+export function companySectorLabel(value?: string | null): string {
+  if (!value) return ''
+  return SECTOR_BY_VALUE.get(value)?.label ?? value
+}
+
+/** Dạng Record để chỗ nào đang dùng `map[value]` không phải sửa nhiều. */
+export const COMPANY_SECTOR_LABEL: Record<string, string> = Object.fromEntries(
+  COMPANY_SECTORS.map((s) => [s.value, s.label]),
+)

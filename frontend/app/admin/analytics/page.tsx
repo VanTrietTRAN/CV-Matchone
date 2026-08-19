@@ -3,6 +3,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminLayout from '@/layouts/AdminLayout'
 import { apiFetch } from '@/lib/api'
+import { COMPANY_SECTOR_LABEL } from '@/lib/job-categories'
+import TaxonomyFilter, {
+  applyTaxonomyParams,
+  type TaxonomyValue,
+} from '@/components/filters/TaxonomyFilter'
 import { toast } from 'sonner'
 import {
   Users,
@@ -67,18 +72,6 @@ const PRESETS = [
   { label: '90 ngày', days: 90 },
   { label: '1 năm', days: 365 },
 ]
-
-const INDUSTRY_LABEL: Record<string, string> = {
-  technology: 'Công nghệ',
-  finance: 'Tài chính',
-  healthcare: 'Y tế',
-  consulting: 'Tư vấn',
-  logistics: 'Vận tải',
-  education: 'Giáo dục',
-  marketing: 'Marketing',
-  manufacturing: 'Sản xuất',
-  other: 'Khác',
-}
 
 function StatCard({
   icon: Icon,
@@ -172,6 +165,7 @@ export default function AdminAnalyticsPage() {
   const [searchInput, setSearchInput] = useState('')
   const [status, setStatus] = useState('all')
   const [minJobs, setMinJobs] = useState(0)
+  const [taxonomy, setTaxonomy] = useState<TaxonomyValue>({ industry: '', specialization: '' })
   const [sortBy, setSortBy] = useState<'jobs' | 'openJobs' | 'applications' | 'createdAt'>('jobs')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
@@ -211,6 +205,7 @@ export default function AdminAnalyticsPage() {
       if (search) p.set('search', search)
       if (status !== 'all') p.set('status', status)
       if (minJobs > 0) p.set('minJobs', String(minJobs))
+      applyTaxonomyParams(p, taxonomy)
 
       const res = await apiFetch<UsageRes>(`/api/admin/analytics/employers?${p}`)
       setUsage(res)
@@ -219,7 +214,7 @@ export default function AdminAnalyticsPage() {
     } finally {
       setLoadingUsage(false)
     }
-  }, [rangeQuery, page, sortBy, sortDir, search, status, minJobs])
+  }, [rangeQuery, page, sortBy, sortDir, search, status, minJobs, taxonomy])
 
   useEffect(() => {
     loadOverview()
@@ -231,7 +226,7 @@ export default function AdminAnalyticsPage() {
   // Đổi bộ lọc thì quay về trang 1, tránh rơi vào trang trống
   useEffect(() => {
     setPage(1)
-  }, [rangeQuery, search, status, minJobs, sortBy, sortDir])
+  }, [rangeQuery, search, status, minJobs, sortBy, sortDir, taxonomy])
 
   const toggleSort = (key: typeof sortBy) => {
     if (sortBy === key) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
@@ -247,7 +242,7 @@ export default function AdminAnalyticsPage() {
     const rows = usage.data.map((r) => [
       r.email,
       r.companyName || '',
-      INDUSTRY_LABEL[r.industry] || r.industry || '',
+      COMPANY_SECTOR_LABEL[r.industry] || r.industry || '',
       r.status,
       r.jobs,
       r.openJobs,
@@ -502,6 +497,18 @@ export default function AdminAnalyticsPage() {
               <option value={10}>Từ 10 tin</option>
             </select>
           </div>
+
+          <div className="min-w-[320px] flex-1">
+            <p className="mb-1.5 text-xs font-medium text-slate-400">
+              Ngành nghề / vị trí của tin đăng
+            </p>
+            <TaxonomyFilter
+              value={taxonomy}
+              onChange={setTaxonomy}
+              tone="dark"
+              showLabels={false}
+            />
+          </div>
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
@@ -547,7 +554,7 @@ export default function AdminAnalyticsPage() {
                         <p className="text-xs text-slate-500">{r.email}</p>
                       </td>
                       <td className="px-5 py-3 text-slate-400">
-                        {INDUSTRY_LABEL[r.industry] || r.industry || '—'}
+                        {COMPANY_SECTOR_LABEL[r.industry] || r.industry || '—'}
                       </td>
                       <td className="px-5 py-3">
                         <span
