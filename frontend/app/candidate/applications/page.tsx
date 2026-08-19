@@ -6,7 +6,7 @@ import CandidateLayout from '@/layouts/CandidateLayout'
 import PageContainer from '@/components/dashboard/PageContainer'
 import PageHeader from '@/components/dashboard/PageHeader'
 import StatCard from '@/components/dashboard/StatCard'
-import StatusBadge from '@/components/StatusBadge'
+import StatusBadge, { STATUS_LABEL } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -34,13 +34,13 @@ type Application = {
   appliedAt: string
 }
 
+// Nhãn lấy từ STATUS_LABEL để tab, badge và toast luôn gọi cùng một tên trạng thái.
 const TABS = [
   { value: 'all', label: 'Tất cả' },
-  { value: 'pending', label: 'Chờ duyệt' },
-  { value: 'reviewed', label: 'Đã xem' },
-  { value: 'interview', label: 'Phỏng vấn' },
-  { value: 'accepted', label: 'Trúng tuyển' },
-  { value: 'rejected', label: 'Từ chối' },
+  ...['pending', 'reviewed', 'interview', 'accepted', 'rejected'].map((value) => ({
+    value,
+    label: STATUS_LABEL[value] ?? value,
+  })),
 ]
 
 function getJob(app: Application): ApiJob | null {
@@ -143,14 +143,14 @@ export default function ApplicationsPage() {
             loading={loading}
           />
           <StatCard
-            label="Đã được xem"
+            label="Đang xem xét"
             value={counts.reviewed ?? 0}
             icon={Eye}
             tone="violet"
             loading={loading}
           />
           <StatCard
-            label="Trúng tuyển"
+            label="Chấp nhận"
             value={counts.accepted ?? 0}
             icon={CheckCircle2}
             tone="brand"

@@ -34,10 +34,10 @@ const toneClasses: Record<Tone, string> = {
 const statusConfig: Record<Status, { tone: Tone; label: string }> = {
   pending: { tone: 'info', label: 'Chờ duyệt' },
   applied: { tone: 'info', label: 'Đã ứng tuyển' },
-  reviewed: { tone: 'violet', label: 'Đã xem hồ sơ' },
+  reviewed: { tone: 'violet', label: 'Đang xem xét' },
   reviewing: { tone: 'violet', label: 'Đang xem xét' },
   interview: { tone: 'warning', label: 'Phỏng vấn' },
-  accepted: { tone: 'brand', label: 'Trúng tuyển' },
+  accepted: { tone: 'brand', label: 'Chấp nhận' },
   rejected: { tone: 'danger', label: 'Từ chối' },
   open: { tone: 'brand', label: 'Đang tuyển' },
   active: { tone: 'brand', label: 'Đang hoạt động' },
@@ -46,6 +46,14 @@ const statusConfig: Record<Status, { tone: Tone; label: string }> = {
   expired: { tone: 'neutral', label: 'Hết hạn' },
   draft: { tone: 'neutral', label: 'Bản nháp' },
 }
+
+/**
+ * Nhãn hiển thị của từng trạng thái — nguồn duy nhất.
+ * Mọi nơi cần chữ (tab, bộ lọc, toast) phải lấy từ đây, đừng viết lại tay.
+ */
+export const STATUS_LABEL: Record<string, string> = Object.fromEntries(
+  Object.entries(statusConfig).map(([k, v]) => [k, v.label]),
+)
 
 interface StatusBadgeProps {
   status: Status | string

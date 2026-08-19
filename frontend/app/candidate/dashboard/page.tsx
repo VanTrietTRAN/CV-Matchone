@@ -156,7 +156,7 @@ export default function CandidateDashboardPage() {
               loading={loading}
             />
             <StatCard
-              label="Đã được xem"
+              label="Đang xem xét"
               value={reviewedCount}
               icon={ClipboardCheck}
               tone="violet"
@@ -164,7 +164,7 @@ export default function CandidateDashboardPage() {
               loading={loading}
             />
             <StatCard
-              label="Trúng tuyển"
+              label="Chấp nhận"
               value={acceptedCount}
               icon={CheckCircle2}
               tone="brand"

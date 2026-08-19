@@ -14,11 +14,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Bell, LogOut, Menu, ChevronDown } from 'lucide-react'
+import { Bell, LogOut, Menu, ChevronDown, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { apiLogout } from '@/lib/api'
 import { useUnreadCount } from '@/hooks/use-unread-count'
-import { getStoredUser, type StoredUser } from '@/lib/auth-storage'
+import { useRoleGuard } from '@/hooks/use-role-guard'
 import { initials } from '@/lib/format'
 
 type Variant = 'candidate' | 'employer' | 'admin'
@@ -52,15 +52,14 @@ export default function DashboardShell({
   const router = useRouter()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [user, setUser] = useState<StoredUser | null>(null)
+
+  // Chặn truy cập chéo vai trò + lấy đúng người đang đăng nhập
+  const guard = useRoleGuard(variant)
+  const user = guard.user
 
   const notificationsHref = NOTIFICATIONS_HREF[variant]
   const isDark = tone === 'dark'
   const unread = useUnreadCount(Boolean(notificationsHref))
-
-  useEffect(() => {
-    setUser(getStoredUser())
-  }, [])
 
   useEffect(() => {
     setOpen(false)
@@ -69,6 +68,20 @@ export default function DashboardShell({
   const signOut = async () => {
     await apiLogout()
     router.push(variant === 'employer' ? '/login?role=employer' : '/login')
+  }
+
+  // Sai vai trò thì không vẽ gì trong lúc đợi chuyển hướng, tránh nháy nội dung của khu vực khác
+  if (guard.status === 'denied') {
+    return (
+      <div
+        className={cn(
+          'grid min-h-screen place-items-center',
+          isDark ? 'bg-slate-950' : 'bg-background',
+        )}
+      >
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   return (
@@ -163,7 +176,7 @@ export default function DashboardShell({
                         isDark ? 'text-slate-400' : 'text-muted-foreground',
                       )}
                     >
-                      {ROLE_LABEL[variant]}
+                      {user ? ROLE_LABEL[user.role] : '—'}
                     </span>
                   </span>
                   <ChevronDown className="size-4 opacity-60" />
@@ -173,7 +186,7 @@ export default function DashboardShell({
               <DropdownMenuContent align="end" className="w-60">
                 <DropdownMenuLabel className="font-normal">
                   <p className="truncate text-sm font-semibold">{user?.email ?? 'Chưa đăng nhập'}</p>
-                  <p className="text-xs text-muted-foreground">{ROLE_LABEL[variant]}</p>
+                  <p className="text-xs text-muted-foreground">{user ? ROLE_LABEL[user.role] : '—'}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {variant === 'candidate' && (
