@@ -25,6 +25,7 @@ import {
   positionLabel,
   positionsOf,
   positionBelongsTo,
+  EXPERIENCE_LEVELS,
 } from '@/lib/job-categories'
 import PositionCombobox from '@/components/employer/PositionCombobox'
 import { formatSalary, WORK_TYPE_LABEL } from '@/lib/format'
@@ -48,13 +49,6 @@ const initialFormData = {
   duration: '',
 }
 
-
-const EXPERIENCE_LEVELS = [
-  { value: 'entry', label: 'Mới tốt nghiệp / dưới 1 năm' },
-  { value: 'mid', label: 'Từ 1 – 3 năm' },
-  { value: 'senior', label: 'Từ 3 – 5 năm' },
-  { value: 'expert', label: 'Trên 5 năm' },
-]
 
 function FormSection({
   icon: Icon,
@@ -144,20 +138,12 @@ export default function PostJobPage() {
     const niceSkills = splitSkills(formData.niceToHaveSkills)
     const requirements = [...reqSkills, ...niceSkills]
 
-    // Các trường chưa có cột riêng trong model job được ghi kèm vào mô tả
-    let extra = ''
-    if (formData.industry) extra += `\nNgành nghề: ${categoryLabel(formData.industry)}`
-    if (formData.specialization) {
-      extra += `\nVị trí chuyên môn: ${positionLabel(formData.specialization)}`
-    }
-    if (formData.workType) extra += `\nHình thức: ${WORK_TYPE_LABEL[formData.workType] ?? formData.workType}`
-    if (formData.experienceLevel) {
-      extra += `\nKinh nghiệm: ${EXPERIENCE_LEVELS.find((l) => l.value === formData.experienceLevel)?.label ?? formData.experienceLevel}`
-    }
-    if (formData.education) extra += `\nHọc vấn: ${formData.education}`
-    if (formData.salaryMin || formData.salaryMax) {
-      extra += `\nMức lương: ${formatSalary(Number(formData.salaryMin), Number(formData.salaryMax), formData.currency)}`
-    }
+
+    // Giữ thêm chuỗi đã định dạng để các chỗ đang đọc `job.salary` không phải sửa
+    const salaryText =
+      formData.salaryMin || formData.salaryMax
+        ? formatSalary(Number(formData.salaryMin), Number(formData.salaryMax), formData.currency)
+        : ''
 
     let expiresAt: string | undefined
     if (formData.deadline) {
@@ -173,13 +159,20 @@ export default function PostJobPage() {
         method: 'POST',
         body: JSON.stringify({
           title: formData.title,
-          description: formData.description + extra,
+          description: formData.description,
           requirements,
           location: formData.location || undefined,
-          // Trước đây ngành nghề chỉ được nhét vào mô tả; nay lưu thành cột riêng
-          // để còn lọc và thống kê được.
+          // Mỗi trường lưu thành cột riêng thay vì nét vào cuối mô tả như trước,
+          // để còn lọc, thống kê và quan trọng nhất là sửa lại được.
           industry: formData.industry || undefined,
           specialization: formData.specialization || undefined,
+          jobType: formData.workType || undefined,
+          experience: formData.experienceLevel || undefined,
+          education: formData.education || undefined,
+          salaryMin: formData.salaryMin ? Number(formData.salaryMin) : undefined,
+          salaryMax: formData.salaryMax ? Number(formData.salaryMax) : undefined,
+          currency: formData.currency,
+          salary: salaryText || undefined,
           expiresAt,
           isEmailEnabled: true,
           status: 'open',

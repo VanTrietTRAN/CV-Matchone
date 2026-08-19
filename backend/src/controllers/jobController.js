@@ -182,6 +182,10 @@ const createJob = async (req, res) => {
       level: req.body.level || '',
       industry: req.body.industry || '',
       specialization: req.body.specialization || '',
+      education: req.body.education || '',
+      salaryMin: req.body.salaryMin ?? null,
+      salaryMax: req.body.salaryMax ?? null,
+      currency: req.body.currency || 'VND',
       benefits: req.body.benefits || [],
       expiresAt: req.body.expiresAt,
       isEmailEnabled:
@@ -234,6 +238,10 @@ const createJobFromOld = async (req, res) => {
       level: req.body.level || oldJob.level,
       industry: req.body.industry || oldJob.industry,
       specialization: req.body.specialization || oldJob.specialization,
+      education: req.body.education || oldJob.education,
+      salaryMin: req.body.salaryMin ?? oldJob.salaryMin,
+      salaryMax: req.body.salaryMax ?? oldJob.salaryMax,
+      currency: req.body.currency || oldJob.currency,
       benefits: req.body.benefits || oldJob.benefits,
       expiresAt: req.body.expiresAt || oldJob.expiresAt,
       isEmailEnabled:
@@ -261,6 +269,8 @@ const updateJob = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền cập nhật tin tuyển dụng này" });
     }
 
+    // Nhà tuyển dụng sửa được mọi trường họ nhập lúc đăng tin.
+    // Không cho sửa: employerId, embedding, isDeleted, createdAt.
     const allowedFields = [
       "title",
       "description",
@@ -269,6 +279,17 @@ const updateJob = async (req, res) => {
       "expiresAt",
       "isEmailEnabled",
       "status",
+      "industry",
+      "specialization",
+      "jobType",
+      "experience",
+      "level",
+      "education",
+      "salary",
+      "salaryMin",
+      "salaryMax",
+      "currency",
+      "benefits",
     ];
 
     let shouldReembed = false;
@@ -282,7 +303,17 @@ const updateJob = async (req, res) => {
     });
 
     if (shouldReembed) {
-      job.embedding = await computeJobEmbedding(job.title, job.description, job.requirements);
+      const fresh = await computeJobEmbedding(job.title, job.description, job.requirements);
+      // computeJobEmbedding trả [] khi AI service lỗi hoặc Gemini 429. Gán thẳng sẽ
+      // xoá mất vector cũ → tin rơi về 0% phù hợp với mọi ứng viên mà không báo gì.
+      // Chỉ ghi đè khi tính lại thành công; thất bại thì giữ vector cũ.
+      if (fresh && fresh.length) {
+        job.embedding = fresh;
+      } else if (job.embedding?.length) {
+        console.warn(
+          `[updateJob] Không tính lại được embedding cho job ${job._id}, giữ vector cũ.`,
+        );
+      }
     }
 
     const updatedJob = await job.save();

@@ -18,6 +18,11 @@ const jobSchema = new mongoose.Schema({
     industry: { type: String, default: '' },       
     // Vị trí chuyên môn (cấp 2 của danh mục nghề) — slug trong frontend/lib/job-categories.ts
     specialization: { type: String, default: '' },
+    education: { type: String, default: '' },
+    // Lương dạng số để sửa lại được; `salary` ở trên giữ chuỗi đã định dạng cho chỗ hiển thị cũ
+    salaryMin: { type: Number, default: null },
+    salaryMax: { type: Number, default: null },
+    currency: { type: String, default: 'VND' },
     benefits: [{ type: String }],                   
 
     embedding: {

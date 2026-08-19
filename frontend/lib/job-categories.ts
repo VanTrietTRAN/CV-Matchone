@@ -540,3 +540,22 @@ export function companySectorLabel(value?: string | null): string {
 export const COMPANY_SECTOR_LABEL: Record<string, string> = Object.fromEntries(
   COMPANY_SECTORS.map((s) => [s.value, s.label]),
 )
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * MỨC KINH NGHIỆM (Job.experience)
+ * Để chung ở đây để trang đăng tin và trang sửa tin gọi cùng một tên.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export const EXPERIENCE_LEVELS = [
+  { value: 'entry', label: 'Mới tốt nghiệp / dưới 1 năm' },
+  { value: 'mid', label: 'Từ 1 – 3 năm' },
+  { value: 'senior', label: 'Từ 3 – 5 năm' },
+  { value: 'expert', label: 'Trên 5 năm' },
+]
+
+const EXPERIENCE_BY_VALUE = new Map(EXPERIENCE_LEVELS.map((e) => [e.value, e]))
+
+export function experienceLabel(value?: string | null): string {
+  if (!value) return ''
+  return EXPERIENCE_BY_VALUE.get(value)?.label ?? value
+}

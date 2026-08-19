@@ -219,7 +219,7 @@ export default function EmployerDashboardPage() {
                       >
                         <td className="px-5 py-4">
                           <Link
-                            href={`/candidate/jobs/${job._id}`}
+                            href={`/employer/jobs/${job._id}`}
                             className="font-semibold transition-colors hover:text-brand-600"
                           >
                             {job.title}
