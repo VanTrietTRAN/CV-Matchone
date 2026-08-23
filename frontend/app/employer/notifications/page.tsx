@@ -32,7 +32,7 @@ type Notification = {
 export default function EmployerNotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
   const router = useRouter()
 
   const fetchNotifications = useCallback(async () => {
@@ -55,6 +55,8 @@ export default function EmployerNotificationsPage() {
       await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' })
       setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)))
       refreshUnreadCount()
+      // Ở tab "Chưa đọc" thông báo sẽ biến mất khỏi danh sách — nói rõ nó đi đâu
+      if (filter === 'unread') toast.success('Đã chuyển sang tab “Đã đọc”')
     } catch {
       toast.error('Không thể đánh dấu đã đọc')
     }
@@ -89,8 +91,16 @@ export default function EmployerNotificationsPage() {
     if (!notif.isRead) handleMarkRead(notif._id)
   }
 
-  const displayed = filter === 'unread' ? notifications.filter((n) => !n.isRead) : notifications
+  // Mỗi chế độ là một lát cắt riêng: đánh dấu đã đọc sẽ chuyển thông báo
+  // từ tab "Chưa đọc" sang tab "Đã đọc" ngay lập tức.
+  const displayed =
+    filter === 'unread'
+      ? notifications.filter((n) => !n.isRead)
+      : filter === 'read'
+        ? notifications.filter((n) => n.isRead)
+        : notifications
   const unreadCount = notifications.filter((n) => !n.isRead).length
+  const readCount = notifications.length - unreadCount
 
   return (
     <EmployerLayout>
@@ -112,8 +122,8 @@ export default function EmployerNotificationsPage() {
           }
         />
 
-        <div className="mb-5 flex gap-2">
-          {(['all', 'unread'] as const).map((f) => (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {(['all', 'unread', 'read'] as const).map((f) => (
             <button
               key={f}
               type="button"
@@ -121,9 +131,9 @@ export default function EmployerNotificationsPage() {
               onClick={() => setFilter(f)}
               className="chip"
             >
-              {f === 'all'
-                ? `Tất cả (${notifications.length})`
-                : `Chưa đọc${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+              {f === 'all' && `Tất cả (${notifications.length})`}
+              {f === 'unread' && `Chưa đọc (${unreadCount})`}
+              {f === 'read' && `Đã đọc (${readCount})`}
             </button>
           ))}
         </div>
@@ -138,11 +148,19 @@ export default function EmployerNotificationsPage() {
           <div className="surface-card">
             <EmptyState
               icon={BellOff}
-              title={filter === 'unread' ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo nào'}
+              title={
+                filter === 'unread'
+                  ? 'Không có thông báo chưa đọc'
+                  : filter === 'read'
+                    ? 'Chưa đọc thông báo nào'
+                    : 'Chưa có thông báo nào'
+              }
               description={
                 filter === 'unread'
                   ? 'Bạn đã xử lý hết thông báo mới.'
-                  : 'Thông báo sẽ xuất hiện khi có ứng viên nộp hồ sơ hoặc khi AI tìm được ứng viên phù hợp.'
+                  : filter === 'read'
+                    ? 'Các thông báo bạn đã đọc sẽ được chuyển sang đây.'
+                    : 'Thông báo sẽ xuất hiện khi có ứng viên nộp hồ sơ hoặc khi AI tìm được ứng viên phù hợp.'
               }
               action={
                 filter === 'all'
