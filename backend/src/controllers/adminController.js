@@ -390,7 +390,7 @@ const triggerMatchingJob = async (req, res) => {
           id: 'mockjob1',
           title: 'Senior Fullstack Developer (Node.js & React)',
           location: 'Thành phố Hồ Chí Minh',
-          companyName: 'Smart Recruit Demo Corp',
+          companyName: 'CVMatchOne Demo Corp',
           previewScore: 96,
         },
         {

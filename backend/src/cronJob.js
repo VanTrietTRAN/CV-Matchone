@@ -21,7 +21,7 @@ const resolveCompanyName = async (job) => {
   return (
     companyProf?.companyName ||
     job.employerId?.email ||
-    "Đối tác của Smart Recruit"
+    "Đối tác của CVMatchOne"
   );
 };
 

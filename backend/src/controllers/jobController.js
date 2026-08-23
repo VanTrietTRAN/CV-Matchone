@@ -26,7 +26,7 @@ const matchJobWithAllCandidates = async (job) => {
     const CompanyProfileModel = require("../models/CompanyProfile");
 
     const companyProf = await CompanyProfileModel.findOne({ userId: job.employerId });
-    const companyName = companyProf?.companyName || "Đối tác của Smart Recruit";
+    const companyName = companyProf?.companyName || "Đối tác của CVMatchOne";
 
     const candidates = await User.find({
       role: "candidate",

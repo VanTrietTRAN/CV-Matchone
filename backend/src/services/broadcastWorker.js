@@ -113,17 +113,17 @@ async function processChunk(users, broadcast) {
       try {
         const htmlContent = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; rounded: 8px;">
-            <h2 style="color: #6d28d9;">📢 Thông báo từ Hệ thống Smart Recruit</h2>
+            <h2 style="color: #6d28d9;">📢 Thông báo từ Hệ thống CVMatchOne</h2>
             <p style="font-size: 16px; font-weight: bold; color: #111;">${broadcast.title}</p>
             <div style="background-color: #f5f3ff; padding: 15px; border-left: 4px solid #7c3aed; margin: 20px 0; color: #333; line-height: 1.6;">
               ${broadcast.message.replace(/\n/g, '<br/>')}
             </div>
-            <p style="font-size: 13px; color: #666;">Cảm ơn bạn đã đồng hành cùng Smart Recruit!</p>
+            <p style="font-size: 13px; color: #666;">Cảm ơn bạn đã đồng hành cùng CVMatchOne!</p>
           </div>
         `;
         await emailService.sendEmail({
           to: user.email,
-          subject: `[Smart Recruit] ${broadcast.title}`,
+          subject: `[CVMatchOne] ${broadcast.title}`,
           html: htmlContent,
         });
         return true;

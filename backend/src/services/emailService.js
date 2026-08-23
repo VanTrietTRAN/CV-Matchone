@@ -46,7 +46,7 @@ const sendJobMatchEmail = async (user, matchedJobs) => {
     if (!matchedJobs || matchedJobs.length === 0) return;
 
     const frontendUrl = frontendOrigin();
-    const sender = process.env.SENDER_EMAIL || 'Smart Recruit <khaitran955@gmail.com>';
+    const sender = process.env.SENDER_EMAIL || 'CVMatchOne <khaitran955@gmail.com>';
 
     const jobsHtml = matchedJobs.map(job => `
       <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px; background-color: #f8fafc;">
@@ -67,11 +67,11 @@ const sendJobMatchEmail = async (user, matchedJobs) => {
     const mailOptions = {
       from: sender,
       to: user.email,
-      subject: `[Smart Recruit] Có ${matchedJobs.length} việc làm mới siêu phù hợp với bạn! 🎉`,
+      subject: `[CVMatchOne] Có ${matchedJobs.length} việc làm mới siêu phù hợp với bạn! 🎉`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
           <div style="text-align: center; padding: 20px 0;">
-            <h1 style="color: #2563eb; margin: 0;">Smart Recruit</h1>
+            <h1 style="color: #2563eb; margin: 0;">CVMatchOne</h1>
             <p style="color: #64748b; margin-top: 5px;">Hệ thống tuyển dụng thông minh AI</p>
           </div>
           
@@ -112,7 +112,7 @@ const sendJobAlertEmail = async (target, alert, matchedJobs) => {
     if (!matchedJobs || matchedJobs.length === 0) return;
 
     const frontendUrl = frontendOrigin();
-    const sender = process.env.SENDER_EMAIL || 'Smart Recruit <khaitran955@gmail.com>';
+    const sender = process.env.SENDER_EMAIL || 'CVMatchOne <khaitran955@gmail.com>';
 
     const jobsHtml = matchedJobs
       .map((job) => {
@@ -149,11 +149,11 @@ const sendJobAlertEmail = async (target, alert, matchedJobs) => {
     const mailOptions = {
       from: sender,
       to: target.email,
-      subject: `[Smart Recruit] ${matchedJobs.length} việc làm mới khớp thông báo "${alert.keyword}" 🔔`,
+      subject: `[CVMatchOne] ${matchedJobs.length} việc làm mới khớp thông báo "${alert.keyword}" 🔔`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
           <div style="text-align:center;padding:20px 0;">
-            <h1 style="color:#2563eb;margin:0;">Smart Recruit</h1>
+            <h1 style="color:#2563eb;margin:0;">CVMatchOne</h1>
             <p style="color:#64748b;margin-top:5px;">Hệ thống tuyển dụng thông minh AI</p>
           </div>
           <div style="padding:20px;background:#fff;border-radius:8px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1);">
@@ -165,7 +165,7 @@ const sendJobAlertEmail = async (target, alert, matchedJobs) => {
             <div style="margin-top:24px;">${jobsHtml}</div>
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
             <p style="font-size:13px;color:#94a3b8;text-align:center;">
-              Bạn nhận email này vì đã tạo thông báo việc làm trên Smart Recruit.<br/>
+              Bạn nhận email này vì đã tạo thông báo việc làm trên CVMatchOne.<br/>
               Quản lý hoặc tắt thông báo tại <a href="${frontendUrl}/candidate/job-alerts" style="color:#2563eb;">Thông báo việc làm</a>.
             </p>
           </div>
@@ -185,7 +185,7 @@ const sendEmail = async ({ to, subject, html }) => {
     const t = await initTransporter();
     if (!t) throw new Error('Transporter not ready');
 
-    const sender = process.env.SENDER_EMAIL || 'Smart Recruit <khaitran955@gmail.com>';
+    const sender = process.env.SENDER_EMAIL || 'CVMatchOne <khaitran955@gmail.com>';
     const mailOptions = {
       from: sender,
       to,
@@ -204,11 +204,11 @@ const sendEmail = async ({ to, subject, html }) => {
 };
 
 const sendPasswordResetEmail = async ({ to, fullName, resetUrl }) => {
-  const subject = '[Smart Recruit] Yêu cầu Đặt lại Mật khẩu';
+  const subject = '[CVMatchOne] Yêu cầu Đặt lại Mật khẩu';
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
       <div style="text-align: center; padding-bottom: 20px;">
-        <h1 style="color: #6d28d9; margin: 0;">Smart Recruit</h1>
+        <h1 style="color: #6d28d9; margin: 0;">CVMatchOne</h1>
         <p style="color: #64748b; margin-top: 4px; font-size: 14px;">Hệ thống Tuyển dụng Thông minh AI</p>
       </div>
       
@@ -216,7 +216,7 @@ const sendPasswordResetEmail = async ({ to, fullName, resetUrl }) => {
         <h2 style="margin-top: 0; color: #1e1b4b; font-size: 18px;">🔑 Yêu cầu Đặt lại Mật khẩu</h2>
         <p style="color: #334155; font-size: 14px; line-height: 1.6;">
           Xin chào <strong>${fullName || to}</strong>,<br/>
-          Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại Smart Recruit.
+          Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại CVMatchOne.
         </p>
         <div style="text-align: center; margin: 25px 0;">
           <a href="${resetUrl}" style="background-color: #7c3aed; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.3);">
@@ -230,7 +230,7 @@ const sendPasswordResetEmail = async ({ to, fullName, resetUrl }) => {
       
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
       <p style="font-size: 12px; color: #94a3b8; text-align: center;">
-        © Smart Recruit System · Hỗ trợ bảo mật tài khoản tự động
+        © CVMatchOne System · Hỗ trợ bảo mật tài khoản tự động
       </p>
     </div>
   `;
