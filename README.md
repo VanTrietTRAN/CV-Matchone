@@ -120,6 +120,7 @@ curl http://localhost:5000/health   # Backend: status ok + database connected
 | `backend` | `node run_seed.js` | Nạp lại dữ liệu mẫu (xoá DB cũ) |
 | `backend` | `node src/scripts/smokeTest.js` | Kiểm thử nhanh các endpoint chính |
 | `backend` | `node src/scripts/dbBackup.js` | Xuất backup database ra `backend/backups/` |
+| `backend` | `node src/scripts/backfillCvEmbedding.js` | Tạo lại vector AI cho CV cũ thiếu embedding và chấm lại điểm đơn ứng tuyển. Bỏ `--apply` để xem trước |
 | `backend` | `node src/scripts/migrateJobMeta.js` | Dọn metadata bị nối vào cuối mô tả tin cũ, đổ về đúng cột. Bỏ `--apply` để xem trước, chạy lại nhiều lần không sao |
 | `ai` | `uvicorn app.main:app --reload --port 8000` | Chạy AI service |
 

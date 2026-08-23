@@ -78,18 +78,33 @@ app.use(helmet({
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 // Railway và uptime monitor gọi endpoint này để kiểm tra service có sống không
-app.get("/health", (req, res) => {
+app.get("/health", async (req, res) => {
   const mongoose = require("mongoose");
   const dbState = mongoose.connection.readyState;
   // 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
   const dbStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown';
   const isHealthy = dbState === 1;
 
+  // Không gọi AI ở healthcheck mặc định vì Railway ping liên tục.
+  // Thêm ?ai=1 khi cần biết backend có với tới AI service không — cấu hình sai
+  // (ví dụ AI_SERVICE_URL = "http://:8000") khiến mọi điểm phù hợp bằng 0 mà
+  // không báo lỗi ở bất kỳ đâu.
+  let ai;
+  if (req.query.ai) {
+    const { checkAiHealth } = require("./src/services/aiService");
+    ai = await checkAiHealth();
+  } else {
+    const { getAiConfig } = require("./src/services/aiService");
+    const cfg = getAiConfig();
+    ai = { configured: cfg.configured, ...(cfg.error ? { error: cfg.error } : {}) };
+  }
+
   res.status(isHealthy ? 200 : 503).json({
     status: isHealthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
     database: dbStatus,
+    ai,
     memory: {
       heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       heapTotalMB: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
