@@ -19,50 +19,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  cvFromApi,
+  cvToPayload,
+  emptyCv,
+  emptyEducation,
+  emptyExperience,
+  emptyLanguage,
+  formatPeriod,
+  type CvData,
+  type EducationEntry,
+  type ExperienceEntry,
+  type LanguageEntry,
+} from '@/lib/cv-model'
+import {
+  EducationEditor,
+  ExperienceEditor,
+  LanguageEditor,
+  PreviewSection,
+  TimelineItem,
+} from '@/components/candidate/CvEntryEditors'
 import { apiFetch, getApiBase } from '@/lib/api'
 import { toast } from 'sonner'
-
-type CvData = {
-  _id?: string
-  name: string
-  headline: string
-  email: string
-  phone: string
-  location: string
-  address: string
-  dateOfBirth: string
-  website: string
-  objective: string
-  experience: string
-  education: string
-  skills: string[]
-  certifications: string
-  isPrimary?: boolean
-  hasEmbedding?: boolean
-  fileUrl?: string
-  createdAt?: string
-  processingStatus?: 'queued' | 'processing' | 'ready' | 'failed'
-  processingError?: string
-}
-
-const emptyData: CvData = {
-  name: '',
-  headline: '',
-  email: '',
-  phone: '',
-  location: '',
-  address: '',
-  dateOfBirth: '',
-  website: '',
-  objective: '',
-  experience: '',
-  education: '',
-  skills: [],
-  certifications: '',
-  isPrimary: false,
-  hasEmbedding: false,
-  processingStatus: 'ready',
-}
 
 const themeOptions = [
   { key: 'slate', label: 'Slate', color: '#334155' },
@@ -71,75 +49,9 @@ const themeOptions = [
   { key: 'purple', label: 'Purple', color: '#6d28d9' },
 ]
 
-function mapCvFromApi(cv: any, userEmail: string): CvData {
-  const expText = Array.isArray(cv.experience)
-    ? cv.experience
-        .map(
-          (e: any) =>
-            `${e.position || ''} tại ${e.company || ''} (${e.startDate ? new Date(e.startDate).getFullYear() : ''} - ${e.endDate ? new Date(e.endDate).getFullYear() : 'nay'})\n${e.description || ''}`
-        )
-        .join('\n\n')
-    : ''
-
-  const eduText = Array.isArray(cv.education)
-    ? cv.education
-        .map((e: any) => `${e.major || ''} — ${e.school || ''}${e.gpa ? ` (GPA: ${e.gpa})` : ''}`)
-        .join('\n')
-    : ''
-
-  return {
-    _id: cv._id,
-    name: cv.fullName || '',
-    headline: cv.headline || '',
-    email: cv.email || userEmail,
-    phone: cv.phone || '',
-    location: cv.location || '',
-    address: cv.address || '',
-    dateOfBirth: cv.dateOfBirth || '',
-    website: cv.website || '',
-    objective: cv.summary || '',
-    experience: expText,
-    education: eduText,
-    skills: cv.skills || [],
-    certifications: cv.certifications || '',
-    isPrimary: cv.isPrimary || false,
-    hasEmbedding: cv.embedding && cv.embedding.length > 0,
-    fileUrl: cv.fileUrl || '',
-    createdAt: cv.createdAt || '',
-    processingStatus: cv.processingStatus || 'ready',
-    processingError: cv.processingError || '',
-  }
-}
-
-function mapCvToPayload(form: CvData) {
-  const experienceParsed = form.experience
-    ? [{ company: 'Xem chi tiết', position: 'Xem chi tiết', description: form.experience }]
-    : []
-
-  const educationParsed = form.education
-    ? [{ school: form.education, major: '', gpa: '' }]
-    : []
-
-  return {
-    fullName: form.name,
-    headline: form.headline,
-    email: form.email,
-    phone: form.phone,
-    location: form.location,
-    address: form.address,
-    dateOfBirth: form.dateOfBirth,
-    website: form.website,
-    summary: form.objective,
-    certifications: form.certifications,
-    skills: form.skills,
-    experience: experienceParsed,
-    education: educationParsed,
-    isLookingForJob: true,
-  }
-}
 export default function CVPage() {
   const [cvList, setCvList] = useState<CvData[]>([])
-  const [formData, setFormData] = useState<CvData>(emptyData)
+  const [formData, setFormData] = useState<CvData>(emptyCv)
   const [cvId, setCvId] = useState<string | null>(null)
   const [newSkill, setNewSkill] = useState('')
   const [importedCvFileName, setImportedCvFileName] = useState<string | null>(null)
@@ -218,7 +130,7 @@ export default function CVPage() {
 
         const cvRes = await apiFetch<{ data: any[] }>('/api/cv')
         const all = cvRes.data || []
-        const mapped = all.map((cv: any) => mapCvFromApi(cv, email))
+        const mapped = all.map((cv: any) => cvFromApi(cv, email))
         setCvList(mapped)
 
         const primary = mapped.find((c) => c.isPrimary) || mapped[0]
@@ -249,7 +161,7 @@ export default function CVPage() {
       try {
         const cvRes = await apiFetch<{ data: any[] }>('/api/cv')
         const all = cvRes.data || []
-        const mapped = all.map((cv: any) => mapCvFromApi(cv, userEmail))
+        const mapped = all.map((cv: any) => cvFromApi(cv, userEmail))
         setCvList(mapped)
       } catch (err) {
         console.error('Lỗi khi cập nhật trạng thái CV:', err)
@@ -265,7 +177,7 @@ export default function CVPage() {
       toast.success(res.message || 'Đã đưa CV vào hàng chờ bóc tách lại AI!')
       const cvRes = await apiFetch<{ data: any[] }>('/api/cv')
       const all = cvRes.data || []
-      setCvList(all.map((cv: any) => mapCvFromApi(cv, userEmail)))
+      setCvList(all.map((cv: any) => cvFromApi(cv, userEmail)))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Không thể thử lại AI')
     }
@@ -312,7 +224,7 @@ export default function CVPage() {
           setFormData(next)
         } else {
           setCvId(null)
-          setFormData({ ...emptyData, email: userEmail })
+          setFormData({ ...emptyCv, email: userEmail })
         }
       }
     } catch (e) {
@@ -331,12 +243,12 @@ export default function CVPage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const payload = mapCvToPayload(formData)
+      const payload = cvToPayload(formData)
       if (cvId) {
         const res = await apiFetch<{ data: any }>(`/api/cv/${cvId}`, { method: 'PUT', body: JSON.stringify(payload) })
         toast.success('Đã cập nhật hồ sơ CV!')
         if (res.data) {
-          const updated = mapCvFromApi(res.data, userEmail)
+          const updated = cvFromApi(res.data, userEmail)
           setCvList((prev) => prev.map((c) => c._id === cvId ? { ...updated, isPrimary: c.isPrimary } : c))
         }
       } else {
@@ -348,7 +260,7 @@ export default function CVPage() {
         setCvId(newId)
         toast.success('Đã lưu hồ sơ CV!')
         if (res.data) {
-          const newCv = mapCvFromApi(res.data, userEmail)
+          const newCv = cvFromApi(res.data, userEmail)
           setCvList((prev) => [newCv, ...prev])
           setFormData(newCv)
         }
@@ -380,7 +292,7 @@ export default function CVPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Upload thất bại')
       if (data.data) {
-        const newCv = mapCvFromApi(data.data, userEmail || formData.email)
+        const newCv = cvFromApi(data.data, userEmail || formData.email)
         if (data.data._id) setCvId(data.data._id)
         setFormData(newCv)
         setCvList((prev) => {
@@ -426,6 +338,7 @@ export default function CVPage() {
       experience: 'Kinh nghiệm',
       education: 'Học vấn',
       certifications: 'Chứng chỉ',
+      languages: 'Ngôn ngữ',
       contact: 'Liên hệ',
       preview: 'Bản xem trước CV',
       fullName: 'Họ và tên',
@@ -473,6 +386,7 @@ export default function CVPage() {
       experience: 'Experience',
       education: 'Education',
       certifications: 'Certifications',
+      languages: 'Languages',
       contact: 'Contact',
       preview: 'CV Live Preview',
       fullName: 'Full Name',
@@ -536,7 +450,7 @@ export default function CVPage() {
               </h2>
               <button
                 type="button"
-                onClick={() => { setCvId(null); setFormData({ ...emptyData, email: userEmail }); setImportedCvFileName(null) }}
+                onClick={() => { setCvId(null); setFormData({ ...emptyCv, email: userEmail }); setImportedCvFileName(null) }}
                 className="text-sm text-primary hover:underline flex items-center gap-1"
               >
                 <Plus className="w-3.5 h-3.5" /> Tạo CV mới
@@ -776,11 +690,24 @@ export default function CVPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-2">{labels.experience}</label>
-                  <Textarea rows={6} value={formData.experience} onChange={(e) => setFormData({ ...formData, experience: e.target.value })} placeholder={labels.experiencePlaceholder} />
+                  <ExperienceEditor
+                    value={formData.experience}
+                    onChange={(v) => setFormData({ ...formData, experience: v })}
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-2">{labels.education}</label>
-                  <Textarea rows={3} value={formData.education} onChange={(e) => setFormData({ ...formData, education: e.target.value })} placeholder={labels.educationPlaceholder} />
+                  <EducationEditor
+                    value={formData.education}
+                    onChange={(v) => setFormData({ ...formData, education: v })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-2">{labels.languages}</label>
+                  <LanguageEditor
+                    value={formData.languages}
+                    onChange={(v) => setFormData({ ...formData, languages: v })}
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-2">{labels.certifications}</label>
@@ -867,56 +794,160 @@ export default function CVPage() {
                   </Button>
                 </div>
                 <div className="border border-border bg-white rounded-md shadow-sm overflow-hidden">
-                  <div ref={cvPreviewRef} className="bg-white">
-                    <div className={`px-5 py-4 text-white ${previewTextSize}`} style={{ backgroundColor: currentTheme.color }}>
-                      <h3 className="text-lg font-bold">{formData.name || 'Họ và tên'}</h3>
-                      <p className="opacity-90">{formData.headline || 'Vị trí công việc'}</p>
+                  <div ref={cvPreviewRef} className={`bg-white ${previewTextSize}`}>
+                    {/* ── Đầu trang: tên + vị trí, gạch chân mảnh ─────────────── */}
+                    <div className="px-6 pt-6 pb-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <h3
+                            className="text-2xl leading-tight font-bold tracking-wide uppercase"
+                            style={{ color: currentTheme.color }}
+                          >
+                            {formData.name || 'Họ và tên'}
+                          </h3>
+                          <p className="mt-1 text-slate-500">
+                            {formData.headline || 'Vị trí công việc'}
+                          </p>
+                        </div>
+                        <div
+                          className="size-16 shrink-0 rounded-full border-[3px]"
+                          style={{ borderColor: `${currentTheme.color}55` }}
+                          aria-hidden="true"
+                        />
+                      </div>
+                      <div
+                        className="mt-4 h-px w-full"
+                        style={{ backgroundColor: `${currentTheme.color}33` }}
+                      />
                     </div>
-                    <div className={`p-5 ${previewTextSize}`}>
-                      <section className="mb-4">
-                        <h4 className="font-semibold mb-2" style={{ color: currentTheme.color }}>{labels.contact}</h4>
-                        <p>{formData.email}</p>
-                        <p>{formData.phone}</p>
-                        <p>{formData.location}</p>
-                        <p>{formData.address}</p>
-                        {formData.website && <p>{formData.website}</p>}
-                      </section>
-                      {formData.objective && (
-                        <section className="mb-4">
-                          <h4 className="font-semibold mb-2" style={{ color: currentTheme.color }}>{labels.objective}</h4>
-                          <p className="text-foreground/80 whitespace-pre-wrap">{formData.objective}</p>
-                        </section>
-                      )}
-                      {formData.experience && (
-                        <section className="mb-4">
-                          <h4 className="font-semibold mb-2" style={{ color: currentTheme.color }}>{labels.experience}</h4>
-                          <p className="text-foreground/80 whitespace-pre-wrap">{formData.experience}</p>
-                        </section>
-                      )}
-                      {formData.education && (
-                        <section className="mb-4">
-                          <h4 className="font-semibold mb-2" style={{ color: currentTheme.color }}>{labels.education}</h4>
-                          <p className="text-foreground/80 whitespace-pre-wrap">{formData.education}</p>
-                        </section>
-                      )}
-                      {formData.skills.length > 0 && (
-                        <section className="mb-4">
-                          <h4 className="font-semibold mb-2" style={{ color: currentTheme.color }}>{labels.skillsTitle}</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {formData.skills.map((skill, idx) => (
-                              <span key={`${skill}-${idx}`} className="px-2 py-1 rounded text-xs border" style={{ borderColor: `${currentTheme.color}40`, color: currentTheme.color }}>
-                                {skill}
-                              </span>
-                            ))}
+
+                    {/* ── Thân CV: 2 cột như mẫu ──────────────────────────────── */}
+                    <div className="grid grid-cols-[38%_1fr] gap-5 px-6 pb-6">
+                      {/* Cột trái */}
+                      <div className="space-y-5">
+                        <PreviewSection title={labels.contact} color={currentTheme.color}>
+                          <div className="space-y-1 text-slate-700">
+                            {formData.phone && <p>{formData.phone}</p>}
+                            {formData.email && <p className="break-all">{formData.email}</p>}
+                            {formData.address && <p>{formData.address}</p>}
+                            {formData.location && <p>{formData.location}</p>}
+                            {formData.website && <p className="break-all">{formData.website}</p>}
                           </div>
-                        </section>
-                      )}
-                      {formData.certifications && (
-                        <section>
-                          <h4 className="font-semibold mb-2" style={{ color: currentTheme.color }}>{labels.certifications}</h4>
-                          <p className="text-foreground/80 whitespace-pre-wrap">{formData.certifications}</p>
-                        </section>
-                      )}
+                        </PreviewSection>
+
+                        {formData.skills.length > 0 && (
+                          <PreviewSection title={labels.skillsTitle} color={currentTheme.color}>
+                            <div className="flex flex-wrap gap-1.5">
+                              {formData.skills.map((skill, idx) => (
+                                <span
+                                  key={`${skill}-${idx}`}
+                                  className="rounded px-1.5 py-0.5 text-[0.9em] leading-snug"
+                                  style={{
+                                    backgroundColor: `${currentTheme.color}14`,
+                                    color: currentTheme.color,
+                                  }}
+                                >
+                                  {skill}
+                                </span>
+                              ))}
+                            </div>
+                          </PreviewSection>
+                        )}
+
+                        {formData.certifications && (
+                          <PreviewSection title={labels.certifications} color={currentTheme.color}>
+                            <p className="whitespace-pre-wrap text-slate-700">
+                              {formData.certifications}
+                            </p>
+                          </PreviewSection>
+                        )}
+
+                        {formData.languages.length > 0 && (
+                          <PreviewSection title={labels.languages} color={currentTheme.color}>
+                            <ul className="space-y-1 text-slate-700">
+                              {formData.languages.map((l, i) => (
+                                <li key={i}>
+                                  {l.name}
+                                  {l.level && <span className="text-slate-500"> — {l.level}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </PreviewSection>
+                        )}
+                      </div>
+
+                      {/* Cột phải */}
+                      <div className="space-y-5">
+                        {formData.objective && (
+                          <PreviewSection title={labels.objective} color={currentTheme.color}>
+                            <p className="whitespace-pre-wrap text-slate-700">
+                              {formData.objective}
+                            </p>
+                          </PreviewSection>
+                        )}
+
+                        {formData.experience.length > 0 && (
+                          <PreviewSection title={labels.experience} color={currentTheme.color}>
+                            <div className="space-y-3">
+                              {formData.experience.map((exp, i) => (
+                                <TimelineItem key={i} color={currentTheme.color}>
+                                  <p className="font-semibold text-slate-800">
+                                    {exp.position || 'Vị trí'}
+                                    {exp.company && (
+                                      <span className="font-normal text-slate-600">
+                                        {' '}
+                                        — {exp.company}
+                                      </span>
+                                    )}
+                                  </p>
+                                  {formatPeriod(exp.startDate, exp.endDate, exp.current) && (
+                                    <p className="text-[0.9em] text-slate-500">
+                                      {formatPeriod(exp.startDate, exp.endDate, exp.current)}
+                                    </p>
+                                  )}
+                                  {exp.description && (
+                                    <p className="mt-0.5 whitespace-pre-wrap text-slate-700">
+                                      {exp.description}
+                                    </p>
+                                  )}
+                                </TimelineItem>
+                              ))}
+                            </div>
+                          </PreviewSection>
+                        )}
+
+                        {formData.education.length > 0 && (
+                          <PreviewSection title={labels.education} color={currentTheme.color}>
+                            <div className="space-y-3">
+                              {formData.education.map((edu, i) => (
+                                <TimelineItem key={i} color={currentTheme.color}>
+                                  <p className="font-semibold text-slate-800">
+                                    {edu.school || 'Trường'}
+                                  </p>
+                                  {(edu.degree || edu.major) && (
+                                    <p className="text-slate-700">
+                                      {[edu.degree, edu.major].filter(Boolean).join(' — ')}
+                                    </p>
+                                  )}
+                                  {[
+                                    formatPeriod(edu.startDate, edu.endDate, edu.current),
+                                    edu.gpa && `GPA: ${edu.gpa}`,
+                                  ].filter(Boolean).length > 0 && (
+                                    <p className="text-[0.9em] text-slate-500">
+                                      {[
+                                        formatPeriod(edu.startDate, edu.endDate, edu.current),
+                                        edu.gpa && `GPA: ${edu.gpa}`,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </p>
+                                  )}
+                                </TimelineItem>
+                              ))}
+                            </div>
+                          </PreviewSection>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

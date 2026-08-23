@@ -37,6 +37,16 @@ import {
   Target,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { formatPeriod } from '@/lib/cv-model'
+
+/** Date ISO từ API -> 'yyyy-MM' để dùng chung formatPeriod với trang CV. */
+const toMonth = (v?: string | null) => {
+  if (!v) return ''
+  const d = new Date(v)
+  return Number.isNaN(d.getTime())
+    ? ''
+    : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 import { toast } from 'sonner'
 import { formatDate, formatRelativeTime, initials } from '@/lib/format'
 
@@ -394,14 +404,34 @@ export default function EmployerCandidatesPage() {
                                           key={i}
                                           className="border-l-2 border-brand-300 pl-3 text-sm"
                                         >
-                                          <p className="font-semibold">
-                                            {exp.position || 'Xem chi tiết'}
-                                          </p>
-                                          {exp.company && (
-                                            <p className="text-muted-foreground">{exp.company}</p>
+                                          {(exp.position || exp.company) && (
+                                            <p className="font-semibold">
+                                              {exp.position}
+                                              {exp.position && exp.company && ' — '}
+                                              {exp.company && (
+                                                <span className="font-normal text-muted-foreground">
+                                                  {exp.company}
+                                                </span>
+                                              )}
+                                            </p>
+                                          )}
+                                          {formatPeriod(
+                                            toMonth(exp.startDate),
+                                            toMonth(exp.endDate),
+                                            Boolean(exp.startDate && !exp.endDate),
+                                          ) && (
+                                            <p className="text-xs text-muted-foreground">
+                                              {formatPeriod(
+                                                toMonth(exp.startDate),
+                                                toMonth(exp.endDate),
+                                                Boolean(exp.startDate && !exp.endDate),
+                                              )}
+                                            </p>
                                           )}
                                           {exp.description && (
-                                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                            // CV giữ xuống dòng, chỗ này trước đây không — nên cả
+                                            // khối mô tả dính liền thành một đoạn khó đọc.
+                                            <p className="mt-1 text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">
                                               {exp.description}
                                             </p>
                                           )}
@@ -424,15 +454,33 @@ export default function EmployerCandidatesPage() {
                                           key={i}
                                           className="border-l-2 border-border pl-3 text-sm"
                                         >
-                                          <p className="font-semibold">
-                                            {edu.major || edu.school || 'Xem chi tiết'}
+                                          <p className="font-semibold whitespace-pre-wrap">
+                                            {edu.school || edu.major || '—'}
                                           </p>
-                                          {edu.school && edu.major && (
-                                            <p className="text-muted-foreground">{edu.school}</p>
+                                          {(edu.degree || edu.major) && (
+                                            <p className="text-muted-foreground">
+                                              {[edu.degree, edu.major].filter(Boolean).join(' — ')}
+                                            </p>
                                           )}
-                                          {edu.gpa && (
+                                          {[
+                                            formatPeriod(
+                                              toMonth(edu.startDate),
+                                              toMonth(edu.endDate),
+                                              Boolean(edu.startDate && !edu.endDate),
+                                            ),
+                                            edu.gpa && `GPA: ${edu.gpa}`,
+                                          ].filter(Boolean).length > 0 && (
                                             <p className="text-xs text-muted-foreground">
-                                              GPA: {edu.gpa}
+                                              {[
+                                                formatPeriod(
+                                                  toMonth(edu.startDate),
+                                                  toMonth(edu.endDate),
+                                                  Boolean(edu.startDate && !edu.endDate),
+                                                ),
+                                                edu.gpa && `GPA: ${edu.gpa}`,
+                                              ]
+                                                .filter(Boolean)
+                                                .join(' · ')}
                                             </p>
                                           )}
                                         </div>
