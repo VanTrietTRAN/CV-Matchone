@@ -14,6 +14,7 @@ type CvItem = {
   email: string
   headline?: string
   processingStatus: 'queued' | 'processing' | 'ready' | 'completed' | 'failed'
+  hasEmbedding?: boolean
   processingError?: string
   attempts?: number
   lastAiAttemptAt?: string
@@ -28,6 +29,8 @@ type AiStats = {
   failed: number
   processing: number
   queued: number
+  missingEmbedding?: number
+  emptyProfiles?: number
 }
 
 export default function AiMonitorPage() {
@@ -182,6 +185,29 @@ export default function AiMonitorPage() {
           </div>
         </div>
 
+        {/* Trạng thái xử lý không cho biết embedding có thật sự tồn tại hay không.
+            Hồ sơ có nội dung nhưng thiếu vector mới là thứ làm điểm phù hợp bằng 0. */}
+        {(stats.missingEmbedding ?? 0) > 0 && (
+          <button
+            onClick={() => setStatusFilter('missing-embedding')}
+            className="mt-4 flex w-full items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-left transition-colors hover:bg-amber-500/15"
+          >
+            <AlertTriangle className="size-5 shrink-0 text-amber-400" />
+            <div>
+              <p className="font-semibold text-amber-200">
+                {stats.missingEmbedding} hồ sơ có nội dung nhưng thiếu vector AI
+              </p>
+              <p className="mt-0.5 text-xs text-amber-200/70">
+                Những hồ sơ này luôn cho điểm phù hợp bằng 0. Chạy
+                <code className="mx-1 rounded bg-slate-950/60 px-1.5 py-0.5">
+                  node src/scripts/backfillCvEmbedding.js --apply
+                </code>
+                để tạo lại. Bấm để xem danh sách.
+              </p>
+            </div>
+          </button>
+        )}
+
         {/* Filter */}
         <div className="flex items-center justify-between bg-slate-900/40 p-4 rounded-xl border border-slate-800">
           <p className="text-sm font-medium text-slate-300">Danh sách hồ sơ CV</p>
@@ -202,6 +228,7 @@ export default function AiMonitorPage() {
                 <SelectItem value="ready">Thành công (Ready)</SelectItem>
                 <SelectItem value="processing">Đang xử lý (Processing)</SelectItem>
                 <SelectItem value="queued">Hàng đợi (Queued)</SelectItem>
+                <SelectItem value="missing-embedding">Thiếu vector AI</SelectItem>
               </SelectContent>
             </Select>
           </div>

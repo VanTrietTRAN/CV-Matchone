@@ -528,23 +528,63 @@ const getAiMonitor = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const status = req.query.status;
 
-    const [total, readyCount, completedCount, failedCount, processingCount, queuedCount] = await Promise.all([
+    // processingStatus KHÔNG đủ để biết AI có chạy không: hồ sơ vẫn được lưu
+    // với status 'ready' dù embedding rỗng. Phải đếm riêng số hồ sơ có nội dung
+    // nhưng thiếu vector — đó mới là số tin làm điểm phù hợp bằng 0.
+    const missingEmbeddingFilter = {
+      $and: [
+        { $or: [{ embedding: { $size: 0 } }, { embedding: { $exists: false } }] },
+        {
+          $or: [
+            { headline: { $nin: [null, ''] } },
+            { summary: { $nin: [null, ''] } },
+            { 'skills.0': { $exists: true } },
+            { 'experience.0': { $exists: true } },
+            { 'education.0': { $exists: true } },
+          ],
+        },
+      ],
+    };
+
+    const [
+      total,
+      readyCount,
+      completedCount,
+      failedCount,
+      processingCount,
+      queuedCount,
+      missingEmbedding,
+      emptyProfiles,
+    ] = await Promise.all([
       CvProfile.countDocuments(),
       CvProfile.countDocuments({ processingStatus: 'ready' }),
       CvProfile.countDocuments({ processingStatus: 'completed' }),
       CvProfile.countDocuments({ processingStatus: 'failed' }),
       CvProfile.countDocuments({ processingStatus: 'processing' }),
       CvProfile.countDocuments({ processingStatus: 'queued' }),
+      CvProfile.countDocuments(missingEmbeddingFilter),
+      CvProfile.countDocuments({
+        $and: [
+          { $or: [{ embedding: { $size: 0 } }, { embedding: { $exists: false } }] },
+          { headline: { $in: [null, ''] } },
+          { summary: { $in: [null, ''] } },
+          { 'skills.0': { $exists: false } },
+          { 'experience.0': { $exists: false } },
+          { 'education.0': { $exists: false } },
+        ],
+      }),
     ]);
 
-    const filter = {};
-    if (status && status !== 'all') {
+    let filter = {};
+    if (status === 'missing-embedding') {
+      filter = missingEmbeddingFilter;
+    } else if (status && status !== 'all') {
       filter.processingStatus = status;
     }
 
     const cvs = await CvProfile.find(filter)
       .populate('userId', 'fullName email')
-      .select('fullName email headline processingStatus processingError attempts lastAiAttemptAt fileUrl createdAt updatedAt')
+      .select('fullName email headline processingStatus processingError attempts lastAiAttemptAt fileUrl createdAt updatedAt embedding')
       .sort({ updatedAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
@@ -558,8 +598,16 @@ const getAiMonitor = async (req, res) => {
         failed: failedCount,
         processing: processingCount,
         queued: queuedCount,
+        missingEmbedding,
+        emptyProfiles,
       },
-      data: cvs,
+      // Không trả cả vector 768 số về client, chỉ cần biết có hay không
+      data: cvs.map((cv) => {
+        const o = cv.toObject();
+        o.hasEmbedding = (o.embedding || []).length > 0;
+        delete o.embedding;
+        return o;
+      }),
       total: filteredTotal,
       page,
       pages: Math.ceil(filteredTotal / limit),

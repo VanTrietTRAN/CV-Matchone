@@ -28,8 +28,17 @@ const cvProfileSchema = new mongoose.Schema({
 
     education: [{
         school: String,
-        major: String,
-        gpa: String
+        major: String,      // Chuyên ngành
+        degree: String,     // Bậc học: Đại học / Cao đẳng / Thạc sĩ...
+        gpa: String,
+        startDate: Date,
+        endDate: Date
+    }],
+
+    // Ngôn ngữ: { name: 'Tiếng Anh', level: 'IELTS 7.0' }
+    languages: [{
+        name: String,
+        level: String
     }],
 
     embedding: {

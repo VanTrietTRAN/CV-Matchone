@@ -2,6 +2,8 @@ const CvProfile = require("../models/CvProfile");
 const storageService = require("../services/storageService");
 const Job = require("../models/Job");
 const Application = require("../models/Application");
+const aiService = require("../services/aiService");
+const { buildCvEmbeddingText, isEmbeddable } = require('../utils/cvEmbeddingText');
 
 const uploadCv = async (req, res) => {
   try {
@@ -99,6 +101,7 @@ const createCvProfile = async (req, res) => {
       certifications: req.body.certifications,
       experience: req.body.experience || [],
       education: req.body.education || [],
+      languages: req.body.languages || [],
       isLookingForJob:
         typeof req.body.isLookingForJob === "boolean"
           ? req.body.isLookingForJob
@@ -108,16 +111,9 @@ const createCvProfile = async (req, res) => {
 
     const createdProfile = await CvProfile.create(payload);
 
-    const textForEmb = [
-      payload.headline || '',
-      payload.summary || '',
-      (payload.skills || []).join(', '),
-      payload.certifications || '',
-      (payload.experience || []).map(e => `${e.position || ''} ${e.description || ''}`).join(' '),
-      (payload.education || []).map(e => `${e.major || ''} ${e.school || ''}`).join(' '),
-    ].filter(Boolean).join('. ').trim();
+    const textForEmb = buildCvEmbeddingText(payload);
 
-    if (textForEmb.length >= 20) {
+    if (isEmbeddable(textForEmb)) {
       try {
         const embedding = await aiService.getEmbedding(textForEmb.substring(0, 3000));
         if (embedding && embedding.length > 0) {
@@ -126,7 +122,7 @@ const createCvProfile = async (req, res) => {
           console.log('CV Profile: embedding tao thanh cong,', embedding.length, 'chieu');
         }
       } catch (e) {
-        console.warn('CV Profile: khong the tao embedding -', e.message);
+        console.error('[CV] Tao embedding that bai:', e.message);
       }
     } else {
       createdProfile.embedding = [];
@@ -164,6 +160,7 @@ const updateCvProfile = async (req, res) => {
       "certifications",
       "experience",
       "education",
+      "languages",
       "isLookingForJob",
       "fileUrl",
     ];
@@ -178,16 +175,9 @@ const updateCvProfile = async (req, res) => {
 
     const changedFields = Object.keys(req.body);
     if (changedFields.some(f => ['summary','skills','experience','education', 'headline', 'certifications'].includes(f))) {
-      const textForEmb = [
-        updatedProfile.headline || '',
-        updatedProfile.summary || '',
-        (updatedProfile.skills || []).join(', '),
-        updatedProfile.certifications || '',
-        (updatedProfile.experience || []).map(e => `${e.position || ''} ${e.description || ''}`).join(' '),
-        (updatedProfile.education || []).map(e => `${e.major || ''} ${e.school || ''}`).join(' '),
-      ].filter(Boolean).join('. ').trim();
+      const textForEmb = buildCvEmbeddingText(updatedProfile);
 
-      if (textForEmb.length >= 20) {
+      if (isEmbeddable(textForEmb)) {
         try {
           const embedding = await aiService.getEmbedding(textForEmb.substring(0, 3000));
           if (embedding && embedding.length > 0) {
@@ -196,7 +186,7 @@ const updateCvProfile = async (req, res) => {
             console.log('CV Profile: cap nhat embedding thanh cong,', embedding.length, 'chieu');
           }
         } catch (e) {
-          console.warn('CV Profile: khong the cap nhat embedding -', e.message);
+          console.error('[CV] Cap nhat embedding that bai:', e.message);
         }
       } else {
         updatedProfile.embedding = [];
