@@ -7,7 +7,7 @@ import { UserRound, Building2, ArrowRight, CheckCircle2 } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'Đăng ký tài khoản',
-  description: 'Chọn loại tài khoản để bắt đầu với Smart Recruit: ứng viên tìm việc hoặc nhà tuyển dụng.',
+  description: 'Chọn loại tài khoản để bắt đầu với CVMatchOne: ứng viên tìm việc hoặc nhà tuyển dụng.',
 }
 
 const options = [

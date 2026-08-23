@@ -75,7 +75,7 @@ export default function AdminDashboardPage() {
             <BarChart2 className="w-8 h-8 text-brand-400" />
             Bảng điều khiển
           </h1>
-          <p className="text-slate-400">Tổng quan hệ thống Smart Recruit</p>
+          <p className="text-slate-400">Tổng quan hệ thống CVMatchOne</p>
         </div>
 
         {loading ? (

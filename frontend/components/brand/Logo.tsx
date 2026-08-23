@@ -74,7 +74,7 @@ export default function Logo({
             inverted ? 'text-white' : 'text-foreground',
           )}
         >
-          Smart<span className="text-brand-500">Recruit</span>
+          CVMatch<span className="text-brand-500">One</span>
         </span>
       )}
     </span>
@@ -83,7 +83,7 @@ export default function Logo({
   if (!href) return content
 
   return (
-    <Link href={href} aria-label="Smart Recruit — Trang chủ" className="inline-flex">
+    <Link href={href} aria-label="CVMatchOne — Trang chủ" className="inline-flex">
       {content}
     </Link>
   )

@@ -67,7 +67,7 @@ export default function CandidateSidebar() {
           <LogOut className="size-[18px]" />
           Đăng xuất
         </Button>
-        <p className="px-3 pt-2 text-[11px] text-muted-foreground">Smart Recruit v1.0</p>
+        <p className="px-3 pt-2 text-[11px] text-muted-foreground">CVMatchOne v1.0</p>
       </div>
     </div>
   )

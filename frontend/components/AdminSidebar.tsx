@@ -49,7 +49,7 @@ export default function AdminSidebar() {
       >
         <LogoMark size="sm" />
         <div>
-          <p className="text-sm leading-none font-bold text-white">Smart Recruit</p>
+          <p className="text-sm leading-none font-bold text-white">CVMatchOne</p>
           <p className="mt-1 text-[11px] font-semibold text-brand-500">Bảng điều khiển Admin</p>
         </div>
       </div>
@@ -70,7 +70,7 @@ export default function AdminSidebar() {
           <LogOut className="size-[18px]" />
           Đăng xuất
         </Button>
-        <p className="px-3 pt-2 text-[11px] text-slate-600">Smart Recruit v1.0</p>
+        <p className="px-3 pt-2 text-[11px] text-slate-600">CVMatchOne v1.0</p>
       </div>
     </div>
   )

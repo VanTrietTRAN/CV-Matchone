@@ -20,9 +20,9 @@ function buildPost(companyName: string, jobTitle: string, location: string, sala
     location ? `📍 Địa điểm: ${location}` : '📍 Địa điểm: linh hoạt',
     '✅ Môi trường làm việc cởi mở, lộ trình phát triển rõ ràng',
     '',
-    '👉 Ứng tuyển ngay trên Smart Recruit để được chấm điểm phù hợp với CV của bạn.',
+    '👉 Ứng tuyển ngay trên CVMatchOne để được chấm điểm phù hợp với CV của bạn.',
     '',
-    '#tuyendung #vieclam #SmartRecruit',
+    '#tuyendung #vieclam #CVMatchOne',
   ]
   return lines.join('\n')
 }

@@ -96,7 +96,7 @@ const employerBenefits = [
 
 const faqs = [
   {
-    q: 'Smart Recruit tính điểm phù hợp như thế nào?',
+    q: 'CVMatchOne tính điểm phù hợp như thế nào?',
     a: 'Hệ thống chuyển CV của bạn và mô tả công việc thành vector ngữ nghĩa (embedding), sau đó đo độ tương đồng giữa hai bên. Điểm càng cao nghĩa là kỹ năng và kinh nghiệm trong CV càng sát với yêu cầu của tin tuyển dụng.',
   },
   {
@@ -134,7 +134,7 @@ export default function HomePage() {
             </h1>
 
             <p className="mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Smart Recruit so khớp CV của bạn với từng tin tuyển dụng và cho biết mức độ phù hợp
+              CVMatchOne so khớp CV của bạn với từng tin tuyển dụng và cho biết mức độ phù hợp
               trước khi ứng tuyển. Bớt rải hồ sơ, tăng cơ hội được gọi phỏng vấn.
             </p>
 
@@ -247,7 +247,7 @@ export default function HomePage() {
         <div className="container-page">
           <div className="mx-auto mb-10 max-w-2xl text-center">
             <h2 className="text-2xl font-bold sm:text-[28px]">
-              Vì sao ứng viên chọn Smart Recruit?
+              Vì sao ứng viên chọn CVMatchOne?
             </h2>
             <p className="mt-2.5 text-muted-foreground">
               Bốn điều tạo nên khác biệt so với cách tìm việc truyền thống
@@ -389,7 +389,7 @@ export default function HomePage() {
           <div className="mb-8 text-center">
             <h2 className="text-2xl font-bold sm:text-[28px]">Câu hỏi thường gặp</h2>
             <p className="mt-2.5 text-muted-foreground">
-              Những thắc mắc phổ biến nhất về cách Smart Recruit hoạt động
+              Những thắc mắc phổ biến nhất về cách CVMatchOne hoạt động
             </p>
           </div>
 

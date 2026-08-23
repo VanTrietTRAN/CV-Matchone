@@ -97,7 +97,7 @@ function LoginContent() {
           title={
             isEmployer
               ? 'Tuyển đúng người, nhanh hơn'
-              : 'Chào mừng bạn quay lại Smart Recruit'
+              : 'Chào mừng bạn quay lại CVMatchOne'
           }
           description={
             isEmployer

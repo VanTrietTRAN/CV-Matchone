@@ -3,6 +3,9 @@ import Link from 'next/link'
 import Logo from '@/components/brand/Logo'
 import { Facebook, Linkedin, Youtube } from 'lucide-react'
 
+/** Group Facebook của cộng đồng — dùng ở cả cột liên kết lẫn icon mạng xã hội */
+const FB_GROUP_URL = 'https://www.facebook.com/groups/svdhbkdn'
+
 const columns = [
   {
     title: 'Dành cho ứng viên',
@@ -23,9 +26,10 @@ const columns = [
     ],
   },
   {
-    title: 'Về Smart Recruit',
+    title: 'Về CVMatchOne',
     links: [
       { label: 'Cách hoạt động', href: '/#cach-hoat-dong' },
+      { label: 'Group Facebook cộng đồng', href: FB_GROUP_URL, external: true },
       { label: 'Câu hỏi thường gặp', href: '/#faq' },
       { label: 'Điều khoản sử dụng', href: '/#faq' },
       { label: 'Chính sách bảo mật', href: '/#faq' },
@@ -34,7 +38,7 @@ const columns = [
 ]
 
 const socials = [
-  { label: 'Facebook', href: '#', icon: Facebook },
+  { label: 'Facebook', href: FB_GROUP_URL, icon: Facebook, external: true },
   { label: 'LinkedIn', href: '#', icon: Linkedin },
   { label: 'YouTube', href: '#', icon: Youtube },
 ]
@@ -62,6 +66,9 @@ export default function Footer() {
                   <li key={link.label}>
                     <Link
                       href={link.href}
+                      {...(link.external
+                        ? { target: '_blank', rel: 'noopener noreferrer' }
+                        : {})}
                       className="text-muted-foreground transition-colors hover:text-brand-600"
                     >
                       {link.label}
@@ -75,13 +82,14 @@ export default function Footer() {
 
         <div className="mt-10 flex flex-col-reverse items-center justify-between gap-5 border-t border-border pt-7 sm:flex-row">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Smart Recruit. Bảo lưu mọi quyền.
+            © {new Date().getFullYear()} CVMatchOne. Bảo lưu mọi quyền.
           </p>
           <div className="flex items-center gap-2">
-            {socials.map(({ label, href, icon: Icon }) => (
+            {socials.map(({ label, href, icon: Icon, external }) => (
               <Link
                 key={label}
                 href={href}
+                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 aria-label={label}
                 className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-brand-400 hover:bg-brand-50 hover:text-brand-600"
               >

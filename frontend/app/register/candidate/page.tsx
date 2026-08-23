@@ -149,7 +149,7 @@ export default function CandidateSignupPage() {
                   className="mt-0.5 size-4 shrink-0 rounded border-input accent-[var(--brand-500)]"
                 />
                 <span className="leading-relaxed">
-                  Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật của Smart Recruit
+                  Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật của CVMatchOne
                 </span>
               </label>
 

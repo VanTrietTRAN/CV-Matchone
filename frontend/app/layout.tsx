@@ -21,11 +21,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Smart Recruit — Tìm việc làm phù hợp bằng AI',
-    template: '%s | Smart Recruit',
+    default: 'CVMatchOne — Tìm việc làm phù hợp bằng AI',
+    template: '%s | CVMatchOne',
   },
   description:
-    'Smart Recruit dùng AI để chấm điểm độ phù hợp giữa CV của bạn và từng tin tuyển dụng. Tìm việc nhanh hơn, ứng tuyển đúng chỗ hơn.',
+    'CVMatchOne dùng AI để chấm điểm độ phù hợp giữa CV của bạn và từng tin tuyển dụng. Tìm việc nhanh hơn, ứng tuyển đúng chỗ hơn.',
   icons: {
     icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
   },

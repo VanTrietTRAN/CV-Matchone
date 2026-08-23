@@ -425,7 +425,7 @@ export default function JobAlertsManager() {
                 className="mt-0.5 w-4 h-4"
               />
               <span className="text-sm text-foreground/80">
-                Tôi đồng ý cho phép Smart Recruit thu thập và sử dụng dữ liệu cá nhân của tôi để gửi
+                Tôi đồng ý cho phép CVMatchOne thu thập và sử dụng dữ liệu cá nhân của tôi để gửi
                 các email thông báo việc làm phù hợp với nhu cầu của tôi. <span className="text-danger">*</span>
               </span>
             </label>

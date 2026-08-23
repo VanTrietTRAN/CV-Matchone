@@ -430,7 +430,7 @@ export default function EmployerSignupPage() {
             <FormSection
               icon={UserRound}
               title="Người liên hệ"
-              description="Thông tin để ứng viên và Smart Recruit liên lạc khi cần"
+              description="Thông tin để ứng viên và CVMatchOne liên lạc khi cần"
             >
               <Field label="Họ tên người liên hệ" htmlFor="contactName" required error={errors.contactName}>
                 <Input
