@@ -635,10 +635,17 @@ const retryCvAi = async (req, res) => {
       action: 'RETRY_AI_PARSING',
       targetModel: 'CvProfile',
       targetId: profile._id,
-      details: { fullName: profile.fullName, email: profile.email },
+      details: { fullName: profile.fullName, email: profile.email, hasFile: Boolean(profile.fileUrl) },
     });
 
-    res.json({ message: 'Đã đưa CV vào hàng đợi xử lý lại AI thành công!', data: profile });
+    // Hồ sơ nhập tay không có PDF: worker sẽ nhúng lại từ các trường đã nhập
+    // chứ không chạy đường bóc tách PDF. Nói rõ để admin không chờ nhầm.
+    res.json({
+      message: profile.fileUrl
+        ? 'Đã đưa CV vào hàng đợi bóc tách lại bằng AI!'
+        : 'Hồ sơ này không có file PDF — đã xếp hàng để tạo lại vector từ nội dung đã nhập.',
+      data: profile,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

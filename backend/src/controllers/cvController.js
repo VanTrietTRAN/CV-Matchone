@@ -7,23 +7,24 @@ const { buildCvEmbeddingText, isEmbeddable } = require('../utils/cvEmbeddingText
 
 const uploadCv = async (req, res) => {
   try {
-    console.log("==========================================");
-    console.log("1. STARTING ASYNC CV UPLOAD PROCESS (CLOUDFLARE R2)...");
-
     if (!req.file) {
-      return res.status(400).json({ message: "Please provide a PDF file" });
+      return res.status(400).json({ message: "Vui lòng chọn một file PDF." });
+    }
+    if (!req.file.buffer || req.file.buffer.length === 0) {
+      return res.status(400).json({ message: "File tải lên rỗng, vui lòng chọn lại." });
     }
 
-    // Upload PDF file from RAM to Cloudflare R2
-    console.log("2. Uploading file to Cloudflare R2...");
+    const { driver } = storageService.getStorageConfig();
+    console.log(`[Upload CV] Bắt đầu — nơi lưu trữ: ${driver}`);
+
     const uniqueFilename = `cvs/${req.user._id}-${Date.now()}.pdf`;
-    const r2Key = await storageService.uploadFile(
+    const fileKey = await storageService.uploadFile(
       req.file.buffer,
       uniqueFilename,
-      req.file.mimetype
+      req.file.mimetype,
+      { userId: req.user._id }
     );
-    console.log("3. R2 upload successful. Key:", r2Key);
-    console.log("==========================================");
+    console.log(`[Upload CV] Đã lưu file. Key: ${fileKey}`);
 
     const existingPrimary = await CvProfile.findOne({ userId: req.user._id, isPrimary: true });
     
@@ -34,20 +35,27 @@ const uploadCv = async (req, res) => {
       userId: req.user._id,
       fullName: tempName,
       headline: "Processing profile details...",
-      fileUrl: r2Key, // Save R2 Key as file URL
+      fileUrl: fileKey,
       isLookingForJob: true,
       isPrimary: !existingPrimary,
       processingStatus: "queued",
+      processingError: null,
       attempts: 0
     });
 
-    res.status(201).json({ 
-      message: "CV upload successful! Processing details in the background.", 
-      data: newCv 
+    res.status(201).json({
+      message: "Đã tải CV lên. Hệ thống đang bóc tách nội dung bằng AI ở nền.",
+      data: newCv
     });
   } catch (error) {
-    console.error("CRASH ERROR DURING CV UPLOAD SETUP:", error);
-    res.status(500).json({ message: "System error preparing profile upload" });
+    // Bản cũ trả câu chung chung "System error preparing profile upload" cho mọi
+    // lỗi, kể cả khi nguyên nhân là thiếu cấu hình kho lưu trữ. Nói thẳng ra để
+    // người vận hành biết cần sửa gì.
+    console.error("[Upload CV] Thất bại:", error);
+    res.status(500).json({
+      message: `Không tải được CV lên: ${error.message}`,
+      storage: storageService.getStorageConfig(),
+    });
   }
 };
 
@@ -96,6 +104,7 @@ const createCvProfile = async (req, res) => {
       address: req.body.address,
       dateOfBirth: req.body.dateOfBirth,
       website: req.body.website,
+      photo: req.body.photo,
       summary: req.body.summary,
       skills: req.body.skills || [],
       certifications: req.body.certifications,
@@ -155,6 +164,7 @@ const updateCvProfile = async (req, res) => {
       "address",
       "dateOfBirth",
       "website",
+      "photo",
       "summary",
       "skills",
       "certifications",
@@ -285,11 +295,24 @@ const downloadCv = async (req, res) => {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Generate pre-signed URL from Cloudflare R2 valid for 5 minutes (300 seconds)
+    // Link ký sẵn chỉ có ở chế độ R2. Khi file nằm trong MongoDB thì không có
+    // link nào để chuyển hướng tới — phải tự stream file ra.
     const signedUrl = await storageService.getSignedDownloadUrl(profile.fileUrl);
-    
-    // Return JSON if client requests it (like standard API fetch request).
-    // Redirect directly to R2 if client visits the URL directly (like clicking anchor tag).
+
+    if (!signedUrl) {
+      const buffer = await storageService.getFileBuffer(profile.fileUrl);
+      if (!buffer) {
+        return res.status(404).json({ message: "Không tìm thấy file CV trong kho lưu trữ." });
+      }
+      const safeName = `${(profile.fullName || "cv").replace(/[^\w.-]+/g, "_")}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Length", buffer.length);
+      res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+      return res.send(buffer);
+    }
+
+    // Trả JSON khi client hỏi bằng fetch; chuyển hướng thẳng sang R2 khi người
+    // dùng bấm vào link.
     if (req.query.json === "true" || req.headers.accept?.includes("application/json")) {
       res.json({
         message: "CV download link generated successfully",
@@ -300,8 +323,8 @@ const downloadCv = async (req, res) => {
       res.redirect(302, signedUrl);
     }
   } catch (error) {
-    console.error("Error generating download CV link:", error);
-    res.status(500).json({ message: "System error generating download link" });
+    console.error("Lỗi khi tạo link tải CV:", error);
+    res.status(500).json({ message: `Không tạo được link tải CV: ${error.message}` });
   }
 };
 

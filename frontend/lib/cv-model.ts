@@ -44,6 +44,8 @@ export type CvData = {
   address: string
   dateOfBirth: string
   website: string
+  /** Ảnh chân dung dạng data URL (image/jpeg), đã thu nhỏ phía trình duyệt. */
+  photo: string
   objective: string
   experience: ExperienceEntry[]
   education: EducationEntry[]
@@ -88,6 +90,7 @@ export const emptyCv: CvData = {
   address: '',
   dateOfBirth: '',
   website: '',
+  photo: '',
   objective: '',
   experience: [],
   education: [],
@@ -176,6 +179,7 @@ export function cvFromApi(cv: Record<string, any>, fallbackEmail: string): CvDat
     address: cv.address || '',
     dateOfBirth: cv.dateOfBirth || '',
     website: cv.website || '',
+    photo: cv.photo || '',
     objective: cv.summary || '',
     experience,
     education,
@@ -201,6 +205,7 @@ export function cvToPayload(form: CvData) {
     address: form.address,
     dateOfBirth: form.dateOfBirth,
     website: form.website,
+    photo: form.photo,
     summary: form.objective,
     certifications: form.certifications,
     skills: form.skills,

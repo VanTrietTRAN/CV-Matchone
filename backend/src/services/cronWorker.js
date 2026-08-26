@@ -10,6 +10,7 @@ const CvProfile = require("../models/CvProfile");
 const storageService = require("./storageService");
 const aiService = require("./aiService");
 const cvExtractor = require("./cvExtractor");
+const { buildCvEmbeddingText, isEmbeddable } = require("../utils/cvEmbeddingText");
 
 // To run OCR, we write the file buffer to temporary storage and clear it immediately
 const extractTextWithOCRFromBuffer = async (pdfBuffer) => {
@@ -67,6 +68,33 @@ const extractTextWithOCRFromBuffer = async (pdfBuffer) => {
 };
 
 /**
+ * Hồ sơ nhập tay (không có file PDF): chỉ tạo lại vector từ các trường đã nhập.
+ * Hồ sơ trống hoàn toàn cũng được coi là xong — không có gì để nhúng không phải lỗi.
+ */
+const embedManualProfile = async (cv) => {
+  const text = buildCvEmbeddingText(cv);
+
+  if (!isEmbeddable(text)) {
+    console.log(`[Worker] Hồ sơ ${cv._id} chưa có nội dung để nhúng — đánh dấu ready.`);
+    cv.processingStatus = "ready";
+    cv.processingError = null;
+    await cv.save();
+    return;
+  }
+
+  const vector = await aiService.getEmbedding(text.substring(0, 3000));
+  if (!vector || vector.length === 0) {
+    throw new Error("AI service trả về vector rỗng khi nhúng hồ sơ nhập tay");
+  }
+
+  cv.embedding = vector;
+  cv.processingStatus = "ready";
+  cv.processingError = null;
+  await cv.save();
+  console.log(`[Worker] Đã nhúng lại hồ sơ nhập tay ${cv._id} — ${vector.length} chiều.`);
+};
+
+/**
  * Main function to process a single queued CV job from the database
  */
 const processSingleCvJob = async () => {
@@ -93,11 +121,16 @@ const processSingleCvJob = async () => {
 
     console.log(`[Worker] Started processing CV Job for profile ID: ${cv._id} (Attempts: ${cv.attempts})`);
 
-    // 2. Fetch the file buffer from Cloudflare R2
+    // 2. Hồ sơ nhập tay không có file PDF. Bản cũ ném "No fileUrl present" rồi
+    // đốt hết 3 lượt thử và đánh dấu failed — admin bấm "Thử lại AI" trên một
+    // hồ sơ nhập tay là chắc chắn hỏng nó. Với hồ sơ kiểu này chỉ cần tạo lại
+    // vector từ chính các trường đã nhập.
     if (!cv.fileUrl) {
-      throw new Error("No fileUrl present on the CV profile");
+      await embedManualProfile(cv);
+      return;
     }
-    console.log(`[Worker] Fetching file buffer from R2 for key: ${cv.fileUrl}`);
+
+    console.log(`[Worker] Fetching file buffer for key: ${cv.fileUrl}`);
     const fileBuffer = await storageService.getFileBuffer(cv.fileUrl);
 
     // 3. Parse PDF text

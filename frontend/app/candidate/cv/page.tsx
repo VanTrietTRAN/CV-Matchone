@@ -39,6 +39,7 @@ import {
   PreviewSection,
   TimelineItem,
 } from '@/components/candidate/CvEntryEditors'
+import CvPhotoPicker from '@/components/candidate/CvPhotoPicker'
 import { apiFetch, getApiBase } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -61,6 +62,8 @@ export default function CVPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  // Trạng thái bóc tách của CV vừa tải lên, để hiện băng trạng thái ở khối Import
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [settingPrimary, setSettingPrimary] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -289,26 +292,86 @@ export default function CVPage() {
         credentials: 'include', // Gửi cookie thay vì Authorization header
         body: form,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Upload thất bại')
-      if (data.data) {
-        const newCv = cvFromApi(data.data, userEmail || formData.email)
-        if (data.data._id) setCvId(data.data._id)
-        setFormData(newCv)
-        setCvList((prev) => {
-          const exists = prev.find((c) => c._id === data.data._id)
-          if (exists) return prev.map((c) => c._id === data.data._id ? newCv : c)
-          return [newCv, ...prev]
-        })
-        toast.success('Đã upload PDF, tạo vector AI và tự động trích xuất thông tin thành công!')
-      } else {
-        toast.success('Đã upload CV PDF và tạo vector AI embedding thành công!')
+      // Lỗi từ multer hoặc proxy có thể trả HTML thay vì JSON; đọc text trước
+      // rồi mới parse để không che mất mã lỗi thật bằng "Unexpected token '<'".
+      const raw = await res.text()
+      let data: any = null
+      try {
+        data = raw ? JSON.parse(raw) : null
+      } catch {
+        throw new Error(
+          res.ok
+            ? 'Máy chủ trả về dữ liệu không đọc được.'
+            : `Máy chủ báo lỗi ${res.status}. ${raw.slice(0, 160)}`,
+        )
       }
+      if (!res.ok) throw new Error(data?.message || `Upload thất bại (HTTP ${res.status})`)
+      if (!data?.data?._id) {
+        toast.success('Đã tải CV lên.')
+        return
+      }
+
+      const uploadedId: string = data.data._id
+      setCvId(uploadedId)
+      const initial = cvFromApi(data.data, userEmail || formData.email)
+      setFormData(initial)
+      setCvList((prev) => [initial, ...prev.filter((c) => c._id !== uploadedId)])
+
+      // Bóc tách chạy ở nền (worker quét hàng đợi mỗi 30 giây). Bản cũ báo
+      // "trích xuất thành công" ngay lúc này, trong khi hồ sơ mới chỉ đang xếp
+      // hàng — người dùng thấy toàn ô trống và tưởng tính năng hỏng.
+      toast.info('Đã tải CV lên. Đang bóc tách nội dung bằng AI, vui lòng đợi...')
+      await pollCvProcessing(uploadedId)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Upload thất bại')
     } finally {
       setUploading(false)
     }
+  }
+
+  /**
+   * Chờ worker nền bóc tách xong file PDF vừa tải lên.
+   * Worker quét hàng đợi mỗi 30 giây và thử lại tối đa 3 lần, nên cho chờ 3 phút.
+   */
+  const pollCvProcessing = async (id: string) => {
+    const DEADLINE = Date.now() + 3 * 60 * 1000
+    const INTERVAL = 4000
+
+    while (Date.now() < DEADLINE) {
+      await new Promise((r) => setTimeout(r, INTERVAL))
+
+      let cv: any
+      try {
+        const res = await apiFetch<{ data: any }>(`/api/cv/${id}`)
+        cv = res.data
+      } catch {
+        continue // lỗi mạng tạm thời — thử lại ở vòng sau
+      }
+      if (!cv) continue
+
+      setProcessingStatus(cv.processingStatus)
+
+      if (cv.processingStatus === 'ready') {
+        const parsed = cvFromApi(cv, userEmail || formData.email)
+        setFormData(parsed)
+        setCvList((prev) => prev.map((c) => (c._id === id ? parsed : c)))
+        toast.success(
+          cv.embedding?.length
+            ? 'AI đã bóc tách xong nội dung CV và tạo vector so khớp.'
+            : 'Đã bóc tách xong nội dung CV.',
+        )
+        return
+      }
+
+      if (cv.processingStatus === 'failed') {
+        toast.error(`AI không bóc tách được CV: ${cv.processingError || 'lỗi không rõ'}`)
+        return
+      }
+    }
+
+    toast.warning(
+      'CV vẫn đang được xử lý ở nền. Bạn có thể tải lại trang sau ít phút để xem kết quả.',
+    )
   }
 
   const currentTheme = themeOptions.find((item) => item.key === theme) || themeOptions[1]
@@ -328,11 +391,17 @@ export default function CVPage() {
       color: 'Màu sắc',
       font: 'Cỡ chữ',
       profileTitle: 'Thông tin cơ bản',
+      photoTitle: 'Ảnh chân dung',
+      photoHint: 'Ảnh sẽ được cắt vuông và thu nhỏ tự động. Bỏ trống nếu không muốn hiện ảnh.',
+      photoChoose: 'Tải ảnh lên',
+      photoReplace: 'Đổi ảnh khác',
+      photoRemove: 'Bỏ ảnh',
       cvContentTitle: 'Nội dung CV',
       skillsTitle: 'Kỹ năng',
       importTitle: 'Import CV PDF (tạo AI Embedding)',
       importSubtitle: 'Upload PDF để hệ thống AI đọc và tạo vector cho tính năng matching.',
       noPdf: 'Chưa import file PDF.',
+      processingHint: 'AI đang đọc file PDF và bóc tách nội dung. Việc này thường mất dưới một phút.',
       imported: 'Đã import',
       objective: 'Mục tiêu nghề nghiệp',
       experience: 'Kinh nghiệm',
@@ -376,11 +445,17 @@ export default function CVPage() {
       color: 'Color theme',
       font: 'Font size',
       profileTitle: 'Basic profile',
+      photoTitle: 'Profile photo',
+      photoHint: 'The image is cropped square and resized automatically. Leave empty for no photo.',
+      photoChoose: 'Upload photo',
+      photoReplace: 'Replace photo',
+      photoRemove: 'Remove photo',
       cvContentTitle: 'CV content',
       skillsTitle: 'Skills',
       importTitle: 'Import CV PDF (AI Embedding)',
       importSubtitle: 'Upload PDF so AI can read and generate a matching vector.',
       noPdf: 'No PDF imported yet.',
+      processingHint: 'AI is reading the PDF and extracting its content. This usually takes under a minute.',
       imported: 'Imported',
       objective: 'Career Objective',
       experience: 'Experience',
@@ -645,6 +720,21 @@ export default function CVPage() {
 
             <Card className="p-6 border border-border">
               <h2 className="text-xl font-semibold mb-5">{labels.profileTitle}</h2>
+
+              <div className="mb-5 border-b border-border pb-5">
+                <CvPhotoPicker
+                  value={formData.photo}
+                  onChange={(photo) => setFormData({ ...formData, photo })}
+                  labels={{
+                    title: labels.photoTitle,
+                    hint: labels.photoHint,
+                    choose: labels.photoChoose,
+                    replace: labels.photoReplace,
+                    remove: labels.photoRemove,
+                  }}
+                />
+              </div>
+
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium block mb-2">{labels.fullName}</label>
@@ -770,6 +860,13 @@ export default function CVPage() {
                   <p className="text-sm text-foreground/60">{labels.noPdf}</p>
                 )}
               </div>
+
+              {(uploading || processingStatus === 'queued' || processingStatus === 'processing') && (
+                <p className="mt-3 flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm text-foreground/70">
+                  <Loader2 className="size-4 shrink-0 animate-spin" />
+                  {labels.processingHint}
+                </p>
+              )}
             </Card>
           </div>
 
@@ -810,10 +907,20 @@ export default function CVPage() {
                           </p>
                         </div>
                         <div
-                          className="size-16 shrink-0 rounded-full border-[3px]"
+                          className="size-16 shrink-0 overflow-hidden rounded-full border-[3px]"
                           style={{ borderColor: `${currentTheme.color}55` }}
-                          aria-hidden="true"
-                        />
+                        >
+                          {formData.photo && (
+                            // Ảnh là data URL nên next/image không giúp được gì ở đây,
+                            // và thẻ img thường mới đi theo được vào bản in PDF.
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={formData.photo}
+                              alt=""
+                              className="size-full object-cover"
+                            />
+                          )}
+                        </div>
                       </div>
                       <div
                         className="mt-4 h-px w-full"

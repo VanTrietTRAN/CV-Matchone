@@ -65,7 +65,10 @@ app.use(
   }),
 );
 
-app.use(express.json());
+// Giới hạn mặc định của express.json là 100kb. CV có ảnh chân dung gửi kèm ảnh
+// dạng data URL nên dễ vượt mức đó — nâng lên 2mb, vẫn đủ chặt để không thành
+// chỗ cho người ta nhồi dữ liệu lớn.
+app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser()); // Đọc HTTPOnly cookie từ request
 
 const helmet = require('helmet');
@@ -99,12 +102,17 @@ app.get("/health", async (req, res) => {
     ai = { configured: cfg.configured, ...(cfg.error ? { error: cfg.error } : {}) };
   }
 
+  // Kho lưu trữ file CV: thiếu biến R2_* thì import CV vẫn chạy nhưng file nằm
+  // trong MongoDB — cần nhìn thấy được để không tưởng là đang dùng R2.
+  const { getStorageConfig } = require("./src/services/storageService");
+
   res.status(isHealthy ? 200 : 503).json({
     status: isHealthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: Math.floor(process.uptime()),
     database: dbStatus,
     ai,
+    storage: getStorageConfig(),
     memory: {
       heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       heapTotalMB: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
@@ -142,6 +150,38 @@ if (process.env.NODE_ENV !== 'production') {
 if (process.env.SENTRY_DSN) {
   Sentry.setupExpressErrorHandler(app);
 }
+
+// ─── Error Handler ────────────────────────────────────────────────────────────
+// Trước đây app không có error handler nào. Lỗi từ multer (file quá 5MB, không
+// phải PDF) rơi xuống handler mặc định của Express và trả về HTML. Frontend gọi
+// res.json() trên HTML đó nên báo "Unexpected token '<'" — người dùng chỉ thấy
+// import CV hỏng mà không biết file của mình sai ở đâu.
+const multer = require("multer");
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+
+  if (err instanceof multer.MulterError) {
+    const messages = {
+      LIMIT_FILE_SIZE: "File vượt quá giới hạn 5MB. Vui lòng chọn file nhỏ hơn.",
+      LIMIT_UNEXPECTED_FILE: "Tên trường file không đúng, hệ thống mong đợi trường 'cv'.",
+    };
+    return res.status(400).json({ message: messages[err.code] || `Lỗi tải file: ${err.message}` });
+  }
+
+  // fileFilter của uploadMiddleware ném Error thường khi file không phải PDF
+  if (/PDF/i.test(err.message || "")) {
+    return res.status(400).json({ message: err.message });
+  }
+
+  if (/^CORS blocked/.test(err.message || "")) {
+    return res.status(403).json({ message: err.message });
+  }
+
+  console.error("[Express] Lỗi chưa được xử lý:", err);
+  res.status(err.status || 500).json({
+    message: process.env.NODE_ENV === "production" ? "Lỗi hệ thống." : err.message,
+  });
+});
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {

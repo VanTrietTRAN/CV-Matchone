@@ -14,6 +14,11 @@ const cvProfileSchema = new mongoose.Schema({
     address: { type: String },
     dateOfBirth: { type: String },
     website: { type: String },
+
+    // Ảnh chân dung hiển thị trên CV. Lưu dạng data URL (image/jpeg) đã được
+    // trình duyệt thu nhỏ về tối đa 320px trước khi gửi lên, nên chỉ vài chục KB
+    // và không cần tới kho lưu trữ ngoài.
+    photo: { type: String },
     summary: { type: String },
     skills: [{ type: String }],
     certifications: { type: String },
