@@ -12,6 +12,7 @@ import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { setAuth } from '@/lib/auth-storage'
 import { apiFetch, type AuthResponse } from '@/lib/api'
+import { HOME_BY_ROLE } from '@/hooks/use-role-guard'
 
 function LoginContent() {
   const router = useRouter()
@@ -44,7 +45,7 @@ function LoginContent() {
         .then((data) => {
           setAuth({ id: data._id, email: data.email, role: data.role })
           toast.success('Đăng nhập thành công!')
-          router.push(data.role === 'employer' ? '/employer/dashboard' : '/candidate/dashboard')
+          router.push(HOME_BY_ROLE[data.role])
         })
         .catch(() => {
           toast.error('Xác thực thất bại. Vui lòng đăng nhập lại.')
@@ -76,11 +77,7 @@ function LoginContent() {
       setAuth({ id: data._id, email: data.email, role: data.role })
       setLoading(false)
 
-      if (data.role === 'admin') {
-        router.push('/admin/dashboard')
-      } else {
-        router.push(data.role === 'employer' ? '/employer/dashboard' : '/candidate/dashboard')
-      }
+      router.push(HOME_BY_ROLE[data.role])
     } catch (err) {
       setLoading(false)
       toast.error(err instanceof Error ? err.message : 'Đăng nhập thất bại')
