@@ -3,7 +3,8 @@
 Hướng dẫn từng bước cho CVMatchOne. Không chứa thông tin bí mật — điền giá trị
 thật vào biến môi trường trên Railway, đừng viết vào file này.
 
-Kiểm chứng lần cuối: tháng 8/2026.
+Kiểm chứng lần cuối: tháng 8/2026, đối chiếu với giao diện Brevo hiện tại.
+Viết cho trường hợp **đã có sẵn tài khoản Brevo**.
 
 ---
 
@@ -22,36 +23,45 @@ SMTP relay của Brevo.
 
 ---
 
-## 1. Tạo tài khoản và lấy SMTP key
+## 1. Lấy SMTP key
 
-**1.1** Đăng ký tại <https://app.brevo.com>. Gói Free đủ dùng: **300 email/ngày**,
-không giới hạn thời gian.
+Bạn đã có tài khoản Brevo, nên bỏ qua phần đăng ký.
 
-**1.2** Brevo cần duyệt tài khoản trước khi cho gửi. Tài khoản mới thường phải
-điền thông tin công ty và chờ duyệt. Chưa duyệt xong thì SMTP trả lỗi dù cấu
-hình đúng.
+**1.1** Mở thẳng trang SMTP key: <https://app.brevo.com/settings/keys/smtp>
 
-**1.3** Vào **SMTP & API** (menu tài khoản góc trên bên phải) → tab **SMTP**.
+Đi bằng menu cũng được: bấm **biểu tượng bánh răng** ở góc trên bên phải (nằm giữa
+dấu **?** và chuông thông báo) → **SMTP & API** → tab **SMTP**.
 
-**1.4** Ghi lại hai giá trị:
+> Đừng tìm trong mục **Transactional** ở thanh bên trái. Mục đó là nơi xem thống
+> kê và nhật ký thư đã gửi, không phải nơi lấy khoá.
+
+**1.2** Trên tab **SMTP** có sẵn hai giá trị cần lấy:
 
 | Ô trên Brevo | Biến môi trường | Dạng giá trị |
 |---|---|---|
 | **Login** | `EMAIL_USER` | `xxxxxx@smtp-brevo.com` |
 | **SMTP key value** | `EMAIL_PASS` | bắt đầu bằng `xsmtpsib-` |
 
-Nếu chưa có key nào, bấm **Generate a new SMTP key**. Key chỉ hiện đầy đủ **một
-lần** — copy ngay.
+Nếu danh sách trống, bấm **Generate a new SMTP key**, đặt tên bất kỳ (ví dụ
+`cvmatchone-railway`). Khoá chỉ hiện đầy đủ **một lần** — copy ngay, đóng hộp
+thoại là không xem lại được nữa, phải tạo khoá khác.
 
-> **Hai lỗi khiến 90% trường hợp thất bại, cả hai đều trả về đúng một mã 535:**
+> **Hai lỗi khiến phần lớn trường hợp thất bại, và Brevo trả về đúng một mã 535
+> cho cả hai:**
 >
-> 1. **Dán nhầm API key.** API key bắt đầu bằng `xkeysib-`, nằm ở tab **API keys**
->    ngay bên cạnh. Nó hợp lệ, nhưng hợp lệ cho REST API chứ không phải SMTP.
->    Cái bạn cần bắt đầu bằng `xsmtpsib-`.
+> 1. **Dán nhầm API key.** Ngay cạnh tab SMTP là tab **API keys**, khoá ở đó bắt
+>    đầu bằng `xkeysib-`. Khoá đó hợp lệ, nhưng hợp lệ cho REST API chứ không phải
+>    SMTP. Cái bạn cần bắt đầu bằng `xsmtpsib-`.
 > 2. **`EMAIL_USER` điền email đăng nhập Brevo.** SMTP login là một địa chỉ riêng
->    dạng `xxxxxx@smtp-brevo.com`, không phải email bạn dùng để đăng nhập.
+>    dạng `xxxxxx@smtp-brevo.com`, khác với email bạn dùng để đăng nhập.
 >
-> Cả hai lỗi này hệ thống tự phát hiện và nói thẳng ra — xem mục 5.
+> Hệ thống tự phát hiện cả hai và nói thẳng ra — xem mục 5.
+
+**1.3** Kiểm tra tài khoản đã được phép gửi chưa: bấm **Usage and plan** ở góc
+trên bên phải, hoặc xem khối **Your plan usage** ngay trang chủ. Dòng **Emails**
+phải hiện dạng `300 left out of 300 until <ngày>`. Nếu chỗ đó báo tài khoản đang
+chờ duyệt hoặc bị giới hạn, SMTP sẽ từ chối dù cấu hình đúng — xử lý xong mới đi
+tiếp.
 
 ---
 
@@ -61,20 +71,22 @@ lần** — copy ngay.
 tên miền, Microsoft theo sau từ tháng 5/2025. Gửi từ tên miền chưa xác thực thì
 thư vào thẳng spam hoặc bị chặn.
 
-**2.1** Brevo → **Senders, Domains & Dedicated IPs** → tab **Domains** →
-**Add a domain**.
+**2.1** Mở **bánh răng** (Settings) → **Senders, Domains, IPs** → tab **Domains**
+→ **Add a domain**.
 
-**2.2** Nhập tên miền bạn sở hữu (ví dụ `cvmatchone.com`). Brevo sẽ nhận diện nhà
-cung cấp DNS và đưa ra các bản ghi cần thêm: **Brevo code**, **DKIM**, **DMARC**.
+**2.2** Nhập tên miền bạn sở hữu (ví dụ `cvmatchone.com`), rồi chọn
+**Authenticate the domain yourself**. Brevo đưa ra ba bản ghi DNS cần thêm:
+**Brevo code**, **DKIM**, **DMARC**.
 
-**2.3** Thêm các bản ghi đó vào DNS. Nếu tên miền đang ở Cloudflare:
+**2.3** Thêm ba bản ghi đó vào DNS. Nếu tên miền đang ở Cloudflare:
 Cloudflare Dashboard → chọn tên miền → **DNS** → **Add record**, dán từng bản ghi.
 
-> Với bản ghi TXT/CNAME dùng cho xác thực email, để **Proxy status = DNS only**
-> (đám mây xám). Bật proxy sẽ làm Brevo không đọc được bản ghi.
+> Với các bản ghi TXT/CNAME dùng để xác thực email, để **Proxy status = DNS only**
+> (đám mây xám). Bật proxy sẽ khiến Brevo không đọc được bản ghi.
 
-**2.4** Quay lại Brevo bấm **Verify**. DNS lan truyền thường vài phút, có thể tới
-vài giờ.
+**2.4** Quay lại Brevo, bấm **Authenticate this email domain** ở cuối trang. DNS
+lan truyền thường mất vài phút, có thể tới vài giờ — Brevo cho thử lại trong vòng
+48 giờ cho đến khi tên miền hiện trạng thái **Authenticated**.
 
 **2.5** Đặt `SENDER_EMAIL` dùng đúng tên miền vừa xác thực:
 
@@ -82,10 +94,10 @@ vài giờ.
 SENDER_EMAIL=CVMatchOne <no-reply@cvmatchone.com>
 ```
 
-> **Chưa có tên miền riêng?** Vẫn gửi được để thử nghiệm: Brevo → **Senders** →
-> **Add a sender** với một địa chỉ Gmail của bạn, xác nhận qua email Brevo gửi
-> tới. Cách này chỉ hợp để chạy thử — thư gửi hàng loạt sẽ vào spam vì không có
-> DKIM trên tên miền gửi.
+> **Chưa có tên miền riêng?** Vẫn gửi được để thử nghiệm: **Settings** →
+> **Senders, Domains, IPs** → tab **Senders** → **Add a sender**, dùng một địa chỉ
+> Gmail của bạn rồi xác nhận qua thư Brevo gửi tới. Cách này chỉ hợp để chạy thử —
+> gửi hàng loạt sẽ vào spam vì tên miền gửi không có DKIM.
 
 ---
 
@@ -179,10 +191,27 @@ Admin → **Hệ thống** → **Gửi Email Test**. Thư gửi về chính đ�
 > Nút này trước đây luôn báo "thành công" kể cả khi gửi hỏng, vì hàm gửi nuốt mọi
 > lỗi. Nay nó báo đúng kết quả kèm nguyên nhân.
 
-### Bước 4 — Chạy thật
+### Bước 4 — Đối chiếu ở phía Brevo
+
+Vào Brevo → **Transactional** (thanh bên trái) → **Logs** (hoặc **Statistics**).
+Thư vừa gửi phải xuất hiện ở đây với trạng thái *Delivered*.
+
+Đây là bước hay bị bỏ qua nhưng lại phân biệt được hai trường hợp rất khác nhau:
+
+| Trong Brevo | Nghĩa là |
+|---|---|
+| Không thấy thư nào | Thư chưa rời khỏi hệ thống — lỗi ở cấu hình SMTP, quay lại bước 1 |
+| Có thư, trạng thái *Delivered* | Brevo đã gửi thành công. Không thấy trong hộp thư thì kiểm tra spam và mục 2 |
+| Có thư, trạng thái *Soft/Hard bounce* | Địa chỉ nhận có vấn đề, hoặc tên miền gửi chưa xác thực |
+| Có thư, trạng thái *Blocked* | Địa chỉ nhận nằm trong danh sách chặn của Brevo |
+
+### Bước 5 — Chạy thật
 
 Admin → **Hệ thống** → **Quét & Gửi ngay**. Hệ thống quét toàn bộ ứng viên, chấm
 điểm phù hợp và gửi thư cho những người vượt ngưỡng.
+
+Theo dõi quota còn lại ở Brevo: **Usage and plan** góc trên bên phải, hoặc khối
+**Your plan usage** ngay trang chủ.
 
 ---
 
@@ -199,6 +228,8 @@ Admin → **Hệ thống** → **Quét & Gửi ngay**. Hệ thống quét toàn 
 | ETIMEDOUT / ECONNREFUSED | Sai host hoặc cổng bị chặn | Kiểm tra `EMAIL_HOST`, thử cổng 465 hoặc 2525 |
 | Gửi được nhưng vào spam | Thiếu DKIM/DMARC trên tên miền gửi | Làm mục 2 cho đủ cả 3 bản ghi |
 | Đang gửi thì dừng giữa chừng | Hết 300 email/ngày | Chờ quota reset, hoặc giãn lịch cron, hoặc nâng gói |
+| SMTP báo OK nhưng Brevo → Transactional → Logs trống | Thư không rời khỏi hệ thống | Xem lại `problems` ở bước 1 |
+| Brevo báo *Blocked* | Địa chỉ nhận nằm trong danh sách chặn của Brevo | Brevo → Transactional → Blocked contacts, gỡ ra |
 | Nhận mail lệch 7 tiếng | `CRON_TIMEZONE` bị ghi đè sai | Bỏ biến đó đi để dùng mặc định `Asia/Ho_Chi_Minh` |
 
 ---
@@ -231,5 +262,6 @@ Trước đây cấu hình Brevo gần như không thể dò được:
 - [Brevo — Authenticate your domain (Brevo code, DKIM, DMARC)](https://help.brevo.com/hc/en-us/articles/12163873383186-Authenticate-your-domain-with-Brevo-Brevo-code-DKIM-DMARC)
 - [Brevo — Which SMTP port should I use?](https://help.brevo.com/hc/en-us/articles/10905415650322-Which-SMTP-port-should-I-use-Port-587-465-or-2525)
 - [Brevo — Troubleshooting SMTP issues](https://help.brevo.com/hc/en-us/articles/115000188150-Troubleshooting-Issues-with-Brevo-SMTP)
+- [Brevo — Getting started with senders and domains](https://developers.brevo.com/docs/getting-started-with-senders-and-domains)
 - [Brevo — Limits of the Free plan](https://help.brevo.com/hc/en-us/articles/208580669-FAQs-What-are-the-limits-of-the-Free-plan)
 - [Brevo — Comply with Gmail, Yahoo and Microsoft sender requirements](https://help.brevo.com/hc/en-us/articles/14925263522578-Comply-with-Gmail-Yahoo-and-Microsoft-s-requirements-for-email-senders)
