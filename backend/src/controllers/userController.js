@@ -4,13 +4,16 @@ const Application = require('../models/Application');
 
 const updateMySettings = async (req, res) => {
   try {
-    const { isEmailSubscribed, isLookingForJob, minMatchScore, jobMatchFrequency } = req.body;
+    const { isEmailSubscribed, isLookingForJob, minMatchScore, jobMatchFrequency, employerDigestLimit } = req.body;
     const userId = req.user._id;
 
     const updateData = {};
     if (typeof isEmailSubscribed === 'boolean') updateData.isEmailSubscribed = isEmailSubscribed;
     if (typeof minMatchScore === 'number') updateData.minMatchScore = minMatchScore;
     if (typeof jobMatchFrequency === 'string') updateData.jobMatchFrequency = jobMatchFrequency;
+    if (typeof employerDigestLimit === 'number' && employerDigestLimit >= 0) {
+      updateData.employerDigestLimit = Math.floor(employerDigestLimit);
+    }
 
     if (Object.keys(updateData).length > 0) {
       await User.findByIdAndUpdate(userId, updateData);
@@ -44,6 +47,7 @@ const getMyProfile = async (req, res) => {
           isEmailSubscribed: req.user.isEmailSubscribed,
           minMatchScore: req.user.minMatchScore,
           jobMatchFrequency: req.user.jobMatchFrequency,
+          employerDigestLimit: req.user.employerDigestLimit,
           status: req.user.status,
         },
         cv: cv || null,

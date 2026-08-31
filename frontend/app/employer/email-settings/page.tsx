@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import EmployerLayout from '@/layouts/EmployerLayout'
 import PageContainer from '@/components/dashboard/PageContainer'
 import PageHeader from '@/components/dashboard/PageHeader'
@@ -13,15 +13,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CheckCircle2, Bell, Users, CalendarClock, Info } from 'lucide-react'
+import { Bell, Users, Loader2 } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
+import { toast } from 'sonner'
 
-const initialSettings = {
-  autoEmailMatched: true,
-  emailTopTenOnly: false,
-  matchThreshold: 70,
-  applicationAlerts: true,
-  alertFrequency: 'daily',
-  jobReminders: true,
+/**
+ * Cài đặt email của doanh nghiệp.
+ *
+ * Trước đây trang này chỉ là bản dựng giao diện: bấm "Lưu cài đặt" hiện thông báo
+ * xanh rồi thôi, không gọi API nào, và có một công tắc ("Nhắc hạn tin tuyển dụng")
+ * cho tính năng chưa tồn tại. Nay mọi tuỳ chọn đều lưu lên máy chủ và điều khiển
+ * đúng email tổng hợp gửi lúc 15h hằng ngày.
+ */
+type Settings = {
+  isEmailSubscribed: boolean
+  minMatchScore: number
+  employerDigestLimit: number
+  jobMatchFrequency: string
+}
+
+const DEFAULTS: Settings = {
+  isEmailSubscribed: true,
+  minMatchScore: 70,
+  employerDigestLimit: 0,
+  jobMatchFrequency: 'daily',
 }
 
 function SettingCard({
@@ -68,68 +83,95 @@ function SettingCard({
 }
 
 export default function EmployerEmailSettingsPage() {
-  const [settings, setSettings] = useState(initialSettings)
-  const [saved, setSaved] = useState(false)
+  const [settings, setSettings] = useState<Settings>(DEFAULTS)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+  const load = useCallback(async () => {
+    try {
+      const res = await apiFetch<{ data: { user: Partial<Settings> } }>('/api/users/me/profile')
+      const u = res.data?.user || {}
+      setSettings({
+        isEmailSubscribed: u.isEmailSubscribed ?? DEFAULTS.isEmailSubscribed,
+        minMatchScore: u.minMatchScore ?? DEFAULTS.minMatchScore,
+        employerDigestLimit: u.employerDigestLimit ?? DEFAULTS.employerDigestLimit,
+        jobMatchFrequency: u.jobMatchFrequency ?? DEFAULTS.jobMatchFrequency,
+      })
+    } catch {
+      toast.error('Không tải được cài đặt email')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await apiFetch('/api/users/me/settings', {
+        method: 'PUT',
+        body: JSON.stringify(settings),
+      })
+      toast.success('Đã lưu cài đặt. Email tổng hợp lúc 15h sẽ theo tuỳ chọn mới.')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Lưu cài đặt thất bại')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleToggle = (key: keyof typeof initialSettings) => {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
-  }
+  const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
+    setSettings((prev) => ({ ...prev, [key]: value }))
 
-  const handleSelect = (key: string, value: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      [key]: isNaN(Number(value)) ? value : Number(value),
-    }))
+  if (loading) {
+    return (
+      <EmployerLayout>
+        <PageContainer size="sm">
+          <div className="flex items-center gap-2 py-12 text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Đang tải cài đặt...
+          </div>
+        </PageContainer>
+      </EmployerLayout>
+    )
   }
 
   return (
     <EmployerLayout>
       <PageContainer size="sm">
         <PageHeader
-          title="Cài đặt email & thông báo"
-          description="Chọn thời điểm hệ thống gửi email về ứng viên phù hợp, hồ sơ mới và hạn tin tuyển dụng."
+          title="Cài đặt email"
+          description="Chọn khi nào và với điều kiện nào hệ thống gửi email tổng hợp ứng viên cho bạn."
         />
-
-        {/* Trạng thái thật của tính năng — tránh gây hiểu nhầm là đã lưu lên máy chủ */}
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-surface p-4">
-          <Info className="mt-0.5 size-5 shrink-0 text-warning-foreground" />
-          <p className="text-sm leading-relaxed text-warning-foreground">
-            <strong>Tính năng đang hoàn thiện:</strong> các tuỳ chọn dưới đây mới áp dụng trong
-            phiên làm việc hiện tại và chưa được đồng bộ với máy chủ.
-          </p>
-        </div>
-
-        {saved && (
-          <div className="mb-5 flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4">
-            <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-brand-600" />
-            <p className="text-sm font-semibold text-brand-800">Đã ghi nhận tuỳ chọn của bạn.</p>
-          </div>
-        )}
 
         <div className="space-y-5">
           <SettingCard
             icon={Users}
-            title="Ứng viên phù hợp do AI gợi ý"
-            description="Gửi email cho bạn khi có ứng viên có điểm phù hợp cao với tin tuyển dụng đang mở."
-            enabled={settings.autoEmailMatched}
-            onToggle={() => handleToggle('autoEmailMatched')}
+            title="Email tổng hợp ứng viên phù hợp"
+            description="Mỗi ngày lúc 15h, hệ thống gom các hồ sơ có điểm phù hợp cao vừa ứng tuyển vào tin của bạn thành một email duy nhất."
+            enabled={settings.isEmailSubscribed}
+            onToggle={() => set('isEmailSubscribed', !settings.isEmailSubscribed)}
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="text-sm font-semibold">Ngưỡng điểm phù hợp</label>
+              <div>
+                <label className="text-sm font-semibold">Ngưỡng điểm phù hợp</label>
+                <p className="text-xs text-muted-foreground">
+                  Chỉ báo những hồ sơ đạt từ mức này trở lên.
+                </p>
+              </div>
               <Select
-                value={String(settings.matchThreshold)}
-                onValueChange={(value) => handleSelect('matchThreshold', value)}
+                value={String(settings.minMatchScore)}
+                onValueChange={(v) => set('minMatchScore', Number(v))}
               >
                 <SelectTrigger className="w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="50">Từ 50% trở lên</SelectItem>
+                  <SelectItem value="60">Từ 60% trở lên</SelectItem>
                   <SelectItem value="70">Từ 70% trở lên</SelectItem>
                   <SelectItem value="80">Từ 80% trở lên</SelectItem>
                   <SelectItem value="90">Từ 90% trở lên</SelectItem>
@@ -137,54 +179,60 @@ export default function EmployerEmailSettingsPage() {
               </Select>
             </div>
 
-            <label className="flex cursor-pointer items-center gap-2.5">
-              <Switch
-                checked={settings.emailTopTenOnly}
-                onCheckedChange={() => handleToggle('emailTopTenOnly')}
-              />
-              <span className="text-sm">Chỉ gửi 10 ứng viên phù hợp nhất mỗi tin</span>
-            </label>
-          </SettingCard>
-
-          <SettingCard
-            icon={Bell}
-            title="Thông báo hồ sơ ứng tuyển mới"
-            description="Nhận email khi có ứng viên nộp hồ sơ vào tin tuyển dụng của bạn."
-            enabled={settings.applicationAlerts}
-            onToggle={() => handleToggle('applicationAlerts')}
-          >
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold">Tần suất nhận email</label>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <label className="text-sm font-semibold">Số hồ sơ tối đa mỗi email</label>
+                <p className="text-xs text-muted-foreground">
+                  Hồ sơ điểm cao nhất được ưu tiên đưa vào trước.
+                </p>
+              </div>
               <Select
-                value={settings.alertFrequency}
-                onValueChange={(value) => handleSelect('alertFrequency', value)}
+                value={String(settings.employerDigestLimit)}
+                onValueChange={(v) => set('employerDigestLimit', Number(v))}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="realtime">Ngay khi có hồ sơ mới</SelectItem>
-                  <SelectItem value="daily">Tổng hợp hằng ngày</SelectItem>
-                  <SelectItem value="weekly">Tổng hợp hằng tuần</SelectItem>
+                  <SelectItem value="0">Không giới hạn</SelectItem>
+                  <SelectItem value="5">5 hồ sơ</SelectItem>
+                  <SelectItem value="10">10 hồ sơ</SelectItem>
+                  <SelectItem value="20">20 hồ sơ</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </SettingCard>
 
           <SettingCard
-            icon={CalendarClock}
-            title="Nhắc hạn tin tuyển dụng"
-            description="Nhắc bạn trước khi tin tuyển dụng hết hạn hiển thị để kịp gia hạn."
-            enabled={settings.jobReminders}
-            onToggle={() => handleToggle('jobReminders')}
-          />
+            icon={Bell}
+            title="Tần suất nhận email"
+            description="Áp dụng cho email tổng hợp ứng viên ở trên."
+            enabled={settings.jobMatchFrequency !== 'off'}
+            onToggle={() =>
+              set('jobMatchFrequency', settings.jobMatchFrequency === 'off' ? 'daily' : 'off')
+            }
+          >
+            <Select
+              value={settings.jobMatchFrequency}
+              onValueChange={(v) => set('jobMatchFrequency', v)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="daily">Hằng ngày (15h)</SelectItem>
+                <SelectItem value="weekly">Hằng tuần</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingCard>
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Button onClick={handleSave} size="lg">
+          <Button onClick={handleSave} size="lg" disabled={saving} className="gap-2">
+            {saving && <Loader2 className="size-4 animate-spin" />}
             Lưu cài đặt
           </Button>
-          <Button onClick={() => setSettings(initialSettings)} variant="outline" size="lg">
+          <Button onClick={() => setSettings(DEFAULTS)} variant="outline" size="lg">
             Khôi phục mặc định
           </Button>
         </div>

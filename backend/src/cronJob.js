@@ -214,9 +214,12 @@ const runEmployerDigest = async () => {
   const hours = Number(settings?.value?.lookbackHours) || 24;
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
+  // Lấy theo ngưỡng mặc định trước, rồi lọc lại theo ngưỡng riêng của từng doanh
+  // nghiệp ở dưới. Doanh nghiệp đặt ngưỡng thấp hơn mặc định vẫn nhận đủ hồ sơ.
+  const LOWEST_THRESHOLD = 50;
   const applications = await Application.find({
     appliedAt: { $gte: since },
-    matchingScore: { $gte: threshold },
+    matchingScore: { $gte: Math.min(threshold, LOWEST_THRESHOLD) },
   })
     .populate("jobId", "title employerId status")
     .populate("cvProfileId", "fullName headline skills")
@@ -248,19 +251,32 @@ const runEmployerDigest = async () => {
   }
 
   let sentCount = 0;
-  for (const [employerId, applicants] of byEmployer) {
-    const employer = await User.findById(employerId).select("email status isDeleted isEmailSubscribed");
+  for (const [employerId, allApplicants] of byEmployer) {
+    const employer = await User.findById(employerId).select(
+      "email status isDeleted isEmailSubscribed minMatchScore jobMatchFrequency employerDigestLimit"
+    );
     // Tôn trọng đúng các điều kiện như email ứng viên: còn hoạt động, chưa xoá,
     // và chưa tắt nhận email
     if (!employer || employer.status !== "active" || employer.isDeleted) continue;
     if (employer.isEmailSubscribed === false) continue;
 
+    // Cài đặt riêng của doanh nghiệp (trang Cài đặt email) đè lên mặc định hệ thống
+    const ownThreshold = Number(employer.minMatchScore) || threshold;
+    const applicants = allApplicants
+      .filter((a) => a.score >= ownThreshold)
+      .sort((a, b) => b.score - a.score);
+    if (!applicants.length) continue;
+
+    // 0 nghĩa là không giới hạn
+    const limit = Number(employer.employerDigestLimit) || 0;
+    const finalList = limit > 0 ? applicants.slice(0, limit) : applicants;
+
     const profile = await CompanyProfile.findOne({ userId: employerId }).select("companyName");
 
     const result = await emailService.sendEmployerDigestEmail({
       employer: { email: employer.email, companyName: profile?.companyName || "" },
-      applicants,
-      threshold,
+      applicants: finalList,
+      threshold: ownThreshold,
     });
     if (result?.sent) sentCount += 1;
   }

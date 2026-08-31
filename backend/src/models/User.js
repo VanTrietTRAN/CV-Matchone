@@ -53,6 +53,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Doanh nghiệp: số hồ sơ tối đa đưa vào mỗi email tổng hợp lúc 15h.
+    // 0 nghĩa là không giới hạn. Ngưỡng điểm dùng chung trường minMatchScore,
+    // tần suất dùng chung jobMatchFrequency với phía ứng viên.
+    employerDigestLimit: { type: Number, default: 0 },
+
     // Đặt lại mật khẩu bằng mã 6 số (lưu bản băm, xem src/utils/otp.js)
     resetPasswordToken: { type: String },
     resetPasswordExpire: { type: Date },
