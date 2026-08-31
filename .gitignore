@@ -39,6 +39,11 @@ docs/
 Data/
 .cursor/
 
+# ─── Backup database (chứa email thật và hash mật khẩu của người dùng) ──────
+# Từng bị commit nhầm lên repo public. File vẫn nằm trên máy, chỉ không đưa lên remote.
+backend/backups/
+*.backup.json
+
 # ─── Tài liệu deploy (chứa credential thật: mật khẩu DB, key R2, SMTP) ───────
 DEPLOYMENT.md
 deployp2.md
