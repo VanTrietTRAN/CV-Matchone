@@ -321,6 +321,39 @@ const sendEmail = async ({ to, subject, html }) => {
   }
 };
 
+/** Nhắc doanh nghiệp gia hạn các tin sắp hết hiển thị. */
+const sendJobExpiringEmail = async ({ employer, jobs, days }) => {
+  try {
+    const t = await initTransporter();
+    if (!t) throw new Error(readEmailConfig().problems.join(' ') || 'Chưa cấu hình được SMTP.');
+    if (!jobs || jobs.length === 0) return { sent: false, skipped: true };
+
+    const tpl = await loadTemplates();
+    const { subject, html } = templates.renderJobExpiring({
+      tpl,
+      employer,
+      jobs,
+      days,
+      frontendUrl: frontendOrigin(),
+    });
+
+    const info = await t.sendMail({
+      from: readEmailConfig().sender,
+      to: employer.email,
+      subject,
+      html,
+    });
+    console.log(
+      `[Email] Đã nhắc hạn ${jobs.length} tin cho ${employer.email} (MessageID: ${info.messageId})`,
+    );
+    return { sent: true, messageId: info.messageId };
+  } catch (error) {
+    const reason = describeSmtpError(error);
+    console.error(`[Email] Lỗi nhắc hạn tin cho ${employer?.email}: ${reason}`);
+    return { sent: false, error: reason };
+  }
+};
+
 /** Gửi mã 6 số để đặt lại mật khẩu. */
 const sendPasswordResetEmail = async ({ to, fullName, code, minutes }) => {
   const tpl = await loadTemplates();
@@ -379,6 +412,7 @@ module.exports = {
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendEmployerDigestEmail,
+  sendJobExpiringEmail,
   getEmailConfig,
   verifyEmailConnection,
   invalidateTemplateCache,

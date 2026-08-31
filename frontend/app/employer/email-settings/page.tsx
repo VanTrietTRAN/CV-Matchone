@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Bell, Users, Loader2 } from 'lucide-react'
+import { Bell, Users, CalendarClock, Loader2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -30,6 +30,7 @@ type Settings = {
   minMatchScore: number
   employerDigestLimit: number
   jobMatchFrequency: string
+  jobExpiryReminder: boolean
 }
 
 const DEFAULTS: Settings = {
@@ -37,6 +38,7 @@ const DEFAULTS: Settings = {
   minMatchScore: 70,
   employerDigestLimit: 0,
   jobMatchFrequency: 'daily',
+  jobExpiryReminder: true,
 }
 
 function SettingCard({
@@ -96,6 +98,7 @@ export default function EmployerEmailSettingsPage() {
         minMatchScore: u.minMatchScore ?? DEFAULTS.minMatchScore,
         employerDigestLimit: u.employerDigestLimit ?? DEFAULTS.employerDigestLimit,
         jobMatchFrequency: u.jobMatchFrequency ?? DEFAULTS.jobMatchFrequency,
+        jobExpiryReminder: u.jobExpiryReminder ?? DEFAULTS.jobExpiryReminder,
       })
     } catch {
       toast.error('Không tải được cài đặt email')
@@ -225,6 +228,14 @@ export default function EmployerEmailSettingsPage() {
               </SelectContent>
             </Select>
           </SettingCard>
+
+          <SettingCard
+            icon={CalendarClock}
+            title="Nhắc hạn tin tuyển dụng"
+            description="Mỗi sáng 9h, nếu có tin sắp hết hạn hiển thị trong 7 ngày tới, hệ thống gửi một email kèm số hồ sơ đã nhận để bạn cân nhắc gia hạn. Mỗi tin chỉ nhắc một lần."
+            enabled={settings.jobExpiryReminder}
+            onToggle={() => set('jobExpiryReminder', !settings.jobExpiryReminder)}
+          />
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">

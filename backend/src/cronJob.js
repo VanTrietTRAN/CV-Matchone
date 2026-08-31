@@ -293,6 +293,91 @@ const runEmployerDigest = async () => {
   };
 };
 
+// ─── Nhắc hạn tin tuyển dụng (9h hằng ngày) ──────────────────────────────────
+//
+// Tin hết hạn là ngừng hiển thị với ứng viên, nhưng doanh nghiệp thường không để
+// ý cho tới khi thấy hồ sơ ngừng về. Nhắc trước vài ngày để kịp gia hạn.
+//
+// Chỉ nhắc MỘT LẦN cho mỗi tin: sau khi gửi, ghi lastExpiryReminderAt để lượt sau
+// bỏ qua — không có mốc này thì tin sắp hết hạn sẽ bị nhắc lại mỗi ngày.
+const DEFAULT_EXPIRY_WARNING_DAYS = 7;
+
+const runJobExpiryReminder = async () => {
+  console.log("[Cron/Expiry] Bắt đầu quét tin sắp hết hạn lúc:", new Date().toLocaleString());
+
+  const settings = await SystemSetting.findOne({ key: "job_expiry_settings" });
+  const days = Number(settings?.value?.warningDays) || DEFAULT_EXPIRY_WARNING_DAYS;
+  const now = new Date();
+  const limitDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+  const jobs = await Job.find({
+    status: "open",
+    expiresAt: { $gt: now, $lte: limitDate },
+    $or: [
+      { lastExpiryReminderAt: { $exists: false } },
+      { lastExpiryReminderAt: null },
+    ],
+  }).select("title expiresAt employerId");
+
+  if (!jobs.length) {
+    console.log("[Cron/Expiry] Không có tin nào cần nhắc.");
+    return { employersNotified: 0, jobsFlagged: 0, warningDays: days };
+  }
+
+  const byEmployer = new Map();
+  for (const job of jobs) {
+    const employerId = String(job.employerId);
+    if (!byEmployer.has(employerId)) byEmployer.set(employerId, []);
+    const daysLeft = Math.max(
+      1,
+      Math.ceil((new Date(job.expiresAt) - now) / (24 * 60 * 60 * 1000)),
+    );
+    byEmployer.get(employerId).push({
+      _id: job._id,
+      id: String(job._id),
+      title: job.title,
+      expiresAt: new Date(job.expiresAt).toLocaleDateString("vi-VN", { timeZone: CRON_TIMEZONE }),
+      daysLeft,
+    });
+  }
+
+  let sentCount = 0;
+  for (const [employerId, list] of byEmployer) {
+    const employer = await User.findById(employerId).select(
+      "email status isDeleted jobExpiryReminder",
+    );
+    if (!employer || employer.status !== "active" || employer.isDeleted) continue;
+    // Mặc định bật; chỉ bỏ qua khi doanh nghiệp tắt tường minh
+    if (employer.jobExpiryReminder === false) continue;
+
+    // Số hồ sơ đã nhận, để doanh nghiệp cân nhắc có đáng gia hạn không
+    for (const item of list) {
+      item.applicationCount = await Application.countDocuments({ jobId: item._id });
+    }
+
+    const profile = await CompanyProfile.findOne({ userId: employerId }).select("companyName");
+    const result = await emailService.sendJobExpiringEmail({
+      employer: { email: employer.email, companyName: profile?.companyName || "" },
+      jobs: list,
+      days,
+    });
+
+    if (result?.sent) {
+      sentCount += 1;
+      // Đánh dấu đã nhắc để không gửi lại mỗi ngày cho cùng một tin
+      await Job.updateMany(
+        { _id: { $in: list.map((j) => j._id) } },
+        { $set: { lastExpiryReminderAt: new Date() } },
+      );
+    }
+  }
+
+  console.log(
+    `[Cron/Expiry] Xong: ${sentCount}/${byEmployer.size} doanh nghiệp nhận thư, ${jobs.length} tin sắp hết hạn.`,
+  );
+  return { employersNotified: sentCount, jobsFlagged: jobs.length, warningDays: days };
+};
+
 const runMatchingProcess = async () => {
   console.log(
     "[Cron/Trigger] Đang chạy tác vụ quét việc làm matching lúc:",
@@ -349,6 +434,7 @@ const runMatchingProcess = async () => {
 
 let activeCronTask = null;
 let employerCronTask = null;
+let expiryCronTask = null;
 
 const startCronJobs = async () => {
   try {
@@ -426,6 +512,30 @@ const startCronJobs = async () => {
     } else {
       console.log('[Cron] Tác vụ tổng hợp hồ sơ gửi doanh nghiệp đang TẮT theo cấu hình.');
     }
+    // ─── Nhắc hạn tin tuyển dụng ─────────────────────────────────────────────
+    if (expiryCronTask) {
+      expiryCronTask.stop();
+      expiryCronTask = null;
+    }
+    const expirySettings = await SystemSetting.findOne({ key: 'job_expiry_settings' });
+    const expiryEnabled = expirySettings?.value?.isEnabled !== false;
+    const expiryCron = expirySettings?.value?.cronExpression || '0 9 * * *';
+
+    if (expiryEnabled) {
+      console.log(
+        `[Cron] Đã khởi động tác vụ nhắc hạn tin tuyển dụng ` +
+        `(Lịch trình: ${expiryCron} — múi giờ ${CRON_TIMEZONE})`
+      );
+      expiryCronTask = cron.schedule(expiryCron, async () => {
+        try {
+          await runJobExpiryReminder();
+        } catch (err) {
+          console.error('[Cron/Expiry] Lỗi:', err.message);
+        }
+      }, { timezone: CRON_TIMEZONE });
+    } else {
+      console.log('[Cron] Tác vụ nhắc hạn tin tuyển dụng đang TẮT theo cấu hình.');
+    }
   } catch (error) {
     console.error('[Cron] Lỗi khi khởi động tác vụ email cron:', error.message);
   }
@@ -435,5 +545,6 @@ module.exports = {
   startCronJobs,
   runMatchingProcess,
   runEmployerDigest,
+  runJobExpiryReminder,
   reloadCronJobs: startCronJobs,
 };

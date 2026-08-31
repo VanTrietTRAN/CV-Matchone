@@ -58,6 +58,10 @@ const userSchema = new mongoose.Schema(
     // tần suất dùng chung jobMatchFrequency với phía ứng viên.
     employerDigestLimit: { type: Number, default: 0 },
 
+    // Nhắc hạn tin tuyển dụng. Không đặt default để tài khoản cũ (undefined) vẫn
+    // được nhắc — chỗ kiểm tra chỉ bỏ qua khi === false.
+    jobExpiryReminder: { type: Boolean },
+
     // Đặt lại mật khẩu bằng mã 6 số (lưu bản băm, xem src/utils/otp.js)
     resetPasswordToken: { type: String },
     resetPasswordExpire: { type: Date },

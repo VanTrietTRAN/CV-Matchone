@@ -31,6 +31,10 @@ const jobSchema = new mongoose.Schema({
     },
 
     expiresAt: { type: Date },
+
+    // Mốc đã gửi email nhắc hạn cho tin này. Không có mốc thì cron sẽ nhắc lại
+    // mỗi ngày cho tới lúc tin hết hạn — phiền và dễ bị đánh dấu spam.
+    lastExpiryReminderAt: { type: Date },
     isEmailEnabled: { type: Boolean, default: true },
     status: {
         type: String,

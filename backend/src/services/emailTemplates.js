@@ -62,6 +62,16 @@ const DEFAULTS = {
       '⚠️ Mã có hiệu lực trong {{minutes}} phút. Nếu bạn không đăng ký tài khoản tại {{brand}}, hãy bỏ qua email này.',
     footer: '© {{brand}} · Email tự động, vui lòng không trả lời',
   },
+  jobExpiring: {
+    subject: '[{{brand}}] {{count}} tin tuyển dụng sắp hết hạn',
+    greeting: 'Chào {{name}},',
+    intro:
+      'Bạn có {{count}} tin tuyển dụng sẽ hết hạn hiển thị trong {{days}} ngày tới. Gia hạn để tin tiếp tục xuất hiện với ứng viên.',
+    listLead: 'Các tin cần gia hạn:',
+    footer:
+      'Bạn nhận email này vì đang bật nhắc hạn tin tuyển dụng trên {{brand}}. Tắt nhắc nhở tại Cài đặt email.',
+    footerLinkLabel: 'Cài đặt email',
+  },
   employerDigest: {
     subject: '[{{brand}}] {{count}} ứng viên phù hợp vừa ứng tuyển',
     greeting: 'Chào {{name}},',
@@ -81,6 +91,7 @@ const VARIABLES = {
   passwordReset: ['brand', 'name', 'code', 'minutes'],
   verifyEmail: ['brand', 'name', 'code', 'minutes'],
   employerDigest: ['brand', 'name', 'count', 'threshold'],
+  jobExpiring: ['brand', 'name', 'count', 'days'],
 };
 
 /** Nhãn tiếng Việt cho từng trường, dùng cho giao diện Quản trị. */
@@ -102,6 +113,7 @@ const TEMPLATE_LABELS = {
   jobMatch: 'Gợi ý việc làm cho ứng viên (12h)',
   jobAlert: 'Thông báo việc làm theo từ khoá',
   employerDigest: 'Hồ sơ phù hợp cho doanh nghiệp (15h)',
+  jobExpiring: 'Nhắc hạn tin tuyển dụng',
 };
 
 const escapeHtml = (value) =>
@@ -399,6 +411,57 @@ const renderEmployerDigest = ({ tpl, employer, applicants, threshold, frontendUr
   };
 };
 
+/** Email nhắc gia hạn tin tuyển dụng sắp hết hiển thị. */
+const renderJobExpiring = ({ tpl, employer, jobs, days, frontendUrl }) => {
+  const t = tpl.jobExpiring;
+  const vars = {
+    brand: tpl.brand.name,
+    name: employer.companyName || employer.email,
+    count: jobs.length,
+    days,
+  };
+
+  const listHtml = jobs
+    .map(
+      (j) => `
+  <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:16px;background:#fffbeb;">
+    <h3 style="margin:0 0 6px;color:#92400e;font-size:17px;">${escapeHtml(j.title)}</h3>
+    <p style="margin:4px 0;color:#475569;font-size:14px;"><strong>Hết hạn:</strong> ${escapeHtml(j.expiresAt)}</p>
+    <p style="margin:4px 0;color:#475569;font-size:14px;"><strong>Còn lại:</strong> ${escapeHtml(
+      j.daysLeft,
+    )} ngày</p>
+    ${
+      typeof j.applicationCount === 'number'
+        ? `<p style="margin:4px 0;color:#475569;font-size:14px;"><strong>Hồ sơ đã nhận:</strong> ${escapeHtml(
+            j.applicationCount,
+          )}</p>`
+        : ''
+    }
+    <div style="margin-top:16px;">
+      <a href="${frontendUrl}/employer/jobs/${j.id}" style="background:#d97706;color:#fff;padding:8px 16px;text-decoration:none;border-radius:6px;font-weight:500;">Gia hạn tin này</a>
+    </div>
+  </div>`,
+    )
+    .join('');
+
+  const footerLink = `<a href="${frontendUrl}/employer/email-settings" style="color:#2563eb;">${escapeHtml(
+    fillPlain(t.footerLinkLabel, vars),
+  )}</a>`;
+
+  return {
+    subject: fillPlain(t.subject, vars),
+    html: layout({
+      brand: tpl.brand,
+      bodyHtml: `
+        <h2 style="margin-top:0;">${fill(t.greeting, vars)}</h2>
+        <p>${fill(t.intro, vars)}</p>
+        <p>${fill(t.listLead, vars)}</p>
+        <div style="margin-top:24px;">${listHtml}</div>`,
+      footerHtml: `${fill(t.footer, vars)}<br/>${footerLink}`,
+    }),
+  };
+};
+
 /** Dữ liệu mẫu để xem trước ở trang Quản trị — không đụng tới database. */
 const SAMPLE = {
   user: { fullName: 'Nguyễn Văn A', email: 'ung-vien@example.com' },
@@ -426,6 +489,10 @@ const SAMPLE = {
   ],
   alert: { keyword: 'backend', location: 'Đà Nẵng' },
   code: '482913',
+  expiringJobs: [
+    { id: 'job1', title: 'Lập trình viên Backend (Node.js)', expiresAt: '03/09/2026', daysLeft: 3, applicationCount: 12 },
+    { id: 'job2', title: 'Kỹ sư Dữ liệu', expiresAt: '05/09/2026', daysLeft: 5, applicationCount: 4 },
+  ],
   employer: { companyName: 'Công ty TNHH Mẫu', email: 'tuyendung@example.com' },
   applicants: [
     {
@@ -488,6 +555,15 @@ const renderPreview = (key, tpl, frontendUrl) => {
       frontendUrl,
     });
   }
+  if (key === 'jobExpiring') {
+    return renderJobExpiring({
+      tpl,
+      employer: SAMPLE.employer,
+      jobs: SAMPLE.expiringJobs,
+      days: 7,
+      frontendUrl,
+    });
+  }
   throw new Error(`Không có mẫu email tên "${key}"`);
 };
 
@@ -502,6 +578,7 @@ module.exports = {
   renderPasswordReset,
   renderVerifyEmail,
   renderEmployerDigest,
+  renderJobExpiring,
   renderPreview,
   escapeHtml,
 };
