@@ -171,12 +171,28 @@ khác: Dashboard → `cvoneclickmatch.com` → **DNS** → **Add record**.
 > *"The Branded record values in Brevo and in your domain provider account
 > mismatch."*
 >
-> Nhận biết: tra tên miền con thấy nó trả về **đúng dãy IP như website chính**,
-> và truy vấn CNAME thì **không có CNAME nào**:
+> Tính năng branded subdomain tạo ra **ba** bản ghi CNAME, cả ba đều mặc định
+> bật proxy và đều phải gạt về DNS only:
+>
+> | Name | Target |
+> |---|---|
+> | `noreply` | `noreply-<tên-miền>.brand.brevosend.com` |
+> | `img.noreply` | `noreply-<tên-miền>.img.brand.brevosend.com` |
+> | `r.noreply` | `noreply-<tên-miền>.r.brand.brevosend.com` |
+>
+> Brevo báo lỗi riêng cho từng cái: *"Branded record ... mismatch"* và
+> *"Redirection Record ... mismatch"*.
+>
+> Nhận biết: cả ba trả về **đúng một cặp IP giống hệt website chính**, và truy
+> vấn CNAME thì **không có CNAME nào**:
 > ```bash
 > nslookup -type=CNAME noreply.cvoneclickmatch.com   # phải thấy ...brand.brevosend.com
 > nslookup noreply.cvoneclickmatch.com               # nếu ra IP giống web chính -> đang bị proxy
 > ```
+>
+> Cách gạt: mở dòng đó ra, ở cột **Proxy status** bấm công tắc xanh bên trái đám
+> mây cam. Đám mây chuyển sang xám và chữ thành **DNS only**, rồi bấm **Save**.
+> Giá trị ở ô Target giữ nguyên, không sửa gì.
 >
 > **3. Đừng đụng vào các bản ghi đang có.** Tên miền này đang chạy website và API
 > trên Railway:
@@ -375,7 +391,7 @@ Theo dõi quota còn lại ở Brevo: **Usage and plan** góc trên bên phải,
 | Brevo báo *Blocked* | Địa chỉ nhận nằm trong danh sách chặn của Brevo | Brevo → Transactional → Blocked contacts, gỡ ra |
 | Nhận mail lệch 7 tiếng | `CRON_TIMEZONE` bị ghi đè sai | Bỏ biến đó đi để dùng mặc định `Asia/Ho_Chi_Minh` |
 | Nhận được thư nhưng bấm link không mở được | `FRONTEND_URL` còn là localhost | Đặt `FRONTEND_URL=https://cvoneclickmatch.com` rồi Restart |
-| Brevo báo *"Branded record values ... mismatch"* | Bản ghi CNAME đang bật proxy Cloudflare | Gạt bản ghi đó về **DNS only** (đám mây xám), đợi 1–2 phút rồi Refresh trang Domains |
+| Brevo báo *"Branded record ... mismatch"* hoặc *"Redirection Record ... mismatch"* | Bản ghi CNAME đang bật proxy Cloudflare | Gạt **cả ba** bản ghi `noreply`, `img.noreply`, `r.noreply` về **DNS only**, đợi 1–2 phút rồi Refresh trang Domains |
 
 ---
 
