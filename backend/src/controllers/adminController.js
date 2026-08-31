@@ -407,6 +407,104 @@ const checkEmailConnection = async (req, res) => {
   }
 };
 
+/**
+ * Mẫu nội dung email — admin sửa lời văn mà không cần deploy lại.
+ *
+ * Chỉ phần chữ nằm trong database; bố cục HTML vẫn ở trong code
+ * (src/services/emailTemplates.js) để admin không làm vỡ giao diện thư.
+ */
+const getEmailTemplates = async (req, res) => {
+  try {
+    const tpl = require('../services/emailTemplates');
+    const rec = await SystemSetting.findOne({ key: 'email_templates' });
+
+    res.json({
+      data: {
+        templates: tpl.mergeTemplates(rec?.value),
+        defaults: tpl.DEFAULTS,
+        variables: tpl.VARIABLES,
+        fieldLabels: tpl.FIELD_LABELS,
+        templateLabels: tpl.TEMPLATE_LABELS,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const updateEmailTemplates = async (req, res) => {
+  try {
+    const tpl = require('../services/emailTemplates');
+    const incoming = req.body?.templates;
+    if (!incoming || typeof incoming !== 'object') {
+      return res.status(400).json({ message: 'Thiếu dữ liệu mẫu email.' });
+    }
+
+    // Chỉ nhận đúng các nhóm/trường đã biết, bỏ qua mọi thứ lạ gửi kèm
+    const clean = {};
+    for (const group of Object.keys(tpl.DEFAULTS)) {
+      const from = incoming[group];
+      if (!from || typeof from !== 'object') continue;
+      const picked = {};
+      for (const field of Object.keys(tpl.DEFAULTS[group])) {
+        if (typeof from[field] === 'string') picked[field] = from[field].trim();
+      }
+      if (Object.keys(picked).length) clean[group] = picked;
+    }
+
+    await SystemSetting.findOneAndUpdate(
+      { key: 'email_templates' },
+      { $set: { key: 'email_templates', value: clean } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+
+    // Bỏ cache để lần gửi kế tiếp dùng ngay nội dung mới
+    require('../services/emailService').invalidateTemplateCache();
+
+    await logAdminAction({
+      req,
+      action: 'UPDATE_SYSTEM_SETTINGS',
+      targetModel: 'SystemSetting',
+      targetId: null,
+      details: { setting: 'email_templates', groups: Object.keys(clean) },
+    });
+
+    res.json({
+      message: 'Đã lưu nội dung email. Các thư gửi sau sẽ dùng nội dung mới.',
+      data: { templates: tpl.mergeTemplates(clean) },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/** Dựng bản xem trước bằng dữ liệu mẫu — không gửi thư, không đụng database. */
+const previewEmailTemplate = async (req, res) => {
+  try {
+    const tpl = require('../services/emailTemplates');
+    const { frontendOrigin } = require('../utils/frontendUrl');
+    const key = req.params.key;
+
+    if (!Object.keys(tpl.TEMPLATE_LABELS).includes(key)) {
+      return res.status(400).json({ message: `Không có mẫu email tên "${key}".` });
+    }
+
+    // Ưu tiên nội dung admin đang gõ dở (gửi kèm body), nếu không thì lấy bản đã lưu
+    let merged;
+    if (req.body?.templates && typeof req.body.templates === 'object') {
+      merged = tpl.mergeTemplates(req.body.templates);
+    } else {
+      const rec = await SystemSetting.findOne({ key: 'email_templates' });
+      merged = tpl.mergeTemplates(rec?.value);
+    }
+
+    const { subject, html } = tpl.renderPreview(key, merged, frontendOrigin());
+    res.json({ data: { subject, html } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const triggerMatchingJob = async (req, res) => {
   try {
     // 1. Nhánh gửi email thử nghiệm (Mock data)
@@ -789,6 +887,9 @@ const getBroadcasts = async (req, res) => {
 };
 
 module.exports = {
+  getEmailTemplates,
+  updateEmailTemplates,
+  previewEmailTemplate,
   checkEmailConnection,
   getStats,
   getUsers,

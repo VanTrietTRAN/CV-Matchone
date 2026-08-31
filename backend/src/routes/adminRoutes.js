@@ -11,6 +11,9 @@ const {
   deleteJob,
   getSystemInfo,
   checkEmailConnection,
+  getEmailTemplates,
+  updateEmailTemplates,
+  previewEmailTemplate,
   triggerMatchingJob,
   getEmailSettings,
   updateEmailSettings,
@@ -54,6 +57,9 @@ router.delete('/jobs/:id', deleteJob);
 
 router.get('/system', getSystemInfo);
 router.get('/system/email-check', checkEmailConnection);
+router.get('/system/email-templates', getEmailTemplates);
+router.put('/system/email-templates', updateEmailTemplates);
+router.post('/system/email-templates/:key/preview', previewEmailTemplate);
 router.get('/system/email-settings', getEmailSettings);
 router.put('/system/email-settings', updateEmailSettings);
 router.post('/trigger-matching', triggerMatchingJob);
