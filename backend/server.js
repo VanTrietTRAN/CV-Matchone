@@ -106,6 +106,13 @@ app.get("/health", async (req, res) => {
   // trong MongoDB — cần nhìn thấy được để không tưởng là đang dùng R2.
   const { getStorageConfig } = require("./src/services/storageService");
 
+  // Cấu hình gửi mail. ?email=1 bắt tay thật với SMTP (mất ~1-2 giây) nên không
+  // chạy ở healthcheck mặc định mà Railway ping liên tục.
+  const emailService = require("./src/services/emailService");
+  const email = req.query.email
+    ? { ...emailService.getEmailConfig(), ...(await emailService.verifyEmailConnection()) }
+    : emailService.getEmailConfig();
+
   res.status(isHealthy ? 200 : 503).json({
     status: isHealthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
@@ -113,6 +120,7 @@ app.get("/health", async (req, res) => {
     database: dbStatus,
     ai,
     storage: getStorageConfig(),
+    email,
     memory: {
       heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       heapTotalMB: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),

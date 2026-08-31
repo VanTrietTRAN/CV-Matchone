@@ -365,6 +365,11 @@ const getSystemInfo = async (req, res) => {
           aiServiceUrl,
           cronSchedule: cronScheduleText,
         },
+        // Cấu hình SMTP đã che khoá. Trước đây trang quản trị không hiển thị gì
+        // về email, nên sai cấu hình chỉ lộ ra khi người dùng thắc mắc sao
+        // không nhận được thư.
+        email: require('../services/emailService').getEmailConfig(),
+        storage: require('../services/storageService').getStorageConfig(),
         notifications: {
           total: totalNotifications,
           softDeleted: softDeletedNotifications,
@@ -373,6 +378,29 @@ const getSystemInfo = async (req, res) => {
           withEmbedding: totalCvWithEmbedding,
         },
       },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * Bắt tay thật với máy chủ SMTP và báo lại kết quả.
+ *
+ * Khác với "Gửi email test": việc này không tốn quota gửi của Brevo, nên dùng
+ * để dò cấu hình bao nhiêu lần cũng được.
+ */
+const checkEmailConnection = async (req, res) => {
+  try {
+    const emailService = require('../services/emailService');
+    const result = await emailService.verifyEmailConnection();
+    const config = emailService.getEmailConfig();
+
+    return res.status(result.ok ? 200 : 502).json({
+      message: result.ok
+        ? `Kết nối SMTP thành công (${config.host}:${config.port}).`
+        : `Kết nối SMTP thất bại: ${result.error}`,
+      data: { ...config, ok: result.ok },
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -407,16 +435,28 @@ const triggerMatchingJob = async (req, res) => {
         return res.status(400).json({ message: 'Không xác định được email của tài khoản admin hiện tại.' });
       }
 
-      await emailService.sendJobMatchEmail(
+      // Bản cũ báo "thành công" bất kể kết quả, vì sendJobMatchEmail nuốt mọi lỗi.
+      // Nút kiểm tra mà luôn báo xanh thì không kiểm tra được gì — nhất là lúc
+      // đang dò cấu hình SMTP.
+      const result = await emailService.sendJobMatchEmail(
         { email: receiverEmail, fullName: 'Người dùng Thử nghiệm (Admin)' },
         mockJobs
       );
 
+      if (!result?.sent) {
+        return res.status(502).json({
+          message: `Gửi email thử nghiệm THẤT BẠI: ${result?.error || 'lỗi không rõ'}`,
+          data: { receiver: receiverEmail, emailsSent: 0 },
+          email: emailService.getEmailConfig(),
+        });
+      }
+
       return res.json({
-        message: 'Gửi email thử nghiệm thành công!',
+        message: `Đã gửi email thử nghiệm tới ${receiverEmail}. Kiểm tra cả hộp thư rác nếu không thấy.`,
         data: {
           receiver: receiverEmail,
           emailsSent: 1,
+          messageId: result.messageId,
         },
       });
     }
@@ -749,6 +789,7 @@ const getBroadcasts = async (req, res) => {
 };
 
 module.exports = {
+  checkEmailConnection,
   getStats,
   getUsers,
   updateUserStatus,

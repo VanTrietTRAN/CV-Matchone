@@ -10,6 +10,7 @@ const {
   closeJob,
   deleteJob,
   getSystemInfo,
+  checkEmailConnection,
   triggerMatchingJob,
   getEmailSettings,
   updateEmailSettings,
@@ -52,6 +53,7 @@ router.patch('/jobs/:id/close', closeJob);
 router.delete('/jobs/:id', deleteJob);
 
 router.get('/system', getSystemInfo);
+router.get('/system/email-check', checkEmailConnection);
 router.get('/system/email-settings', getEmailSettings);
 router.put('/system/email-settings', updateEmailSettings);
 router.post('/trigger-matching', triggerMatchingJob);

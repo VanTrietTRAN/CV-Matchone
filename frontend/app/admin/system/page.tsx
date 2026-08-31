@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import AdminLayout from '@/layouts/AdminLayout'
 import { apiFetch } from '@/lib/api'
-import { Server, RefreshCw, CheckCircle, XCircle, Cpu, Database, Zap, Bell, Play, ExternalLink } from 'lucide-react'
+import { Server, RefreshCw, CheckCircle, XCircle, Cpu, Database, Zap, Bell, Play, ExternalLink, Mail, AlertTriangle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -37,6 +37,23 @@ type SystemInfo = {
   cvs: {
     withEmbedding: number
   }
+  email?: EmailConfig
+  storage?: {
+    driver: string
+    note: string
+  }
+}
+
+type EmailConfig = {
+  configured: boolean
+  host: string
+  port: number
+  user: string
+  keyPrefix: string
+  sender: string
+  problems: string[]
+  warnings: string[]
+  ok?: boolean
 }
 
 function InfoRow({ label, value, badge }: { label: string; value: string | number; badge?: React.ReactNode }) {
@@ -73,6 +90,26 @@ export default function AdminSystemPage() {
   const [scheduleType, setScheduleType] = useState('daily')
   const [cronExpression, setCronExpression] = useState('0 7,17 * * *')
   const [savingSettings, setSavingSettings] = useState(false)
+
+  // Kiểm tra kết nối SMTP — không tốn quota gửi của Brevo nên dò bao nhiêu lần cũng được
+  const [checkingSmtp, setCheckingSmtp] = useState(false)
+  const [smtpResult, setSmtpResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const handleCheckSmtp = async () => {
+    setCheckingSmtp(true)
+    setSmtpResult(null)
+    try {
+      const res = await apiFetch<{ message: string; data: EmailConfig }>('/api/admin/system/email-check')
+      setSmtpResult({ ok: true, message: res.message })
+      toast.success(res.message)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Kiểm tra SMTP thất bại.'
+      setSmtpResult({ ok: false, message })
+      toast.error(message)
+    } finally {
+      setCheckingSmtp(false)
+    }
+  }
 
   const loadSettings = useCallback(async () => {
     try {
@@ -133,7 +170,7 @@ export default function AdminSystemPage() {
         method: 'POST',
       })
       if (isTest) {
-        toast.success(`Đã gửi email test thành công đến: ${res.data.receiver}!`)
+        toast.success(res.message)
       } else {
         toast.success(
           `Thành công: Đã quét ${res.data.candidatesProcessed} ứng viên và khớp ${res.data.openJobsCount} tin tuyển dụng!`
@@ -235,6 +272,73 @@ export default function AdminSystemPage() {
                 </div>
               </div>
               <InfoRow label="CV có AI Embedding" value={info.cvs.withEmbedding} />
+
+              {/* Cấu hình SMTP — trước đây không hiển thị ở đâu cả, nên sai cấu hình
+                  chỉ lộ ra khi người dùng thắc mắc sao không nhận được thư. */}
+              {info.email && (
+                <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Máy chủ gửi mail (SMTP)
+                    </h3>
+                    {info.email.configured ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/15 px-2 py-0.5 text-xs font-medium text-brand-400">
+                        <CheckCircle className="size-3" />
+                        Đã cấu hình
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-400">
+                        <XCircle className="size-3" />
+                        Chưa cấu hình
+                      </span>
+                    )}
+                  </div>
+
+                  <InfoRow label="Máy chủ" value={`${info.email.host}:${info.email.port}`} />
+                  <InfoRow label="SMTP login" value={info.email.user || '(chưa đặt)'} />
+                  <InfoRow label="SMTP key" value={info.email.keyPrefix || '(chưa đặt)'} />
+                  <InfoRow label="Địa chỉ gửi" value={info.email.sender} />
+
+                  {info.email.problems.map((p) => (
+                    <p key={p} className="flex items-start gap-2 rounded-md bg-red-500/10 p-2.5 text-xs leading-relaxed text-red-300">
+                      <XCircle className="mt-0.5 size-3.5 shrink-0" />
+                      {p}
+                    </p>
+                  ))}
+                  {info.email.warnings.map((w) => (
+                    <p key={w} className="flex items-start gap-2 rounded-md bg-amber-500/10 p-2.5 text-xs leading-relaxed text-amber-300">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                      {w}
+                    </p>
+                  ))}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                      onClick={handleCheckSmtp}
+                      disabled={checkingSmtp}
+                    >
+                      {checkingSmtp ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                      Kiểm tra kết nối SMTP
+                    </Button>
+                    <span className="text-xs text-slate-500">Không tốn quota gửi của Brevo.</span>
+                  </div>
+
+                  {smtpResult && (
+                    <p
+                      className={cn(
+                        'rounded-md p-2.5 text-xs leading-relaxed',
+                        smtpResult.ok ? 'bg-brand-500/10 text-brand-300' : 'bg-red-500/10 text-red-300',
+                      )}
+                    >
+                      {smtpResult.message}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* 🛠️ CẤU HÌNH GỬI EMAIL matching */}
               <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
