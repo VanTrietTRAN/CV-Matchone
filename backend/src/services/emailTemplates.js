@@ -45,14 +45,32 @@ const DEFAULTS = {
     footerLinkLabel: 'Thông báo việc làm',
   },
   passwordReset: {
-    subject: '[{{brand}}] Yêu cầu đặt lại mật khẩu',
-    heading: '🔑 Yêu cầu đặt lại mật khẩu',
+    subject: '[{{brand}}] Mã đặt lại mật khẩu: {{code}}',
+    heading: '🔑 Đặt lại mật khẩu',
     intro:
-      'Xin chào {{name}}, chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại {{brand}}.',
-    buttonLabel: 'Đặt lại mật khẩu ngay',
+      'Xin chào {{name}}, chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại {{brand}}. Nhập mã bên dưới để đặt mật khẩu mới.',
     note:
-      '⚠️ Đường dẫn này có hiệu lực trong vòng 60 phút. Nếu bạn không đưa ra yêu cầu này, hãy bỏ qua email — mật khẩu của bạn vẫn an toàn.',
+      '⚠️ Mã có hiệu lực trong {{minutes}} phút. Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này — mật khẩu của bạn vẫn an toàn.',
     footer: '© {{brand}} · Hỗ trợ bảo mật tài khoản tự động',
+  },
+  verifyEmail: {
+    subject: '[{{brand}}] Mã xác thực tài khoản: {{code}}',
+    heading: '👋 Chào mừng bạn đến với {{brand}}',
+    intro:
+      'Cảm ơn bạn đã đăng ký. Nhập mã bên dưới để xác thực địa chỉ email và bắt đầu sử dụng tài khoản.',
+    note:
+      '⚠️ Mã có hiệu lực trong {{minutes}} phút. Nếu bạn không đăng ký tài khoản tại {{brand}}, hãy bỏ qua email này.',
+    footer: '© {{brand}} · Email tự động, vui lòng không trả lời',
+  },
+  employerDigest: {
+    subject: '[{{brand}}] {{count}} ứng viên phù hợp vừa ứng tuyển',
+    greeting: 'Chào {{name}},',
+    intro:
+      'Trong hôm nay có {{count}} ứng viên đạt độ phù hợp từ {{threshold}}% trở lên vừa ứng tuyển vào tin tuyển dụng của bạn.',
+    listLead: 'Danh sách hồ sơ đáng chú ý:',
+    footer:
+      'Bạn nhận email này vì đang có tin tuyển dụng đăng trên {{brand}}. Xem toàn bộ hồ sơ tại Quản lý ứng viên.',
+    footerLinkLabel: 'Quản lý ứng viên',
   },
 };
 
@@ -60,7 +78,9 @@ const DEFAULTS = {
 const VARIABLES = {
   jobMatch: ['brand', 'name', 'count'],
   jobAlert: ['brand', 'name', 'count', 'keyword', 'location'],
-  passwordReset: ['brand', 'name'],
+  passwordReset: ['brand', 'name', 'code', 'minutes'],
+  verifyEmail: ['brand', 'name', 'code', 'minutes'],
+  employerDigest: ['brand', 'name', 'count', 'threshold'],
 };
 
 /** Nhãn tiếng Việt cho từng trường, dùng cho giao diện Quản trị. */
@@ -77,9 +97,11 @@ const FIELD_LABELS = {
 };
 
 const TEMPLATE_LABELS = {
-  jobMatch: 'Gợi ý việc làm theo AI',
-  jobAlert: 'Thông báo việc làm theo từ khoá',
+  verifyEmail: 'Xác thực email khi đăng ký',
   passwordReset: 'Đặt lại mật khẩu',
+  jobMatch: 'Gợi ý việc làm cho ứng viên (12h)',
+  jobAlert: 'Thông báo việc làm theo từ khoá',
+  employerDigest: 'Hồ sơ phù hợp cho doanh nghiệp (15h)',
 };
 
 const escapeHtml = (value) =>
@@ -172,7 +194,9 @@ const renderJobMatch = ({ tpl, user, jobs, frontendUrl }) => {
         location: job.location,
         scoreLabel: 'Độ phù hợp (AI)',
         score: job.previewScore,
-        ctaUrl: `${frontendUrl}/candidate/matches`,
+        // Trỏ thẳng vào bài đăng, không phải trang danh sách — người nhận bấm là
+        // tới đúng tin đó, không phải tự đi tìm lại.
+        ctaUrl: job.id ? `${frontendUrl}/candidate/jobs/${job.id}` : `${frontendUrl}/candidate/matches`,
       }),
     )
     .join('');
@@ -252,10 +276,20 @@ const renderJobAlert = ({ tpl, target, alert, jobs, frontendUrl }) => {
   };
 };
 
-/** Email đặt lại mật khẩu. */
-const renderPasswordReset = ({ tpl, fullName, to, resetUrl }) => {
+/** Khối hiển thị mã 6 số — to, rõ, dễ chọn để copy. */
+const codeBlock = (code, accent) => `
+  <div style="text-align:center;margin:28px 0;">
+    <div style="display:inline-block;background:#f1f5f9;border:1px dashed ${accent};border-radius:10px;padding:16px 28px;">
+      <span style="font-family:'Courier New',Courier,monospace;font-size:34px;font-weight:bold;letter-spacing:10px;color:${accent};">${escapeHtml(
+        code,
+      )}</span>
+    </div>
+  </div>`;
+
+/** Email đặt lại mật khẩu — gửi mã 6 số thay cho đường dẫn. */
+const renderPasswordReset = ({ tpl, fullName, to, code, minutes }) => {
   const t = tpl.passwordReset;
-  const vars = { brand: tpl.brand.name, name: fullName || to };
+  const vars = { brand: tpl.brand.name, name: fullName || to, code, minutes };
 
   return {
     subject: fillPlain(t.subject, vars),
@@ -265,13 +299,102 @@ const renderPasswordReset = ({ tpl, fullName, to, resetUrl }) => {
       bodyHtml: `
         <h2 style="margin-top:0;color:#1e1b4b;font-size:18px;">${fill(t.heading, vars)}</h2>
         <p style="color:#334155;font-size:14px;line-height:1.6;">${fill(t.intro, vars)}</p>
-        <div style="text-align:center;margin:25px 0;">
-          <a href="${resetUrl}" style="background:${RESET_ACCENT};color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;font-size:14px;display:inline-block;">
-            ${fill(t.buttonLabel, vars)}
-          </a>
-        </div>
+        ${codeBlock(code, RESET_ACCENT)}
         ${t.note ? highlight(`<em>${fill(t.note, vars)}</em>`, RESET_ACCENT) : ''}`,
       footerHtml: fill(t.footer, vars),
+    }),
+  };
+};
+
+/** Email xác thực địa chỉ email khi đăng ký lần đầu. */
+const renderVerifyEmail = ({ tpl, fullName, to, code, minutes }) => {
+  const t = tpl.verifyEmail;
+  const vars = { brand: tpl.brand.name, name: fullName || to, code, minutes };
+
+  return {
+    subject: fillPlain(t.subject, vars),
+    html: layout({
+      brand: tpl.brand,
+      bodyHtml: `
+        <h2 style="margin-top:0;font-size:18px;">${fill(t.heading, vars)}</h2>
+        <p style="color:#334155;font-size:14px;line-height:1.6;">${fill(t.intro, vars)}</p>
+        ${codeBlock(code, BRAND_ACCENT)}
+        ${t.note ? highlight(`<em>${fill(t.note, vars)}</em>`) : ''}`,
+      footerHtml: fill(t.footer, vars),
+    }),
+  };
+};
+
+/** Thẻ một ứng viên trong email tổng hợp gửi doanh nghiệp. */
+const candidateCard = ({ fullName, headline, jobTitle, score, skills, appliedAt, ctaUrl }) => `
+  <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:16px;background:#f8fafc;">
+    <div style="display:block;">
+      <h3 style="margin:0 0 4px;color:#1e40af;font-size:17px;">${escapeHtml(fullName || 'Ứng viên')}</h3>
+      ${headline ? `<p style="margin:0 0 8px;color:#64748b;font-size:14px;">${escapeHtml(headline)}</p>` : ''}
+    </div>
+    <p style="margin:4px 0;color:#475569;font-size:14px;"><strong>Ứng tuyển vào:</strong> ${escapeHtml(jobTitle)}</p>
+    ${appliedAt ? `<p style="margin:4px 0;color:#475569;font-size:14px;"><strong>Thời gian:</strong> ${escapeHtml(appliedAt)}</p>` : ''}
+    ${
+      skills && skills.length
+        ? `<div style="margin:8px 0;">${skills
+            .slice(0, 6)
+            .map(
+              (k) =>
+                `<span style="display:inline-block;background:#eff6ff;color:#1d4ed8;padding:2px 10px;border-radius:999px;font-size:12px;margin:2px 4px 2px 0;">${escapeHtml(
+                  k,
+                )}</span>`,
+            )
+            .join('')}</div>`
+        : ''
+    }
+    <p style="margin:8px 0 0;">
+      <span style="display:inline-block;background:#dcfce7;color:#166534;padding:4px 12px;border-radius:999px;font-weight:bold;font-size:14px;">
+        Độ phù hợp (AI): ${escapeHtml(score)}%
+      </span>
+    </p>
+    <div style="margin-top:16px;">
+      <a href="${ctaUrl}" style="background:#2563eb;color:#fff;padding:8px 16px;text-decoration:none;border-radius:6px;font-weight:500;">Xem hồ sơ ứng viên</a>
+    </div>
+  </div>`;
+
+/** Email tổng hợp gửi doanh nghiệp: các hồ sơ có điểm khớp cao trong ngày. */
+const renderEmployerDigest = ({ tpl, employer, applicants, threshold, frontendUrl }) => {
+  const t = tpl.employerDigest;
+  const vars = {
+    brand: tpl.brand.name,
+    name: employer.companyName || employer.email,
+    count: applicants.length,
+    threshold,
+  };
+
+  const listHtml = applicants
+    .map((a) =>
+      candidateCard({
+        fullName: a.fullName,
+        headline: a.headline,
+        jobTitle: a.jobTitle,
+        score: a.score,
+        skills: a.skills,
+        appliedAt: a.appliedAt,
+        ctaUrl: `${frontendUrl}/employer/candidates`,
+      }),
+    )
+    .join('');
+
+  const footerLink = `<a href="${frontendUrl}/employer/candidates" style="color:#2563eb;">${escapeHtml(
+    fillPlain(t.footerLinkLabel, vars),
+  )}</a>`;
+
+  return {
+    subject: fillPlain(t.subject, vars),
+    html: layout({
+      brand: tpl.brand,
+      bodyHtml: `
+        <h2 style="margin-top:0;">${fill(t.greeting, vars)}</h2>
+        <p>${fill(t.intro, vars)}</p>
+        <p>${fill(t.listLead, vars)}</p>
+        <div style="margin-top:24px;">${listHtml}</div>`,
+      footerHtml: `${fill(t.footer, vars)}<br/>${footerLink}`,
     }),
   };
 };
@@ -302,7 +425,26 @@ const SAMPLE = {
     },
   ],
   alert: { keyword: 'backend', location: 'Đà Nẵng' },
-  resetUrl: 'https://example.com/reset-password?token=mau-thu-nghiem',
+  code: '482913',
+  employer: { companyName: 'Công ty TNHH Mẫu', email: 'tuyendung@example.com' },
+  applicants: [
+    {
+      fullName: 'Trần Thị B',
+      headline: 'Lập trình viên Backend · 3 năm kinh nghiệm',
+      jobTitle: 'Lập trình viên Backend (Node.js)',
+      score: 91,
+      skills: ['Node.js', 'MongoDB', 'Docker'],
+      appliedAt: '31/08/2026 09:15',
+    },
+    {
+      fullName: 'Lê Văn C',
+      headline: 'Kỹ sư dữ liệu',
+      jobTitle: 'Kỹ sư Dữ liệu',
+      score: 76,
+      skills: ['Python', 'SQL'],
+      appliedAt: '31/08/2026 11:40',
+    },
+  ],
 };
 
 /** Dựng bản xem trước cho một mẫu bất kỳ. */
@@ -324,7 +466,26 @@ const renderPreview = (key, tpl, frontendUrl) => {
       tpl,
       fullName: SAMPLE.user.fullName,
       to: SAMPLE.user.email,
-      resetUrl: SAMPLE.resetUrl,
+      code: SAMPLE.code,
+      minutes: 10,
+    });
+  }
+  if (key === 'verifyEmail') {
+    return renderVerifyEmail({
+      tpl,
+      fullName: SAMPLE.user.fullName,
+      to: SAMPLE.user.email,
+      code: SAMPLE.code,
+      minutes: 10,
+    });
+  }
+  if (key === 'employerDigest') {
+    return renderEmployerDigest({
+      tpl,
+      employer: SAMPLE.employer,
+      applicants: SAMPLE.applicants,
+      threshold: 70,
+      frontendUrl,
     });
   }
   throw new Error(`Không có mẫu email tên "${key}"`);
@@ -339,6 +500,8 @@ module.exports = {
   renderJobMatch,
   renderJobAlert,
   renderPasswordReset,
+  renderVerifyEmail,
+  renderEmployerDigest,
   renderPreview,
   escapeHtml,
 };

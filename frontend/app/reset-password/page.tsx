@@ -5,16 +5,20 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PublicLayout from '@/layouts/PublicLayout'
 import PasswordInput from '@/components/auth/PasswordInput'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
-import { Lock, ArrowLeft, CheckCircle2, ShieldAlert, Loader2 } from 'lucide-react'
+import { Lock, ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react'
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const token = searchParams.get('token')
 
+  // Đặt lại mật khẩu nay dùng mã 6 số gửi qua email thay cho đường dẫn có token.
+  // Email điền sẵn từ trang "Quên mật khẩu" để người dùng đỡ gõ lại.
+  const [email, setEmail] = useState(searchParams.get('email') || '')
+  const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -22,8 +26,12 @@ function ResetPasswordForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!token) {
-      toast.error('Mã xác thực không tồn tại hoặc đã bị lỗi!')
+    if (!email) {
+      toast.error('Vui lòng nhập địa chỉ email!')
+      return
+    }
+    if (code.length !== 6) {
+      toast.error('Mã xác thực gồm 6 chữ số!')
       return
     }
     if (password.length < 6) {
@@ -39,7 +47,7 @@ function ResetPasswordForm() {
     try {
       const res = await apiFetch<{ message: string }>('/api/auth/reset-password', {
         method: 'POST',
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ email, code, password }),
       })
       toast.success(res.message || 'Đặt lại mật khẩu thành công!')
       setSuccess(true)
@@ -49,23 +57,6 @@ function ResetPasswordForm() {
     } finally {
       setLoading(false)
     }
-  }
-
-  if (!token) {
-    return (
-      <div className="text-center">
-        <span className="mx-auto grid size-14 place-items-center rounded-full bg-danger-surface text-danger-foreground">
-          <ShieldAlert className="size-7" />
-        </span>
-        <h1 className="mt-5 text-xl font-bold">Đường dẫn không hợp lệ</h1>
-        <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
-          Liên kết đặt lại mật khẩu đã hết hạn hoặc thiếu mã xác thực. Hãy gửi lại yêu cầu mới.
-        </p>
-        <Button asChild className="mt-6 w-full" size="lg">
-          <Link href="/forgot-password">Gửi lại yêu cầu</Link>
-        </Button>
-      </div>
-    )
   }
 
   if (success) {
@@ -97,6 +88,41 @@ function ResetPasswordForm() {
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div>
+          <label htmlFor="reset-email" className="mb-1.5 block text-sm font-semibold">
+            Email <span className="text-danger">*</span>
+          </label>
+          <Input
+            id="reset-email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="ban@example.com"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="reset-code" className="mb-1.5 block text-sm font-semibold">
+            Mã xác thực <span className="text-danger">*</span>
+          </label>
+          <Input
+            id="reset-code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="000000"
+            className="text-center font-mono text-2xl tracking-[0.5em]"
+            required
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Mã gồm 6 chữ số vừa gửi tới email của bạn, có hiệu lực trong 10 phút.
+          </p>
+        </div>
+
         <div>
           <label htmlFor="password" className="mb-1.5 block text-sm font-semibold">
             Mật khẩu mới <span className="text-danger">*</span>

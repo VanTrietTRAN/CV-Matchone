@@ -53,8 +53,19 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Đặt lại mật khẩu bằng mã 6 số (lưu bản băm, xem src/utils/otp.js)
     resetPasswordToken: { type: String },
     resetPasswordExpire: { type: Date },
+    resetPasswordAttempts: { type: Number, default: 0 },
+
+    // Xác thực email khi đăng ký lần đầu.
+    // KHÔNG đặt default: tài khoản tạo trước tính năng này không có trường
+    // emailVerified nên là undefined — chỗ kiểm tra chỉ chặn khi === false, tức
+    // người dùng cũ vẫn đăng nhập bình thường.
+    emailVerified: { type: Boolean },
+    verificationCode: { type: String },
+    verificationCodeExpire: { type: Date },
+    verificationAttempts: { type: Number, default: 0 },
   },
   {
     timestamps: true,

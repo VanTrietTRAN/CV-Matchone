@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { setAuth } from '@/lib/auth-storage'
-import { apiFetch, type AuthResponse } from '@/lib/api'
+import { apiFetch, ApiError, type AuthResponse } from '@/lib/api'
 import { HOME_BY_ROLE } from '@/hooks/use-role-guard'
 
 function LoginContent() {
@@ -80,6 +80,14 @@ function LoginContent() {
       router.push(HOME_BY_ROLE[data.role])
     } catch (err) {
       setLoading(false)
+      // Tài khoản đăng ký xong nhưng chưa nhập mã: đưa thẳng sang trang xác thực
+      // thay vì để người dùng đọc thông báo lỗi rồi tự đi tìm.
+      const body = err instanceof ApiError ? (err.body as { needsVerification?: boolean } | null) : null
+      if (body?.needsVerification) {
+        toast.info('Tài khoản chưa xác thực email. Vui lòng nhập mã đã gửi tới hộp thư của bạn.')
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`)
+        return
+      }
       toast.error(err instanceof Error ? err.message : 'Đăng nhập thất bại')
     }
   }

@@ -215,7 +215,7 @@ export default function EmployerSignupPage() {
 
     setLoading(true)
     try {
-      const data = await apiFetch<AuthResponse>('/api/auth/register', {
+      const res = await apiFetch<{ message: string; data: { email: string; emailSent: boolean } }>('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email: formData.email,
@@ -235,9 +235,13 @@ export default function EmployerSignupPage() {
         skipAuth: true,
       })
 
-      setAuth({ id: data._id, email: data.email, role: data.role })
-      toast.success('Đăng ký tài khoản nhà tuyển dụng thành công!')
-      router.push('/employer/dashboard')
+      // Xem chú thích ở trang đăng ký ứng viên: cần xác thực email trước khi dùng
+      if (res.data?.emailSent === false) {
+        toast.warning('Đã tạo tài khoản nhưng chưa gửi được email. Hãy bấm "Gửi lại mã" ở bước sau.')
+      } else {
+        toast.success('Đã tạo tài khoản. Kiểm tra email để lấy mã xác thực.')
+      }
+      router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Đăng ký thất bại')
       generateCaptcha()

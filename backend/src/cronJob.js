@@ -11,6 +11,11 @@ const aiService = require("./services/aiService");
 const emailService = require("./services/emailService");
 const { matchJobToAlert, isAlertDue } = require("./utils/alertMatching");
 
+// Múi giờ phải khai báo tường minh. Không có option này, node-cron dùng giờ hệ
+// thống của container — Railway chạy UTC, nên "0 12 * * *" mà ta hiểu là 12h trưa
+// sẽ thực sự chạy lúc 19h giờ Việt Nam. Lệch 7 tiếng, không có dấu hiệu nào trong log.
+const CRON_TIMEZONE = process.env.CRON_TIMEZONE || 'Asia/Ho_Chi_Minh';
+
 // Floor AI score for jobs that already passed hard alert filters
 const ALERT_BASE_SCORE = 60;
 
@@ -193,6 +198,85 @@ const runCvMatching = async (candidate, cv, openJobs) => {
   }
 };
 
+// ─── Tổng hợp hồ sơ phù hợp gửi doanh nghiệp (15h hằng ngày) ─────────────────
+//
+// Khác với thông báo trong ứng dụng (tạo ngay lúc ứng viên nộp), email này gom
+// toàn bộ hồ sơ điểm cao trong ngày thành MỘT thư cho mỗi doanh nghiệp. Doanh
+// nghiệp đăng nhiều tin sẽ nhận một thư duy nhất thay vì hàng chục thư rời.
+const DEFAULT_EMPLOYER_THRESHOLD = 70;
+
+const runEmployerDigest = async () => {
+  const startedAt = new Date();
+  console.log("[Cron/Employer] Bắt đầu tổng hợp hồ sơ phù hợp lúc:", startedAt.toLocaleString());
+
+  const settings = await SystemSetting.findOne({ key: "employer_digest_settings" });
+  const threshold = Number(settings?.value?.minMatchScore) || DEFAULT_EMPLOYER_THRESHOLD;
+  const hours = Number(settings?.value?.lookbackHours) || 24;
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+  const applications = await Application.find({
+    appliedAt: { $gte: since },
+    matchingScore: { $gte: threshold },
+  })
+    .populate("jobId", "title employerId status")
+    .populate("cvProfileId", "fullName headline skills")
+    .sort({ matchingScore: -1 });
+
+  if (!applications.length) {
+    console.log(`[Cron/Employer] Không có hồ sơ nào đạt ${threshold}% trong ${hours} giờ qua.`);
+    return { employersNotified: 0, applicationsConsidered: 0, threshold };
+  }
+
+  // Gom theo doanh nghiệp
+  const byEmployer = new Map();
+  for (const app of applications) {
+    const job = app.jobId;
+    if (!job || !job.employerId) continue;
+
+    const employerId = String(job.employerId);
+    if (!byEmployer.has(employerId)) byEmployer.set(employerId, []);
+    byEmployer.get(employerId).push({
+      fullName: app.cvProfileId?.fullName || "Ứng viên",
+      headline: app.cvProfileId?.headline || "",
+      skills: app.cvProfileId?.skills || [],
+      jobTitle: job.title,
+      score: app.matchingScore,
+      appliedAt: new Date(app.appliedAt).toLocaleString("vi-VN", {
+        timeZone: CRON_TIMEZONE,
+      }),
+    });
+  }
+
+  let sentCount = 0;
+  for (const [employerId, applicants] of byEmployer) {
+    const employer = await User.findById(employerId).select("email status isDeleted isEmailSubscribed");
+    // Tôn trọng đúng các điều kiện như email ứng viên: còn hoạt động, chưa xoá,
+    // và chưa tắt nhận email
+    if (!employer || employer.status !== "active" || employer.isDeleted) continue;
+    if (employer.isEmailSubscribed === false) continue;
+
+    const profile = await CompanyProfile.findOne({ userId: employerId }).select("companyName");
+
+    const result = await emailService.sendEmployerDigestEmail({
+      employer: { email: employer.email, companyName: profile?.companyName || "" },
+      applicants,
+      threshold,
+    });
+    if (result?.sent) sentCount += 1;
+  }
+
+  console.log(
+    `[Cron/Employer] Xong: ${sentCount}/${byEmployer.size} doanh nghiệp nhận thư, ` +
+      `${applications.length} hồ sơ đạt ngưỡng ${threshold}%.`
+  );
+  return {
+    employersNotified: sentCount,
+    employersMatched: byEmployer.size,
+    applicationsConsidered: applications.length,
+    threshold,
+  };
+};
+
 const runMatchingProcess = async () => {
   console.log(
     "[Cron/Trigger] Đang chạy tác vụ quét việc làm matching lúc:",
@@ -248,6 +332,7 @@ const runMatchingProcess = async () => {
 };
 
 let activeCronTask = null;
+let employerCronTask = null;
 
 const startCronJobs = async () => {
   try {
@@ -258,7 +343,7 @@ const startCronJobs = async () => {
         value: {
           isEnabled: true,
           scheduleType: 'daily',
-          cronExpression: '0 7,17 * * *',
+          cronExpression: '0 12 * * *',
         }
       });
     }
@@ -285,7 +370,6 @@ const startCronJobs = async () => {
     // 7h sáng sẽ thực sự chạy lúc 14h chiều giờ Việt Nam. Lỗi lệch 7 tiếng này
     // không có dấu hiệu nào trong log, chỉ phát hiện khi user hỏi sao nhận mail
     // vào giờ lạ.
-    const CRON_TIMEZONE = process.env.CRON_TIMEZONE || 'Asia/Ho_Chi_Minh';
 
     console.log(
       `[Cron] Đã khởi động tác vụ quét matching gửi email ` +
@@ -299,9 +383,41 @@ const startCronJobs = async () => {
         // already logged
       }
     }, { timezone: CRON_TIMEZONE });
+
+    // ─── Tổng hợp hồ sơ gửi doanh nghiệp ─────────────────────────────────────
+    // Lịch riêng, cố định 15h, không dùng chung cấu hình với email ứng viên vì
+    // hai bên phục vụ hai đối tượng và hai nhịp làm việc khác nhau.
+    if (employerCronTask) {
+      employerCronTask.stop();
+      employerCronTask = null;
+    }
+    const employerSettings = await SystemSetting.findOne({ key: 'employer_digest_settings' });
+    const employerEnabled = employerSettings?.value?.isEnabled !== false;
+    const employerCron = employerSettings?.value?.cronExpression || '0 15 * * *';
+
+    if (employerEnabled) {
+      console.log(
+        `[Cron] Đã khởi động tác vụ tổng hợp hồ sơ gửi doanh nghiệp ` +
+        `(Lịch trình: ${employerCron} — múi giờ ${CRON_TIMEZONE})`
+      );
+      employerCronTask = cron.schedule(employerCron, async () => {
+        try {
+          await runEmployerDigest();
+        } catch (err) {
+          console.error('[Cron/Employer] Lỗi:', err.message);
+        }
+      }, { timezone: CRON_TIMEZONE });
+    } else {
+      console.log('[Cron] Tác vụ tổng hợp hồ sơ gửi doanh nghiệp đang TẮT theo cấu hình.');
+    }
   } catch (error) {
     console.error('[Cron] Lỗi khi khởi động tác vụ email cron:', error.message);
   }
 };
 
-module.exports = { startCronJobs, runMatchingProcess, reloadCronJobs: startCronJobs };
+module.exports = {
+  startCronJobs,
+  runMatchingProcess,
+  runEmployerDigest,
+  reloadCronJobs: startCronJobs,
+};

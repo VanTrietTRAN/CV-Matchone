@@ -113,7 +113,36 @@ const register = async (req, res) => {
             });
         }
 
-        return sendTokenCookie(user, 201, res);
+        // Không đăng nhập ngay nữa: gửi mã 6 số và bắt xác thực email trước.
+        // Tài khoản tạo trước tính năng này không có trường emailVerified nên
+        // là undefined — chỗ kiểm tra ở login chỉ chặn khi === false.
+        user.emailVerified = false;
+        const otp = require('../utils/otp');
+        const { code, hash, expiresAt } = otp.issueCode();
+        user.verificationCode = hash;
+        user.verificationCodeExpire = expiresAt;
+        user.verificationAttempts = 0;
+        await user.save();
+
+        const emailService = require('../services/emailService');
+        const result = await emailService.sendVerificationEmail({
+            to: user.email,
+            fullName: user.email.split('@')[0],
+            code,
+            minutes: Math.round(otp.TTL_MS / 60000),
+        }).catch((e) => ({ sent: false, error: e.message }));
+
+        return res.status(201).json({
+            message: 'Đã tạo tài khoản. Vui lòng kiểm tra email để lấy mã xác thực.',
+            data: {
+                email: user.email,
+                role: user.role,
+                needsVerification: true,
+                // Báo thật khi gửi hỏng để người dùng biết đường bấm gửi lại,
+                // thay vì ngồi chờ một email không bao giờ tới.
+                emailSent: result?.sent !== false,
+            },
+        });
     } catch (error) {
         if (error.name === 'ValidationError') {
             const msgs = Object.values(error.errors || {}).map((e) => e.message);
@@ -147,6 +176,18 @@ const login = async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(401).json({ message: 'Email hoặc mật khẩu không chính xác' });
+        }
+
+        // 4. Chặn tài khoản chưa xác thực email.
+        // Chỉ chặn khi === false. Tài khoản tạo trước tính năng này không có
+        // trường emailVerified (undefined) nên vẫn đăng nhập bình thường —
+        // thêm tính năng không được phép khoá người dùng đang có.
+        if (user.emailVerified === false) {
+            return res.status(403).json({
+                message: 'Tài khoản chưa xác thực email. Vui lòng nhập mã đã gửi tới hộp thư của bạn.',
+                needsVerification: true,
+                email: user.email,
+            });
         }
 
         return sendTokenCookie(user, 200, res);
@@ -247,7 +288,11 @@ const googleCallback = async (req, res) => {
             user = await User.create({
                 email,
                 googleId,
-                role: 'candidate'
+                role: 'candidate',
+                // Google đã xác minh địa chỉ email trước khi trả về cho ta, nên
+                // không bắt nhập lại mã. Ghi rõ true thay vì để trống cho khỏi
+                // phải suy luận từ việc thiếu trường.
+                emailVerified: true
             });
         } else if (!user.googleId) {
             user.googleId = googleId;
@@ -364,7 +409,11 @@ const facebookCallback = async (req, res) => {
             user = await User.create({
                 email,
                 facebookId,
-                role: 'candidate'
+                role: 'candidate',
+                // Facebook đã xác minh địa chỉ email trước khi trả về cho ta, nên
+                // không bắt nhập lại mã. Ghi rõ true thay vì để trống cho khỏi
+                // phải suy luận từ việc thiếu trường.
+                emailVerified: true
             });
         } else if (!user.facebookId) {
             user.facebookId = facebookId;
@@ -404,6 +453,91 @@ const facebookCallback = async (req, res) => {
     }
 };
 
+// ─── Xác thực email bằng mã 6 số ──────────────────────────────────────────────
+const verifyEmail = async (req, res) => {
+  const { email, code } = req.body;
+  try {
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Vui lòng nhập email và mã xác thực.' });
+    }
+
+    const user = await User.findOne({
+      email: String(email).toLowerCase().trim(),
+      isDeleted: { $ne: true },
+    });
+    if (!user) {
+      return res.status(400).json({ message: 'Mã xác thực không hợp lệ hoặc đã hết hạn.' });
+    }
+    if (user.emailVerified !== false) {
+      return res.json({ message: 'Tài khoản đã được xác thực. Bạn có thể đăng nhập.', alreadyVerified: true });
+    }
+
+    const otp = require('../utils/otp');
+    const check = otp.verifyCode({
+      input: code,
+      hash: user.verificationCode,
+      expiresAt: user.verificationCodeExpire,
+      attempts: user.verificationAttempts || 0,
+    });
+
+    if (!check.ok) {
+      // Chỉ đếm lần nhập sai; hết hạn hay chưa có mã thì đếm cũng vô nghĩa
+      if (check.reason === 'wrong') {
+        user.verificationAttempts = (user.verificationAttempts || 0) + 1;
+        await user.save();
+      }
+      return res.status(400).json({ message: otp.reasonMessage(check.reason) });
+    }
+
+    user.emailVerified = true;
+    user.verificationCode = undefined;
+    user.verificationCodeExpire = undefined;
+    user.verificationAttempts = 0;
+    await user.save();
+
+    // Xác thực xong thì đăng nhập luôn, đỡ bắt gõ lại mật khẩu
+    return sendTokenCookie(user, 200, res);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ─── Gửi lại mã xác thực ──────────────────────────────────────────────────────
+const resendVerification = async (req, res) => {
+  const { email } = req.body;
+  // Trả lời giống nhau dù email có tồn tại hay không, tránh dò tài khoản
+  const generic = 'Nếu email tồn tại và chưa xác thực, chúng tôi đã gửi lại mã.';
+  try {
+    if (!email) return res.status(400).json({ message: 'Vui lòng nhập địa chỉ email.' });
+
+    const user = await User.findOne({
+      email: String(email).toLowerCase().trim(),
+      isDeleted: { $ne: true },
+    });
+    if (!user || user.emailVerified !== false) return res.json({ message: generic });
+
+    const otp = require('../utils/otp');
+    const { code, hash, expiresAt } = otp.issueCode();
+    user.verificationCode = hash;
+    user.verificationCodeExpire = expiresAt;
+    user.verificationAttempts = 0;
+    await user.save();
+
+    const emailService = require('../services/emailService');
+    await emailService.sendVerificationEmail({
+      to: user.email,
+      fullName: user.email.split('@')[0],
+      code,
+      minutes: Math.round(otp.TTL_MS / 60000),
+    });
+
+    return res.json({ message: generic });
+  } catch (error) {
+    console.error('[ResendVerification]', error.message);
+    return res.json({ message: generic });
+  }
+};
+
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
   const genericMessage = 'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu.';
@@ -424,22 +558,20 @@ const forgotPassword = async (req, res) => {
       return res.json({ message: genericMessage });
     }
 
-    const crypto = require('crypto');
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const otp = require('../utils/otp');
+    const { code, hash, expiresAt } = otp.issueCode();
 
-    user.resetPasswordToken = resetTokenHash;
-    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+    user.resetPasswordToken = hash;
+    user.resetPasswordExpire = expiresAt;
+    user.resetPasswordAttempts = 0;
     await user.save();
-
-    const frontendUrl = frontendOrigin();
-    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
     const emailService = require('../services/emailService');
     await emailService.sendPasswordResetEmail({
       to: user.email,
       fullName: user.email.split('@')[0],
-      resetUrl,
+      code,
+      minutes: Math.round(otp.TTL_MS / 60000),
     });
 
     return res.json({ message: genericMessage });
@@ -450,23 +582,19 @@ const forgotPassword = async (req, res) => {
 };
 
 const resetPassword = async (req, res) => {
-  const { token, password } = req.body;
+  const { email, code, password } = req.body;
 
   try {
-    if (!token) {
-      return res.status(400).json({ message: 'Mã xác thực đặt lại mật khẩu không hợp lệ.' });
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Vui lòng nhập email và mã xác thực.' });
     }
 
     if (!password || String(password).length < 6) {
       return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' });
     }
 
-    const crypto = require('crypto');
-    const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
     const user = await User.findOne({
-      resetPasswordToken: resetTokenHash,
-      resetPasswordExpire: { $gt: Date.now() },
+      email: String(email).toLowerCase().trim(),
       isDeleted: { $ne: true },
     });
 
@@ -474,10 +602,29 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Mã xác thực không hợp lệ hoặc đã hết hạn.' });
     }
 
+    const otp = require('../utils/otp');
+    const check = otp.verifyCode({
+      input: code,
+      hash: user.resetPasswordToken,
+      expiresAt: user.resetPasswordExpire,
+      attempts: user.resetPasswordAttempts || 0,
+    });
+
+    if (!check.ok) {
+      if (check.reason === 'wrong') {
+        user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
+        await user.save();
+      }
+      return res.status(400).json({ message: otp.reasonMessage(check.reason) });
+    }
+
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
+    user.resetPasswordAttempts = 0;
+    // Đặt lại mật khẩu qua email cũng chứng minh sở hữu hộp thư, nên xác thực luôn
+    if (user.emailVerified === false) user.emailVerified = true;
     await user.save();
 
     // Clear any active session cookie if logged in
@@ -559,6 +706,8 @@ const changePassword = async (req, res) => {
 };
 
 module.exports = {
+    verifyEmail,
+    resendVerification,
     register,
     login,
     logout,

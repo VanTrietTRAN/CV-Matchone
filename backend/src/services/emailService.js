@@ -321,10 +321,55 @@ const sendEmail = async ({ to, subject, html }) => {
   }
 };
 
-const sendPasswordResetEmail = async ({ to, fullName, resetUrl }) => {
+/** Gửi mã 6 số để đặt lại mật khẩu. */
+const sendPasswordResetEmail = async ({ to, fullName, code, minutes }) => {
   const tpl = await loadTemplates();
-  const { subject, html } = templates.renderPasswordReset({ tpl, fullName, to, resetUrl });
+  const { subject, html } = templates.renderPasswordReset({ tpl, fullName, to, code, minutes });
   return sendEmail({ to, subject, html });
+};
+
+/** Gửi mã 6 số để xác thực email khi đăng ký lần đầu. */
+const sendVerificationEmail = async ({ to, fullName, code, minutes }) => {
+  const tpl = await loadTemplates();
+  const { subject, html } = templates.renderVerifyEmail({ tpl, fullName, to, code, minutes });
+  return sendEmail({ to, subject, html });
+};
+
+/**
+ * Email tổng hợp gửi doanh nghiệp: các hồ sơ điểm khớp cao trong ngày.
+ * Trả kết quả thay vì ném, giống hai hàm digest kia — cron duyệt nhiều doanh
+ * nghiệp, một địa chỉ hỏng không được làm dừng cả lượt.
+ */
+const sendEmployerDigestEmail = async ({ employer, applicants, threshold }) => {
+  try {
+    const t = await initTransporter();
+    if (!t) throw new Error(readEmailConfig().problems.join(' ') || 'Chưa cấu hình được SMTP.');
+    if (!applicants || applicants.length === 0) return { sent: false, skipped: true };
+
+    const tpl = await loadTemplates();
+    const { subject, html } = templates.renderEmployerDigest({
+      tpl,
+      employer,
+      applicants,
+      threshold,
+      frontendUrl: frontendOrigin(),
+    });
+
+    const info = await t.sendMail({
+      from: readEmailConfig().sender,
+      to: employer.email,
+      subject,
+      html,
+    });
+    console.log(
+      `[Email] Đã gửi tổng hợp ứng viên cho ${employer.email} (${applicants.length} hồ sơ, MessageID: ${info.messageId})`,
+    );
+    return { sent: true, messageId: info.messageId };
+  } catch (error) {
+    const reason = describeSmtpError(error);
+    console.error(`[Email] Lỗi gửi tổng hợp ứng viên cho ${employer?.email}: ${reason}`);
+    return { sent: false, error: reason };
+  }
 };
 
 module.exports = {
@@ -332,6 +377,8 @@ module.exports = {
   sendJobAlertEmail,
   sendEmail,
   sendPasswordResetEmail,
+  sendVerificationEmail,
+  sendEmployerDigestEmail,
   getEmailConfig,
   verifyEmailConnection,
   invalidateTemplateCache,

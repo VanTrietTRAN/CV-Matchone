@@ -11,6 +11,8 @@ const {
     facebookAuth,
     facebookCallback,
     forgotPassword,
+    verifyEmail,
+    resendVerification,
     resetPassword,
     changePassword,
 } = require('../controllers/authController');
@@ -22,6 +24,19 @@ const passwordResetLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Quá nhiều yêu cầu đặt lại mật khẩu. Vui lòng thử lại sau 15 phút.' },
+});
+
+// Limiter riêng cho việc NHẬP mã xác thực — không dùng chung với limiter đặt lại
+// mật khẩu (5 lần/15 phút). Người dùng gõ mã 6 số từ email rất dễ nhầm một hai
+// lần; khoá theo IP sau 5 lần là quá gắt, nhất là khi nhiều người dùng chung một
+// IP (văn phòng, mạng NAT). Chống dò đã có lớp đúng chỗ hơn: bộ đếm 5 lần sai
+// tính THEO TỪNG TÀI KHOẢN trong src/utils/otp.js, hết lượt thì phải xin mã mới.
+const verifyCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Bạn đã thử quá nhiều lần. Vui lòng đợi ít phút rồi thử lại.' },
 });
 
 // Limiter riêng cho đổi mật khẩu — KHÔNG dùng chung passwordResetLimiter.
@@ -40,8 +55,10 @@ const changePasswordLimiter = rateLimit({
 router.post('/register', register);
 router.post('/login', login);
 router.post('/logout', logout);
+router.post('/verify-email', verifyCodeLimiter, verifyEmail);
+router.post('/resend-verification', passwordResetLimiter, resendVerification);
 router.post('/forgot-password', passwordResetLimiter, forgotPassword);
-router.post('/reset-password', passwordResetLimiter, resetPassword);
+router.post('/reset-password', verifyCodeLimiter, resetPassword);
 router.get('/me', protect, getCurrentUser);
 router.put('/change-password', changePasswordLimiter, protect, changePassword);
 

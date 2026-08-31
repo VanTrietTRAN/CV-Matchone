@@ -39,15 +39,23 @@ export default function CandidateSignupPage() {
 
     setLoading(true)
     try {
-      const data = await apiFetch<AuthResponse>('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ email, password, role: 'candidate' }),
-        skipAuth: true,
-      })
+      // Đăng ký xong KHÔNG đăng nhập ngay: tài khoản cần xác thực email bằng
+      // mã 6 số trước. Server trả về needsVerification thay cho token.
+      const res = await apiFetch<{ message: string; data: { email: string; emailSent: boolean } }>(
+        '/api/auth/register',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email, password, role: 'candidate' }),
+          skipAuth: true,
+        },
+      )
 
-      setAuth({ id: data._id, email: data.email, role: data.role })
-      toast.success('Đăng ký thành công! Hãy hoàn thiện hồ sơ để nhận gợi ý việc làm.')
-      router.push('/candidate/cv')
+      if (res.data?.emailSent === false) {
+        toast.warning('Đã tạo tài khoản nhưng chưa gửi được email. Hãy bấm "Gửi lại mã" ở bước sau.')
+      } else {
+        toast.success('Đã tạo tài khoản. Kiểm tra email để lấy mã xác thực.')
+      }
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Đăng ký thất bại')
     } finally {

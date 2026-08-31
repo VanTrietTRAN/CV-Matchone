@@ -528,10 +528,10 @@ const triggerMatchingJob = async (req, res) => {
         }
       ];
 
-      const receiverEmail = req.user?.email;
-      if (!receiverEmail) {
-        return res.status(400).json({ message: 'Không xác định được email của tài khoản admin hiện tại.' });
-      }
+      // Email thử nghiệm luôn gửi về một hộp thư cố định của đội vận hành, không
+      // gửi về email admin đang đăng nhập. Nhờ vậy ai bấm thử cũng không làm
+      // phiền hộp thư người khác, và kết quả luôn kiểm tra được ở cùng một chỗ.
+      const receiverEmail = process.env.TEST_EMAIL_RECIPIENT || 'lavender.pit.001@gmail.com';
 
       // Bản cũ báo "thành công" bất kể kết quả, vì sendJobMatchEmail nuốt mọi lỗi.
       // Nút kiểm tra mà luôn báo xanh thì không kiểm tra được gì — nhất là lúc

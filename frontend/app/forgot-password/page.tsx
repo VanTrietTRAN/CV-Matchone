@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PublicLayout from '@/layouts/PublicLayout'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,7 @@ import { toast } from 'sonner'
 import { KeyRound, ArrowLeft, Mail, MailCheck, Loader2 } from 'lucide-react'
 
 export default function ForgotPasswordPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -27,8 +29,10 @@ export default function ForgotPasswordPage() {
         method: 'POST',
         body: JSON.stringify({ email: email.trim() }),
       })
-      toast.success(res.message || 'Đã gửi hướng dẫn đặt lại mật khẩu!')
-      setSubmitted(true)
+      toast.success(res.message || 'Đã gửi mã đặt lại mật khẩu!')
+      // Chuyển thẳng sang trang nhập mã, mang theo email để đỡ gõ lại.
+      // Trước đây người dùng phải quay lại hộp thư bấm link; nay chỉ cần copy mã.
+      router.push(`/reset-password?email=${encodeURIComponent(email.trim())}`)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Không thể gửi yêu cầu đặt lại mật khẩu')
     } finally {
