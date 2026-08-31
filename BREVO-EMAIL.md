@@ -161,9 +161,22 @@ khác: Dashboard → `cvoneclickmatch.com` → **DNS** → **Add record**.
 > *IPv4 address* tự đổi thành **Content**, và công tắc Proxy **biến mất** —
 > Cloudflare không cho proxy bản ghi TXT.
 >
-> **2. Nếu có bản ghi `CNAME`,** công tắc Proxy vẫn hiện và mặc định **bật**.
-> Phải gạt về **DNS only** (đám mây xám). Để Proxied thì Brevo đọc ra hạ tầng
-> Cloudflare chứ không phải giá trị bạn đặt, và xác thực sẽ thất bại.
+> **2. Bản ghi `CNAME` PHẢI để DNS only.** Công tắc Proxy vẫn hiện với CNAME và
+> mặc định **bật** (đám mây cam). Gạt về **DNS only** (đám mây xám).
+>
+> Đây là lỗi gần như chắc chắn sẽ gặp nếu bỏ qua. Bật proxy thì Cloudflare "làm
+> phẳng" CNAME và trả về IP anycast của chính nó thay cho giá trị bạn đặt. Brevo
+> tra ra IP Cloudflare, không thấy giá trị mong đợi, và báo:
+>
+> *"The Branded record values in Brevo and in your domain provider account
+> mismatch."*
+>
+> Nhận biết: tra tên miền con thấy nó trả về **đúng dãy IP như website chính**,
+> và truy vấn CNAME thì **không có CNAME nào**:
+> ```bash
+> nslookup -type=CNAME noreply.cvoneclickmatch.com   # phải thấy ...brand.brevosend.com
+> nslookup noreply.cvoneclickmatch.com               # nếu ra IP giống web chính -> đang bị proxy
+> ```
 >
 > **3. Đừng đụng vào các bản ghi đang có.** Tên miền này đang chạy website và API
 > trên Railway:
@@ -362,6 +375,7 @@ Theo dõi quota còn lại ở Brevo: **Usage and plan** góc trên bên phải,
 | Brevo báo *Blocked* | Địa chỉ nhận nằm trong danh sách chặn của Brevo | Brevo → Transactional → Blocked contacts, gỡ ra |
 | Nhận mail lệch 7 tiếng | `CRON_TIMEZONE` bị ghi đè sai | Bỏ biến đó đi để dùng mặc định `Asia/Ho_Chi_Minh` |
 | Nhận được thư nhưng bấm link không mở được | `FRONTEND_URL` còn là localhost | Đặt `FRONTEND_URL=https://cvoneclickmatch.com` rồi Restart |
+| Brevo báo *"Branded record values ... mismatch"* | Bản ghi CNAME đang bật proxy Cloudflare | Gạt bản ghi đó về **DNS only** (đám mây xám), đợi 1–2 phút rồi Refresh trang Domains |
 
 ---
 
