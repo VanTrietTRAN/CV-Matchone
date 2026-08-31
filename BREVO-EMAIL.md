@@ -3,8 +3,12 @@
 Hướng dẫn từng bước cho CVMatchOne. Không chứa thông tin bí mật — điền giá trị
 thật vào biến môi trường trên Railway, đừng viết vào file này.
 
-Kiểm chứng lần cuối: tháng 8/2026, đối chiếu với giao diện Brevo hiện tại.
-Viết cho trường hợp **đã có sẵn tài khoản Brevo**.
+Kiểm chứng lần cuối: tháng 8/2026, đối chiếu với **ảnh chụp giao diện Brevo thật**
+(bảng Settings và wizard thêm tên miền). Viết cho trường hợp **đã có sẵn tài
+khoản Brevo**.
+
+> Phần chưa đối chiếu được bằng ảnh: nội dung bên trong trang **SMTP & API**
+> (mục 1.2). Nếu tên các ô ở đó khác với mô tả, hãy sửa lại mục này.
 
 ---
 
@@ -27,13 +31,24 @@ SMTP relay của Brevo.
 
 Bạn đã có tài khoản Brevo, nên bỏ qua phần đăng ký.
 
-**1.1** Mở thẳng trang SMTP key: <https://app.brevo.com/settings/keys/smtp>
+**1.1** Bấm **biểu tượng bánh răng** ở góc trên bên phải (nằm giữa dấu **?** và
+chuông thông báo). Một bảng **Settings** mở ra, có thanh điều hướng riêng bên trái
+chia theo nhóm:
 
-Đi bằng menu cũng được: bấm **biểu tượng bánh răng** ở góc trên bên phải (nằm giữa
-dấu **?** và chuông thông báo) → **SMTP & API** → tab **SMTP**.
+```
+Personal settings     Profile · General · Language · Individual email
+Organization settings Users · Senders, domains, IPs · SMTP & API ·
+                      Aura AI control center · Security · Localization ·
+                      Deliverability Center · UTM parameters
+Data Management       Custom objects · Data feeds
+CRM                   Contacts · Companies · Deals
+Marketing             Campaigns
+```
 
-> Đừng tìm trong mục **Transactional** ở thanh bên trái. Mục đó là nơi xem thống
-> kê và nhật ký thư đã gửi, không phải nơi lấy khoá.
+Chọn **SMTP & API** trong nhóm **Organization settings**.
+
+> Đừng tìm trong mục **Transactional** ở thanh biểu tượng ngoài cùng bên trái.
+> Mục đó là nơi xem thống kê và nhật ký thư đã gửi, không phải nơi lấy khoá.
 
 **1.2** Trên tab **SMTP** có sẵn hai giá trị cần lấy:
 
@@ -71,33 +86,72 @@ tiếp.
 tên miền, Microsoft theo sau từ tháng 5/2025. Gửi từ tên miền chưa xác thực thì
 thư vào thẳng spam hoặc bị chặn.
 
-**2.1** Mở **bánh răng** (Settings) → **Senders, Domains, IPs** → tab **Domains**
-→ **Add a domain**.
+> **Chưa sở hữu tên miền nào?** Bỏ qua cả mục này, làm theo mục 2.6 ở cuối.
 
-**2.2** Nhập tên miền bạn sở hữu (ví dụ `cvmatchone.com`), rồi chọn
-**Authenticate the domain yourself**. Brevo đưa ra ba bản ghi DNS cần thêm:
-**Brevo code**, **DKIM**, **DMARC**.
+**2.1** Bánh răng → **Settings** → **Senders, domains, IPs** (nhóm *Organization
+settings*) → thêm tên miền. Đường link trực tiếp:
+<https://app.brevo.com/senders/domain/add>
 
-**2.3** Thêm ba bản ghi đó vào DNS. Nếu tên miền đang ở Cloudflare:
-Cloudflare Dashboard → chọn tên miền → **DNS** → **Add record**, dán từng bản ghi.
+Wizard có 4 bước, hiện ở đầu trang:
+
+```
+1 Domain  →  2 Branded subdomain  →  3 Setup method  →  4 Records
+```
+
+**2.2 — Bước Domain.** Ô **Domain name**, nhập tên miền hoặc tên miền con bạn sở
+hữu. Không gõ `http://`, `https://` hay `www`.
+
+Brevo ghi rõ tên miền này **không nên đang được dùng cho dịch vụ email nào khác**.
+Nên nếu tên miền gốc của bạn đã gắn Google Workspace hay Zoho Mail, hãy dùng tên
+miền con — đúng như gợi ý sẵn trong ô (`send.mydomain.com`):
+
+```
+send.cvmatchone.com
+```
+
+Bấm **Continue**.
+
+**2.3 — Bước Branded subdomain.** Tên miền con này dùng cho link theo dõi và ảnh
+trong thư, để người nhận thấy tên miền của bạn thay vì tên miền của Brevo. Nhận
+giá trị Brevo đề xuất là được.
+
+**2.4 — Bước Setup method.** Ba lựa chọn:
+
+| Cách | Nghĩa là | Nên chọn khi |
+|---|---|---|
+| **Automatic** | Brevo kết nối thẳng vào tài khoản DNS và tự thêm bản ghi | Muốn nhanh và chấp nhận cấp quyền |
+| **Individual DNS records** | Brevo đưa danh sách bản ghi, bạn tự dán vào DNS | **Khuyến nghị** — chạy với mọi nhà cung cấp DNS, bạn giữ toàn quyền |
+| **Brevo-managed** | Thêm 2 bản ghi NS, giao quyền quản lý subdomain cho Brevo | Chỉ dùng được khi tên miền gửi là một subdomain |
+
+Chọn **Individual DNS records**.
+
+**2.5 — Bước Records.** Brevo liệt kê các bản ghi cần thêm (Brevo code, DKIM,
+DMARC). Mở DNS của bạn ở tab khác và dán từng cái vào.
+
+Nếu tên miền đang ở Cloudflare: Cloudflare Dashboard → chọn tên miền → **DNS** →
+**Add record**.
 
 > Với các bản ghi TXT/CNAME dùng để xác thực email, để **Proxy status = DNS only**
 > (đám mây xám). Bật proxy sẽ khiến Brevo không đọc được bản ghi.
 
-**2.4** Quay lại Brevo, bấm **Authenticate this email domain** ở cuối trang. DNS
-lan truyền thường mất vài phút, có thể tới vài giờ — Brevo cho thử lại trong vòng
-48 giờ cho đến khi tên miền hiện trạng thái **Authenticated**.
+Dán xong quay lại Brevo bấm nút xác thực ở cuối trang. DNS lan truyền thường mất
+vài phút, có thể tới vài giờ — Brevo cho thử lại trong vòng 48 giờ cho đến khi
+tên miền hiện trạng thái **Authenticated**.
 
-**2.5** Đặt `SENDER_EMAIL` dùng đúng tên miền vừa xác thực:
+**2.6 — Đặt `SENDER_EMAIL`.** Địa chỉ gửi phải thuộc đúng tên miền vừa xác thực:
 
 ```
-SENDER_EMAIL=CVMatchOne <no-reply@cvmatchone.com>
+SENDER_EMAIL=CVMatchOne <no-reply@send.cvmatchone.com>
 ```
 
-> **Chưa có tên miền riêng?** Vẫn gửi được để thử nghiệm: **Settings** →
-> **Senders, Domains, IPs** → tab **Senders** → **Add a sender**, dùng một địa chỉ
-> Gmail của bạn rồi xác nhận qua thư Brevo gửi tới. Cách này chỉ hợp để chạy thử —
-> gửi hàng loạt sẽ vào spam vì tên miền gửi không có DKIM.
+> **Chưa có tên miền riêng?** Vẫn gửi được để chạy thử: Settings →
+> **Senders, domains, IPs** → phần **Senders** → thêm một người gửi bằng địa chỉ
+> Gmail của bạn, rồi bấm xác nhận trong thư Brevo gửi tới. Đặt `SENDER_EMAIL`
+> đúng địa chỉ Gmail đó.
+>
+> Cách này chỉ hợp để chạy thử. Gửi hàng loạt sẽ vào spam vì tên miền gửi
+> (`gmail.com`) không phải của bạn và không có DKIM của bạn — đúng thứ mà quy định
+> Gmail/Yahoo từ 2024 nhắm vào.
 
 ---
 
@@ -263,5 +317,7 @@ Trước đây cấu hình Brevo gần như không thể dò được:
 - [Brevo — Which SMTP port should I use?](https://help.brevo.com/hc/en-us/articles/10905415650322-Which-SMTP-port-should-I-use-Port-587-465-or-2525)
 - [Brevo — Troubleshooting SMTP issues](https://help.brevo.com/hc/en-us/articles/115000188150-Troubleshooting-Issues-with-Brevo-SMTP)
 - [Brevo — Getting started with senders and domains](https://developers.brevo.com/docs/getting-started-with-senders-and-domains)
+- [Brevo — Set up your domain in Brevo](https://help.brevo.com/hc/en-us/articles/35337929909778-Set-up-your-domain-in-Brevo)
+- [Brevo — FAQs about branded subdomains](https://help.brevo.com/hc/en-us/articles/35946791638802-FAQs-About-branded-subdomains)
 - [Brevo — Limits of the Free plan](https://help.brevo.com/hc/en-us/articles/208580669-FAQs-What-are-the-limits-of-the-Free-plan)
 - [Brevo — Comply with Gmail, Yahoo and Microsoft sender requirements](https://help.brevo.com/hc/en-us/articles/14925263522578-Comply-with-Gmail-Yahoo-and-Microsoft-s-requirements-for-email-senders)

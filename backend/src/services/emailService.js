@@ -52,7 +52,7 @@ const readEmailConfig = () => {
   if (pass.startsWith('xkeysib-')) {
     problems.push(
       'EMAIL_PASS đang là API key (bắt đầu bằng "xkeysib-"). SMTP relay cần SMTP key ' +
-        '(bắt đầu bằng "xsmtpsib-"). Lấy ở Brevo → SMTP & API → tab SMTP.',
+        '(bắt đầu bằng "xsmtpsib-"). Lấy ở Brevo → bánh răng (Settings) → SMTP & API.',
     );
   }
 
@@ -66,7 +66,7 @@ const readEmailConfig = () => {
   if (isBrevo && user && !/@smtp-brevo\.com$/i.test(user) && !PLACEHOLDER.test(user)) {
     warnings.push(
       `EMAIL_USER = "${user}" không có dạng xxx@smtp-brevo.com. SMTP login của Brevo ` +
-        'khác với email đăng nhập tài khoản — kiểm tra lại ở Brevo → SMTP & API → tab SMTP.',
+        'khác với email đăng nhập tài khoản — kiểm tra lại ở Brevo → bánh răng (Settings) → SMTP & API.',
     );
   }
 
@@ -191,7 +191,7 @@ const describeSmtpError = (error) => {
   if (code === 550 || /550|not authorized|unrecognized/i.test(msg)) {
     return (
       `Máy chủ từ chối địa chỉ gửi. SENDER_EMAIL phải thuộc tên miền đã xác thực ` +
-      `trong Brevo (Senders, Domains & Dedicated IPs). Lỗi gốc: ${msg}`
+      `trong Brevo (Settings → Senders, domains, IPs). Lỗi gốc: ${msg}`
     );
   }
   return msg;
