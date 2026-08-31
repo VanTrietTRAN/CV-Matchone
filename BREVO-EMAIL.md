@@ -98,18 +98,23 @@ Wizard có 4 bước, hiện ở đầu trang:
 1 Domain  →  2 Branded subdomain  →  3 Setup method  →  4 Records
 ```
 
-**2.2 — Bước Domain.** Ô **Domain name**, nhập tên miền hoặc tên miền con bạn sở
-hữu. Không gõ `http://`, `https://` hay `www`.
-
-Brevo ghi rõ tên miền này **không nên đang được dùng cho dịch vụ email nào khác**.
-Nên nếu tên miền gốc của bạn đã gắn Google Workspace hay Zoho Mail, hãy dùng tên
-miền con — đúng như gợi ý sẵn trong ô (`send.mydomain.com`):
+**2.2 — Bước Domain.** Ô **Domain name**, nhập:
 
 ```
-send.cvmatchone.com
+cvoneclickmatch.com
 ```
 
-Bấm **Continue**.
+Không gõ `http://`, `https://` hay `www`. Bấm **Continue**.
+
+> **Vì sao dùng tên miền gốc chứ không phải `send.cvoneclickmatch.com`?**
+> Brevo cảnh báo tên miền gửi không nên đang được dùng cho dịch vụ email khác.
+> Kiểm tra DNS thực tế của `cvoneclickmatch.com` cho thấy **chưa có bản ghi MX
+> nào và chưa có bản ghi TXT nào** — tức tên miền chưa nhận thư và chưa có SPF
+> của dịch vụ nào khác. Không có xung đột, nên dùng thẳng tên miền gốc được, và
+> địa chỉ gửi cũng gọn hơn.
+>
+> Chỉ chuyển sang tên miền con nếu sau này bạn gắn Google Workspace / Zoho Mail
+> vào `cvoneclickmatch.com`, hoặc muốn tách uy tín gửi thư khỏi tên miền chính.
 
 **2.3 — Bước Branded subdomain.** Tên miền con này dùng cho link theo dõi và ảnh
 trong thư, để người nhận thấy tên miền của bạn thay vì tên miền của Brevo. Nhận
@@ -128,8 +133,9 @@ Chọn **Individual DNS records**.
 **2.5 — Bước Records.** Brevo liệt kê các bản ghi cần thêm (Brevo code, DKIM,
 DMARC). Mở DNS của bạn ở tab khác và dán từng cái vào.
 
-Nếu tên miền đang ở Cloudflare: Cloudflare Dashboard → chọn tên miền → **DNS** →
-**Add record**.
+Tên miền `cvoneclickmatch.com` đang dùng nameserver của **Cloudflare**
+(`dave.ns.cloudflare.com`, `sydney.ns.cloudflare.com`), nên thêm bản ghi ở đây:
+Cloudflare Dashboard → chọn `cvoneclickmatch.com` → **DNS** → **Add record**.
 
 > Với các bản ghi TXT/CNAME dùng để xác thực email, để **Proxy status = DNS only**
 > (đám mây xám). Bật proxy sẽ khiến Brevo không đọc được bản ghi.
@@ -141,7 +147,7 @@ tên miền hiện trạng thái **Authenticated**.
 **2.6 — Đặt `SENDER_EMAIL`.** Địa chỉ gửi phải thuộc đúng tên miền vừa xác thực:
 
 ```
-SENDER_EMAIL=CVMatchOne <no-reply@send.cvmatchone.com>
+SENDER_EMAIL=CVMatchOne <no-reply@cvoneclickmatch.com>
 ```
 
 > **Chưa có tên miền riêng?** Vẫn gửi được để chạy thử: Settings →
@@ -164,8 +170,20 @@ EMAIL_HOST=smtp-relay.brevo.com
 EMAIL_PORT=587
 EMAIL_USER=<SMTP login dạng xxxxxx@smtp-brevo.com>
 EMAIL_PASS=<SMTP key bắt đầu bằng xsmtpsib->
-SENDER_EMAIL=CVMatchOne <no-reply@ten-mien-da-xac-thuc.com>
+SENDER_EMAIL=CVMatchOne <no-reply@cvoneclickmatch.com>
 ```
+
+**Kiểm tra luôn ba biến này** — chúng quyết định link bên trong email:
+
+```
+FRONTEND_URL=https://cvoneclickmatch.com
+CLIENT_ORIGIN=https://cvoneclickmatch.com,https://www.cvoneclickmatch.com
+```
+
+`FRONTEND_URL` là nơi dựng mọi đường dẫn trong thư (đặt lại mật khẩu, xem việc
+làm). Nếu nó còn là `localhost`, thư vẫn gửi đi bình thường nhưng người nhận bấm
+vào link sẽ không mở được gì — hỏng mà không có dấu hiệu nào. Hệ thống nay cảnh
+báo trường hợp này ở `/health` (`email.linkOrigin` và `email.warnings`).
 
 Rồi **Restart** service. Biến môi trường chỉ được đọc lúc khởi động.
 
@@ -219,7 +237,8 @@ Xem trường `email`:
   "port": 587,
   "user": "abc***@smtp-brevo.com",
   "keyPrefix": "xsmtpsib-...",
-  "sender": "CVMatchOne <no-reply@cvmatchone.com>",
+  "sender": "CVMatchOne <no-reply@cvoneclickmatch.com>",
+  "linkOrigin": "https://cvoneclickmatch.com",
   "problems": [],
   "warnings": []
 }
@@ -285,6 +304,7 @@ Theo dõi quota còn lại ở Brevo: **Usage and plan** góc trên bên phải,
 | SMTP báo OK nhưng Brevo → Transactional → Logs trống | Thư không rời khỏi hệ thống | Xem lại `problems` ở bước 1 |
 | Brevo báo *Blocked* | Địa chỉ nhận nằm trong danh sách chặn của Brevo | Brevo → Transactional → Blocked contacts, gỡ ra |
 | Nhận mail lệch 7 tiếng | `CRON_TIMEZONE` bị ghi đè sai | Bỏ biến đó đi để dùng mặc định `Asia/Ho_Chi_Minh` |
+| Nhận được thư nhưng bấm link không mở được | `FRONTEND_URL` còn là localhost | Đặt `FRONTEND_URL=https://cvoneclickmatch.com` rồi Restart |
 
 ---
 

@@ -3,7 +3,7 @@ const { frontendOrigin } = require('../utils/frontendUrl');
 
 let transporter = null;
 
-const DEFAULT_SENDER = 'CVMatchOne <no-reply@cvmatchone.com>';
+const DEFAULT_SENDER = 'CVMatchOne <no-reply@cvoneclickmatch.com>';
 
 /** Giá trị mẫu trong .env.example — có nghĩa là chưa ai điền gì thật. */
 const PLACEHOLDER = /^your_|your_brevo|example\.com|changeme|smartrecruit\.vn/i;
@@ -83,6 +83,17 @@ const readEmailConfig = () => {
     warnings.push(`EMAIL_PORT = ${port} không phải cổng Brevo hỗ trợ (587, 465 hoặc 2525).`);
   }
 
+  // Mọi link trong email (đặt lại mật khẩu, xem việc làm) đều dựng từ origin này.
+  // Trên production mà vẫn là localhost thì thư vẫn gửi đi bình thường nhưng
+  // người nhận bấm vào link chỉ mở được trên máy của chính họ — hỏng lặng lẽ.
+  const origin = frontendOrigin();
+  if (process.env.NODE_ENV === 'production' && /localhost|127\.0\.0\.1/.test(origin)) {
+    warnings.push(
+      `Link trong email đang trỏ tới "${origin}". Đặt FRONTEND_URL bằng địa chỉ ` +
+        'thật của website, nếu không người nhận bấm vào link sẽ không mở được.',
+    );
+  }
+
   return {
     host,
     port,
@@ -114,6 +125,7 @@ const getEmailConfig = () => {
     user: user ? `${user.slice(0, 3)}***@${user.split('@')[1] || '?'}` : '',
     keyPrefix: pass ? `${pass.slice(0, 9)}...` : '',
     sender,
+    linkOrigin: frontendOrigin(),
     problems,
     warnings,
   };
