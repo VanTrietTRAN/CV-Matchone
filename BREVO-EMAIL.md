@@ -7,8 +7,10 @@ Kiểm chứng lần cuối: tháng 8/2026, đối chiếu với **ảnh chụp 
 (bảng Settings và wizard thêm tên miền). Viết cho trường hợp **đã có sẵn tài
 khoản Brevo**.
 
-> Phần chưa đối chiếu được bằng ảnh: nội dung bên trong trang **SMTP & API**
-> (mục 1.2). Nếu tên các ô ở đó khác với mô tả, hãy sửa lại mục này.
+> Đã đối chiếu bằng ảnh: bảng **Settings**, bước **Domain** và bước
+> **Setup method** của wizard xác thực tên miền.
+> Chưa đối chiếu được: nội dung bên trong trang **SMTP & API** (mục 1.2) và
+> bước **Records** (mục 2.5). Nếu khác với mô tả, hãy sửa lại.
 
 ---
 
@@ -120,15 +122,32 @@ Không gõ `http://`, `https://` hay `www`. Bấm **Continue**.
 trong thư, để người nhận thấy tên miền của bạn thay vì tên miền của Brevo. Nhận
 giá trị Brevo đề xuất là được.
 
-**2.4 — Bước Setup method.** Ba lựa chọn:
+**2.4 — Bước Setup method.** Tiêu đề trang: *"How do you want to set up
+cvoneclickmatch.com?"*, khối **1. Choose how the records will be added** có ba thẻ:
 
-| Cách | Nghĩa là | Nên chọn khi |
+| Thẻ | Brevo mô tả | Nghĩa thật |
 |---|---|---|
-| **Automatic** | Brevo kết nối thẳng vào tài khoản DNS và tự thêm bản ghi | Muốn nhanh và chấp nhận cấp quyền |
-| **Individual DNS records** | Brevo đưa danh sách bản ghi, bạn tự dán vào DNS | **Khuyến nghị** — chạy với mọi nhà cung cấp DNS, bạn giữ toàn quyền |
-| **Brevo-managed** | Thêm 2 bản ghi NS, giao quyền quản lý subdomain cho Brevo | Chỉ dùng được khi tên miền gửi là một subdomain |
+| **Automatic** *(Recommended)* | Brevo kết nối vào nhà cung cấp DNS và tự thêm bản ghi, thường dưới một phút | Bạn cấp cho Brevo quyền **ghi** vào DNS của tên miền |
+| **Manual** | Brevo hiện danh sách bản ghi để bạn tự copy sang nhà cung cấp DNS | Bạn tự dán vào Cloudflare, Brevo không đụng gì tới DNS |
+| **Delegate** | Gửi link bảo mật cho người quản trị DNS để họ tự làm | Dùng khi DNS do người khác quản |
 
-Chọn **Individual DNS records**.
+**Chọn Manual.**
+
+Brevo gợi ý *Automatic*, và lựa chọn đó không sai — nhưng với trường hợp của bạn,
+**Manual** hợp hơn vì ba lý do:
+
+- Chỉ có 3–4 bản ghi phải thêm. Lợi thế "dưới một phút" của Automatic gần như
+  không đáng kể.
+- Automatic cần quyền ghi vào toàn bộ DNS của `cvoneclickmatch.com`, trong khi
+  việc cần làm chỉ là thêm vài bản ghi TXT/CNAME. Quyền đó bao gồm cả bản ghi A
+  đang trỏ website của bạn.
+- **Website của bạn đang chạy trên chính tên miền này.** Sai một bản ghi DNS là
+  cả trang sập. Tự dán thì bạn nhìn thấy chính xác mình đang thêm gì.
+
+*Delegate* không dùng đến vì bạn tự quản Cloudflare.
+
+> Trên màn hình còn một khối nữa bên dưới (đánh số **2.**). Cuộn xuống xem hết
+> rồi mới bấm **Continue**.
 
 **2.5 — Bước Records.** Brevo liệt kê các bản ghi cần thêm (Brevo code, DKIM,
 DMARC). Mở DNS của bạn ở tab khác và dán từng cái vào.
