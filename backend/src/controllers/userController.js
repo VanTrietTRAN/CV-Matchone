@@ -103,7 +103,7 @@ const updateCompanyProfile = async (req, res) => {
     const allowedFields = [
       'companyName', 'industry', 'size', 'about', 'website',
       'address', 'foundedYear', 'benefits', 'country', 'province',
-      'contactName', 'phone', 'taxId'
+      'contactName', 'phone', 'taxId', 'coverImage', 'logo'
     ];
     const updateData = {};
     allowedFields.forEach((f) => {

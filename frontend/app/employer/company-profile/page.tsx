@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { Plus, Loader2, Building2, CheckCircle } from 'lucide-react'
 import SkillTag from '@/components/SkillTag'
+import CompanyImagePicker, { COVER_SIZE, LOGO_SIZE } from '@/components/employer/CompanyImagePicker'
 import { apiFetch } from '@/lib/api'
 import { COMPANY_SECTOR_LABEL } from '@/lib/job-categories'
 import { toast } from 'sonner'
@@ -30,6 +31,8 @@ type CompanyFormData = {
   address: string
   foundedYear: number | string
   benefits: string[]
+  coverImage: string
+  logo: string
 }
 
 const defaultFormData: CompanyFormData = {
@@ -41,6 +44,8 @@ const defaultFormData: CompanyFormData = {
   address: '',
   foundedYear: '',
   benefits: [],
+  coverImage: '',
+  logo: '',
 }
 
 const sizeLabels: Record<string, string> = {
@@ -71,6 +76,8 @@ export default function CompanyProfilePage() {
           address: d.address || '',
           foundedYear: d.foundedYear || '',
           benefits: d.benefits || [],
+          coverImage: d.coverImage || '',
+          logo: d.logo || '',
         })
       } catch {
         toast.error('Không tải được hồ sơ công ty, hiển thị mặc định')
@@ -152,15 +159,62 @@ export default function CompanyProfilePage() {
         />
 
         <Card className="p-8 border border-border mb-8">
-          <div className="brand-gradient mb-6 flex h-32 items-center justify-center rounded-lg">
-            <span className="text-sm font-medium text-white/70">Ảnh bìa công ty</span>
+          <div className="mb-6">
+            <div className="brand-gradient relative flex h-32 items-center justify-center overflow-hidden rounded-lg">
+              {formData.coverImage ? (
+                // Ảnh là data URL nên next/image không tối ưu được gì — dùng thẻ img thường.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={formData.coverImage}
+                  alt="Ảnh bìa công ty"
+                  className="size-full object-cover"
+                />
+              ) : (
+                <span className="text-sm font-medium text-white/70">
+                  {isEditing ? 'Chưa có ảnh bìa — chọn ảnh bên dưới' : 'Ảnh bìa công ty'}
+                </span>
+              )}
+            </div>
+            {isEditing && (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <CompanyImagePicker
+                  value={formData.coverImage}
+                  onChange={(coverImage) => setFormData((p) => ({ ...p, coverImage }))}
+                  size={COVER_SIZE}
+                  chooseLabel="Tải ảnh bìa"
+                  replaceLabel="Đổi ảnh bìa"
+                  removeLabel="Bỏ ảnh bìa"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Ảnh ngang, tỉ lệ khoảng 3:1. Ảnh sẽ được cắt và thu nhỏ tự động.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex items-start gap-6">
-            <div className="flex size-24 shrink-0 items-center justify-center rounded-xl border-4 border-card bg-brand-50 shadow-[var(--shadow-card)]">
-              <span className="text-3xl font-bold text-brand-600">
-                {(formData.companyName || '?').substring(0, 2).toUpperCase()}
-              </span>
+            <div className="shrink-0">
+              <div className="flex size-24 items-center justify-center overflow-hidden rounded-xl border-4 border-card bg-brand-50 shadow-[var(--shadow-card)]">
+                {formData.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={formData.logo} alt="Logo công ty" className="size-full object-cover" />
+                ) : (
+                  <span className="text-3xl font-bold text-brand-600">
+                    {(formData.companyName || '?').substring(0, 2).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              {isEditing && (
+                <CompanyImagePicker
+                  className="mt-2"
+                  value={formData.logo}
+                  onChange={(logo) => setFormData((p) => ({ ...p, logo }))}
+                  size={LOGO_SIZE}
+                  chooseLabel="Tải logo"
+                  replaceLabel="Đổi logo"
+                  removeLabel="Bỏ logo"
+                />
+              )}
             </div>
 
             <div className="flex-1">

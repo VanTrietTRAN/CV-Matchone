@@ -8,6 +8,13 @@ const companyProfileSchema = new mongoose.Schema({
     unique: true, 
   },
   companyName: { type: String, default: '' },
+
+  // Ảnh thương hiệu, lưu dạng data URL (image/jpeg) đã được trình duyệt thu nhỏ.
+  // Trang hồ sơ công ty vốn chỉ vẽ một dải gradient ghi "Ảnh bìa công ty" và một
+  // ô chữ cái đầu thay cho logo — trông như chỗ đặt ảnh nhưng không có gì phía
+  // sau, nên doanh nghiệp không thể đổi được.
+  coverImage: { type: String, default: '' },
+  logo: { type: String, default: '' },
   industry: {
     type: String,
     enum: ['technology', 'finance', 'healthcare', 'consulting', 'logistics', 'education', 'marketing', 'manufacturing', 'other'],

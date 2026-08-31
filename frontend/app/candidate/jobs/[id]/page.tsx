@@ -62,6 +62,8 @@ type CompanyProfile = {
   address: string
   foundedYear: number
   benefits: string[]
+  coverImage?: string
+  logo?: string
 }
 
 type OtherJob = {
@@ -372,8 +374,18 @@ export default function JobDetailPage() {
             <aside className="space-y-5 lg:sticky lg:top-[calc(var(--header-h)+16px)]">
               <div className="surface-card p-5">
                 <div className="flex items-center gap-3">
-                  <div className="logo-box size-12 text-sm font-bold text-brand-600">
-                    {initials(companyName)}
+                  <div className="logo-box size-12 overflow-hidden text-sm font-bold text-brand-600">
+                    {company?.logo ? (
+                      // Logo là data URL nên dùng thẻ img thường
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={company.logo}
+                        alt={`Logo ${companyName}`}
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      initials(companyName)
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="truncate font-bold">{companyName}</p>

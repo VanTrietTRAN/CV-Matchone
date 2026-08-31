@@ -4,6 +4,11 @@ import React, { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ImagePlus, Loader2, Trash2, User } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  ACCEPTED_IMAGE_TYPES,
+  fileToResizedDataUrl,
+  validateImageFile,
+} from '@/lib/image-resize'
 
 /**
  * Chọn ảnh chân dung cho CV.
@@ -17,44 +22,6 @@ import { toast } from 'sonner'
  */
 
 const MAX_EDGE = 320 // px — đủ nét cho khung ảnh in ra giấy
-const JPEG_QUALITY = 0.85
-const MAX_SOURCE_BYTES = 8 * 1024 * 1024
-
-/** Đọc file ảnh, cắt vuông ở giữa và thu nhỏ về data URL JPEG. */
-async function toSquareDataUrl(file: File): Promise<string> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('Không đọc được file ảnh.'))
-    reader.readAsDataURL(file)
-  })
-
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const el = new Image()
-    el.onload = () => resolve(el)
-    el.onerror = () => reject(new Error('File này không phải ảnh hợp lệ.'))
-    el.src = dataUrl
-  })
-
-  // Cắt vuông theo cạnh ngắn, lấy phần giữa ảnh
-  const edge = Math.min(img.naturalWidth, img.naturalHeight)
-  const sx = (img.naturalWidth - edge) / 2
-  const sy = (img.naturalHeight - edge) / 2
-  const size = Math.min(edge, MAX_EDGE)
-
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Trình duyệt không hỗ trợ xử lý ảnh.')
-
-  // Nền trắng để ảnh PNG trong suốt không thành nền đen khi chuyển sang JPEG
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, size, size)
-  ctx.drawImage(img, sx, sy, edge, edge, 0, 0, size, size)
-
-  return canvas.toDataURL('image/jpeg', JPEG_QUALITY)
-}
 
 export default function CvPhotoPicker({
   value,
@@ -74,18 +41,17 @@ export default function CvPhotoPicker({
     event.target.value = ''
     if (!file) return
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Vui lòng chọn file ảnh (JPG, PNG, WEBP).')
-      return
-    }
-    if (file.size > MAX_SOURCE_BYTES) {
-      toast.error('Ảnh quá lớn (tối đa 8MB). Vui lòng chọn ảnh nhỏ hơn.')
+    const problem = validateImageFile(file)
+    if (problem) {
+      toast.error(problem)
       return
     }
 
     setBusy(true)
     try {
-      onChange(await toSquareDataUrl(file))
+      onChange(
+        await fileToResizedDataUrl(file, { targetWidth: MAX_EDGE, targetHeight: MAX_EDGE }),
+      )
       toast.success('Đã thêm ảnh vào CV. Nhớ bấm Lưu để cập nhật hồ sơ.')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Không xử lý được ảnh.')
@@ -146,7 +112,7 @@ export default function CvPhotoPicker({
         <input
           ref={inputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept={ACCEPTED_IMAGE_TYPES}
           className="hidden"
           onChange={handleFile}
           disabled={busy}
