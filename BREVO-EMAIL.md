@@ -214,9 +214,19 @@ sau, nên chỉ gõ phần đầu:
 Thêm bản ghi TXT ở `@` **không ảnh hưởng** tới bản ghi A của website — một tên
 có thể mang nhiều bản ghi khác loại cùng lúc.
 
-**Bỏ qua gợi ý MX của Cloudflare.** Cloudflare hiện dòng *"Email cannot reach
-@cvoneclickmatch.com — Add an MX record to receive email"*. MX là để **nhận** thư;
-ở đây bạn chỉ **gửi** đi, nên không cần. Thêm MX sai còn gây rắc rối.
+**Về khối Recommendations của Cloudflare.** Cloudflare hiện dòng *"Email cannot
+reach @cvoneclickmatch.com addresses and they could be spoofed — Add an MX record
+to receive email. Set up SPF, DKIM, and DMARC records to prevent email spoofing."*
+Đây là gợi ý chung, Cloudflare không biết bạn đang cấu hình Brevo:
+
+| Cloudflare khuyên | Cần làm |
+|---|---|
+| Thêm **MX** | **Bỏ qua.** MX để *nhận* thư; ở đây chỉ *gửi* đi |
+| **DMARC** | Brevo đã đưa bản ghi, thêm theo bước Records là xong |
+| **SPF** / **DKIM** | **Đừng tự viết tay.** Luồng branded subdomain xử lý qua vùng `brand.brevosend.com` được uỷ quyền — chính là ba CNAME ở trên. Thêm tay có thể xung đột |
+
+Xong Brevo rồi hãy kiểm tra lại. Nếu thiếu SPF thật và thư vào spam thì mới thêm
+`v=spf1 include:spf.brevo.com ~all`.
 
 **Kiểm tra sau khi thêm** (chờ 1–2 phút cho DNS lan):
 
@@ -392,6 +402,22 @@ Theo dõi quota còn lại ở Brevo: **Usage and plan** góc trên bên phải,
 | Nhận mail lệch 7 tiếng | `CRON_TIMEZONE` bị ghi đè sai | Bỏ biến đó đi để dùng mặc định `Asia/Ho_Chi_Minh` |
 | Nhận được thư nhưng bấm link không mở được | `FRONTEND_URL` còn là localhost | Đặt `FRONTEND_URL=https://cvoneclickmatch.com` rồi Restart |
 | Brevo báo *"Branded record ... mismatch"* hoặc *"Redirection Record ... mismatch"* | Bản ghi CNAME đang bật proxy Cloudflare | Gạt **cả ba** bản ghi `noreply`, `img.noreply`, `r.noreply` về **DNS only**, đợi 1–2 phút rồi Refresh trang Domains |
+| Ba lỗi mismatch **thay nhau** hiện dù CNAME đã đúng | Đích `*.brand.brevosend.com` của Brevo đang SERVFAIL (`ns1.sendinblue.com` trả về REFUSED) — lỗi phía Brevo | Ngừng sửa DNS. Kiểm tra bằng lệnh bên dưới để chắc phía mình đúng, rồi chờ và Verify lại; quá lâu thì báo hỗ trợ Brevo kèm bằng chứng |
+
+### Tự phân biệt lỗi phía mình hay phía Brevo
+
+```bash
+# 1. Bản ghi của MÌNH có đúng không (phải ra tên ...brand.brevosend.com)
+nslookup -type=CNAME noreply.cvoneclickmatch.com 8.8.8.8
+nslookup -type=CNAME img.noreply.cvoneclickmatch.com 8.8.8.8
+nslookup -type=CNAME r.noreply.cvoneclickmatch.com 8.8.8.8
+
+# 2. Đích phía BREVO có phân giải được không
+nslookup noreply-cvoneclickmatch-com.brand.brevosend.com 8.8.8.8
+```
+
+Lệnh 1 ra đúng tên mà lệnh 2 báo `SERVFAIL` → phía bạn xong, đang chờ Brevo.
+Lệnh 1 ra địa chỉ IP thay vì tên → CNAME còn bật proxy, quay lại mục 2.5.
 
 ---
 
