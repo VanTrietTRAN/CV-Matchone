@@ -9,8 +9,9 @@ khoản Brevo**.
 
 > Đã đối chiếu bằng ảnh: bảng **Settings**, bước **Domain** và bước
 > **Setup method** của wizard xác thực tên miền.
-> Chưa đối chiếu được: nội dung bên trong trang **SMTP & API** (mục 1.2) và
-> bước **Records** (mục 2.5). Nếu khác với mô tả, hãy sửa lại.
+> Mục 2.5 đối chiếu với hộp thoại **Add record** thật của Cloudflare.
+> Chưa đối chiếu được: nội dung bên trong trang **SMTP & API** (mục 1.2) và danh
+> sách bản ghi cụ thể Brevo đưa ra. Nếu khác với mô tả, hãy sửa lại.
 
 ---
 
@@ -149,19 +150,56 @@ Brevo gợi ý *Automatic*, và lựa chọn đó không sai — nhưng với tr
 > Trên màn hình còn một khối nữa bên dưới (đánh số **2.**). Cuộn xuống xem hết
 > rồi mới bấm **Continue**.
 
-**2.5 — Bước Records.** Brevo liệt kê các bản ghi cần thêm (Brevo code, DKIM,
-DMARC). Mở DNS của bạn ở tab khác và dán từng cái vào.
+**2.5 — Bước Records.** Brevo liệt kê các bản ghi cần thêm. Mở Cloudflare ở tab
+khác: Dashboard → `cvoneclickmatch.com` → **DNS** → **Add record**.
 
-Tên miền `cvoneclickmatch.com` đang dùng nameserver của **Cloudflare**
-(`dave.ns.cloudflare.com`, `sydney.ns.cloudflare.com`), nên thêm bản ghi ở đây:
-Cloudflare Dashboard → chọn `cvoneclickmatch.com` → **DNS** → **Add record**.
+> ### Ba điều phải nhớ trước khi gõ gì
+>
+> **1. Đổi `Type` TRƯỚC TIÊN.** Hộp thoại mở mặc định ở `Type = A` với ô
+> **IPv4 address** và **Proxy status = Proxied**. Bản ghi xác thực email của Brevo
+> **không có cái nào là loại A**. Chọn đúng loại (thường là `TXT`) thì ô
+> *IPv4 address* tự đổi thành **Content**, và công tắc Proxy **biến mất** —
+> Cloudflare không cho proxy bản ghi TXT.
+>
+> **2. Nếu có bản ghi `CNAME`,** công tắc Proxy vẫn hiện và mặc định **bật**.
+> Phải gạt về **DNS only** (đám mây xám). Để Proxied thì Brevo đọc ra hạ tầng
+> Cloudflare chứ không phải giá trị bạn đặt, và xác thực sẽ thất bại.
+>
+> **3. Đừng đụng vào các bản ghi đang có.** Tên miền này đang chạy website và API
+> trên Railway:
+> ```
+> cvoneclickmatch.com          www.cvoneclickmatch.com      api.cvoneclickmatch.com
+> _railway-verify.*  (3 bản ghi xác minh của Railway)
+> ```
+> Chỉ **thêm mới**, không sửa, không xoá. Sửa nhầm mấy dòng trên là sập trang.
 
-> Với các bản ghi TXT/CNAME dùng để xác thực email, để **Proxy status = DNS only**
-> (đám mây xám). Bật proxy sẽ khiến Brevo không đọc được bản ghi.
+**Điền ô Name như thế nào:** Cloudflare tự thêm phần `.cvoneclickmatch.com` phía
+sau, nên chỉ gõ phần đầu:
 
-Dán xong quay lại Brevo bấm nút xác thực ở cuối trang. DNS lan truyền thường mất
-vài phút, có thể tới vài giờ — Brevo cho thử lại trong vòng 48 giờ cho đến khi
-tên miền hiện trạng thái **Authenticated**.
+| Brevo yêu cầu đặt tại | Gõ vào ô Name |
+|---|---|
+| Chính tên miền gốc | `@` |
+| `mail._domainkey.cvoneclickmatch.com` | `mail._domainkey` |
+| `_dmarc.cvoneclickmatch.com` | `_dmarc` |
+
+Thêm bản ghi TXT ở `@` **không ảnh hưởng** tới bản ghi A của website — một tên
+có thể mang nhiều bản ghi khác loại cùng lúc.
+
+**Bỏ qua gợi ý MX của Cloudflare.** Cloudflare hiện dòng *"Email cannot reach
+@cvoneclickmatch.com — Add an MX record to receive email"*. MX là để **nhận** thư;
+ở đây bạn chỉ **gửi** đi, nên không cần. Thêm MX sai còn gây rắc rối.
+
+**Kiểm tra sau khi thêm** (chờ 1–2 phút cho DNS lan):
+
+```bash
+nslookup -type=TXT cvoneclickmatch.com
+nslookup -type=TXT mail._domainkey.cvoneclickmatch.com
+nslookup -type=TXT _dmarc.cvoneclickmatch.com
+```
+
+Thấy đúng giá trị đã dán thì quay lại Brevo bấm nút xác thực. DNS lan truyền
+thường mất vài phút, có thể tới vài giờ — Brevo cho thử lại trong vòng 48 giờ cho
+đến khi tên miền hiện trạng thái **Authenticated**.
 
 **2.6 — Đặt `SENDER_EMAIL`.** Địa chỉ gửi phải thuộc đúng tên miền vừa xác thực:
 
