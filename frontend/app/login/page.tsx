@@ -77,6 +77,13 @@ function LoginContent() {
       setAuth({ id: data._id, email: data.email, role: data.role })
       setLoading(false)
 
+      // Tài khoản do admin import dùng mật khẩu tạm gửi qua email — bắt đổi ngay
+      // trước khi vào hệ thống.
+      if ((data as { mustChangePassword?: boolean }).mustChangePassword) {
+        toast.info('Đây là mật khẩu tạm. Vui lòng đặt mật khẩu mới để tiếp tục.')
+        router.push('/change-password?first=1')
+        return
+      }
       router.push(HOME_BY_ROLE[data.role])
     } catch (err) {
       setLoading(false)

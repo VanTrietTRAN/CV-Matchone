@@ -42,6 +42,7 @@ import {
   MapPin,
   Lock,
   Copy,
+  Trash2,
 } from 'lucide-react'
 
 type Job = {
@@ -150,6 +151,8 @@ export default function EmployerJobDetailPage() {
   const [form, setForm] = useState<FormState | null>(null)
   const [applyCount, setApplyCount] = useState<number | null>(null)
   const [closeOpen, setCloseOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [denied, setDenied] = useState(false)
 
   const load = useCallback(async () => {
@@ -257,6 +260,22 @@ export default function EmployerJobDetailPage() {
       load()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Không đóng được tin')
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      const res = await apiFetch<{ message: string; data?: { deletedApplications: number } }>(
+        `/api/jobs/${jobId}`,
+        { method: 'DELETE' },
+      )
+      const n = res.data?.deletedApplications ?? 0
+      toast.success(n > 0 ? `${res.message} (kèm ${n} hồ sơ ứng tuyển)` : res.message)
+      router.push('/employer/dashboard')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Không xoá được tin')
+      setDeleting(false)
     }
   }
 
@@ -376,6 +395,15 @@ export default function EmployerJobDetailPage() {
                     Đóng tin
                   </Button>
                 )}
+                <Button
+                  variant="ghost"
+                  className="text-danger-foreground hover:bg-danger/10 hover:text-danger-foreground"
+                  onClick={() => setDeleteOpen(true)}
+                  disabled={deleting}
+                >
+                  <Trash2 />
+                  Xoá tin
+                </Button>
                 <Button onClick={() => setEditing(true)}>
                   <Pencil />
                   Chỉnh sửa
@@ -618,6 +646,19 @@ export default function EmployerJobDetailPage() {
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title="Xoá vĩnh viễn tin tuyển dụng?"
+          description={
+            'Tin và toàn bộ hồ sơ ứng tuyển vào tin này sẽ bị xoá, không khôi phục được. ' +
+            'Nếu chỉ muốn ngừng hiển thị, hãy dùng "Đóng tin" — hồ sơ đã nhận vẫn giữ nguyên.'
+          }
+          actionLabel="Xoá vĩnh viễn"
+          destructive
+          onConfirm={handleDelete}
+        />
 
         <ConfirmDialog
           open={closeOpen}

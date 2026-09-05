@@ -321,6 +321,32 @@ const sendEmail = async ({ to, subject, html }) => {
   }
 };
 
+/** Báo sinh viên rằng admin đã tạo sẵn tài khoản, kèm mật khẩu tạm thời. */
+const sendAccountCreatedEmail = async ({ user, password }) => {
+  try {
+    const t = await initTransporter();
+    if (!t) throw new Error(readEmailConfig().problems.join(' ') || 'Chưa cấu hình được SMTP.');
+
+    const tpl = await loadTemplates();
+    const { subject, html } = templates.renderAccountCreated({
+      tpl,
+      user,
+      password,
+      frontendUrl: frontendOrigin(),
+    });
+
+    const info = await t.sendMail({ from: readEmailConfig().sender, to: user.email, subject, html });
+    console.log(`[Email] Đã gửi thông tin tài khoản cho ${user.email} (MessageID: ${info.messageId})`);
+    return { sent: true, messageId: info.messageId };
+  } catch (error) {
+    // Không ném: import hàng trăm sinh viên, một địa chỉ hỏng không được làm
+    // dừng cả lô. Người gọi ghi lại để admin biết ai chưa nhận được thư.
+    const reason = describeSmtpError(error);
+    console.error(`[Email] Lỗi gửi thông tin tài khoản cho ${user?.email}: ${reason}`);
+    return { sent: false, error: reason };
+  }
+};
+
 /** Nhắc doanh nghiệp gia hạn các tin sắp hết hiển thị. */
 const sendJobExpiringEmail = async ({ employer, jobs, days }) => {
   try {
@@ -413,6 +439,7 @@ module.exports = {
   sendVerificationEmail,
   sendEmployerDigestEmail,
   sendJobExpiringEmail,
+  sendAccountCreatedEmail,
   getEmailConfig,
   verifyEmailConnection,
   invalidateTemplateCache,

@@ -23,6 +23,22 @@ router.post(
 );
 router.put("/:id", protect, authorize("employer", "admin"), updateJob);
 router.patch("/:id/close", protect, authorize("employer", "admin"), closeJob);
+// Import tin tuyển dụng từ Excel. Phải đặt TRƯỚC route "/:id" để "import"
+// không bị hiểu là một id.
+const sheetUpload = require("../middleware/sheetUploadMiddleware");
+const { importJobs, downloadTemplate } = require("../controllers/importController");
+router.get("/import/template", (req, res) => {
+  req.params.kind = "jobs";
+  downloadTemplate(req, res);
+});
+router.post(
+  "/import",
+  protect,
+  authorize("employer", "admin"),
+  sheetUpload.single("file"),
+  importJobs,
+);
+
 router.delete("/:id", protect, authorize("employer", "admin"), deleteJob);
 router.get("/", getAllOpenJobs);
 router.get("/match-preview", protect, authorize("candidate"), getJobsWithMatchPreview);

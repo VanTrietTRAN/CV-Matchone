@@ -161,22 +161,23 @@ const resetUserPasswordByAdmin = async (req, res) => {
       return res.status(404).json({ message: 'Không tìm thấy tài khoản người dùng' });
     }
 
-    const crypto = require('crypto');
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    // Đặt lại mật khẩu nay dùng mã 6 số như luồng "Quên mật khẩu" của người dùng.
+    // Trước đây chỗ này vẫn dựng link có token — sau khi đổi luồng thì tham số
+    // resetUrl không còn được đọc nữa nên email gửi đi thiếu hẳn phần hướng dẫn.
+    const otp = require('../utils/otp');
+    const { code, hash, expiresAt } = otp.issueCode();
 
-    user.resetPasswordToken = resetTokenHash;
-    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+    user.resetPasswordToken = hash;
+    user.resetPasswordExpire = expiresAt;
+    user.resetPasswordAttempts = 0;
     await user.save();
-
-    const frontendUrl = frontendOrigin();
-    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
     const emailService = require('../services/emailService');
     await emailService.sendPasswordResetEmail({
       to: user.email,
       fullName: user.fullName || user.email,
-      resetUrl,
+      code,
+      minutes: Math.round(otp.TTL_MS / 60000),
     });
 
     await logAdminAction({
@@ -337,8 +338,8 @@ const getSystemInfo = async (req, res) => {
       const typeMap = {
         demo: 'Mỗi phút (Demo)',
         hourly: 'Mỗi giờ',
-        daily: 'Hàng ngày (7h & 17h)',
-        weekly: 'Hàng tuần (Thứ 2)',
+        daily: 'Hàng ngày (12h)',
+        weekly: 'Hàng tuần (14h thứ Năm)',
         custom: 'Tùy chỉnh',
       };
       const label = typeMap[settingsRecord.value.scheduleType] || 'Tùy chỉnh';
@@ -579,8 +580,8 @@ const getEmailSettings = async (req, res) => {
         key: 'email_matching_settings',
         value: {
           isEnabled: true,
-          scheduleType: 'daily',
-          cronExpression: '0 7,17 * * *',
+          scheduleType: 'weekly',
+          cronExpression: '0 14 * * 4',
         }
       });
     }
@@ -622,8 +623,9 @@ const updateEmailSettings = async (req, res) => {
     let computedCron = cronExpression;
     if (scheduleType === 'demo') computedCron = '* * * * *';
     else if (scheduleType === 'hourly') computedCron = '0 * * * *';
-    else if (scheduleType === 'daily') computedCron = '0 7,17 * * *';
-    else if (scheduleType === 'weekly') computedCron = '0 8 * * 1';
+    else if (scheduleType === 'daily') computedCron = '0 12 * * *';
+    // Mặc định của hệ thống: 14h chiều thứ Năm hằng tuần (0 = Chủ nhật)
+    else if (scheduleType === 'weekly') computedCron = '0 14 * * 4';
 
     const settingsRecord = await SystemSetting.findOneAndUpdate(
       { key: 'email_matching_settings' },

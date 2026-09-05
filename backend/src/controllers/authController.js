@@ -61,6 +61,9 @@ const sendTokenCookie = (user, statusCode, res, extraJson = {}) => {
         _id: user._id,
         email: user.email,
         role: user.role,
+        // Tài khoản do admin import có mật khẩu tạm gửi qua email; client thấy cờ
+        // này thì đưa thẳng người dùng sang trang đổi mật khẩu.
+        ...(user.mustChangePassword === true ? { mustChangePassword: true } : {}),
         // Không trả token trong body — client dùng cookie
         ...extraJson,
     });
@@ -210,6 +213,7 @@ const getCurrentUser = async (req, res) => {
         email: req.user.email,
         role: req.user.role,
         isEmailSubscribed: req.user.isEmailSubscribed,
+        mustChangePassword: req.user.mustChangePassword === true,
         status: req.user.status
     });
 };
@@ -694,6 +698,9 @@ const changePassword = async (req, res) => {
     // mật khẩu rồi lại đổi tại đây) — tránh để link cũ còn hiệu lực
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
+
+    // Tài khoản import bắt đổi mật khẩu lần đầu — đổi xong thì bỏ cờ đi
+    user.mustChangePassword = undefined;
 
     await user.save();
 

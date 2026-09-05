@@ -62,6 +62,19 @@ const DEFAULTS = {
       '⚠️ Mã có hiệu lực trong {{minutes}} phút. Nếu bạn không đăng ký tài khoản tại {{brand}}, hãy bỏ qua email này.',
     footer: '© {{brand}} · Email tự động, vui lòng không trả lời',
   },
+  accountCreated: {
+    subject: '[{{brand}}] Tài khoản của bạn đã sẵn sàng',
+    heading: '🎓 Chào {{name}}',
+    intro:
+      'Nhà trường đã tạo sẵn tài khoản {{brand}} cho bạn để tìm việc làm và thực tập phù hợp với ngành {{major}}. Đăng nhập bằng thông tin bên dưới.',
+    passwordLabel: 'Mật khẩu tạm thời',
+    buttonLabel: 'Đăng nhập ngay',
+    note:
+      '⚠️ Đây là mật khẩu tạm thời. Hệ thống sẽ yêu cầu bạn đổi mật khẩu ngay trong lần đăng nhập đầu tiên. Không chia sẻ mật khẩu này với ai.',
+    nextSteps:
+      'Sau khi đăng nhập, hãy tải CV lên hoặc dùng công cụ tạo CV. AI sẽ đọc hồ sơ và gợi ý việc làm phù hợp gửi vào email của bạn.',
+    footer: '© {{brand}} · Email tự động, vui lòng không trả lời',
+  },
   jobExpiring: {
     subject: '[{{brand}}] {{count}} tin tuyển dụng sắp hết hạn',
     greeting: 'Chào {{name}},',
@@ -92,6 +105,7 @@ const VARIABLES = {
   verifyEmail: ['brand', 'name', 'code', 'minutes'],
   employerDigest: ['brand', 'name', 'count', 'threshold'],
   jobExpiring: ['brand', 'name', 'count', 'days'],
+  accountCreated: ['brand', 'name', 'email', 'major', 'studentCode'],
 };
 
 /** Nhãn tiếng Việt cho từng trường, dùng cho giao diện Quản trị. */
@@ -105,6 +119,8 @@ const FIELD_LABELS = {
   buttonLabel: 'Chữ trên nút bấm',
   footer: 'Chân thư',
   footerLinkLabel: 'Chữ của link ở chân thư',
+  passwordLabel: 'Nhãn ô mật khẩu',
+  nextSteps: 'Hướng dẫn bước tiếp theo',
 };
 
 const TEMPLATE_LABELS = {
@@ -114,6 +130,7 @@ const TEMPLATE_LABELS = {
   jobAlert: 'Thông báo việc làm theo từ khoá',
   employerDigest: 'Hồ sơ phù hợp cho doanh nghiệp (15h)',
   jobExpiring: 'Nhắc hạn tin tuyển dụng',
+  accountCreated: 'Tài khoản sinh viên do admin tạo',
 };
 
 const escapeHtml = (value) =>
@@ -411,6 +428,65 @@ const renderEmployerDigest = ({ tpl, employer, applicants, threshold, frontendUr
   };
 };
 
+/** Email báo tài khoản sinh viên đã được tạo sẵn, kèm mật khẩu tạm thời. */
+const renderAccountCreated = ({ tpl, user, password, frontendUrl }) => {
+  const t = tpl.accountCreated;
+  const vars = {
+    brand: tpl.brand.name,
+    name: user.fullName || user.email,
+    email: user.email,
+    major: user.major || 'của bạn',
+    studentCode: user.studentCode || '',
+  };
+
+  const rows = [
+    ['Email đăng nhập', user.email],
+    user.studentCode ? ['MSSV', user.studentCode] : null,
+    user.studentClass ? ['Lớp', user.studentClass] : null,
+    user.major ? ['Ngành học', user.major] : null,
+  ].filter(Boolean);
+
+  const infoTable = `
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      ${rows
+        .map(
+          ([k, v]) => `
+        <tr>
+          <td style="padding:6px 0;color:#64748b;font-size:14px;width:40%;">${escapeHtml(k)}</td>
+          <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;">${escapeHtml(v)}</td>
+        </tr>`,
+        )
+        .join('')}
+    </table>`;
+
+  return {
+    subject: fillPlain(t.subject, vars),
+    html: layout({
+      brand: tpl.brand,
+      bodyHtml: `
+        <h2 style="margin-top:0;font-size:18px;">${fill(t.heading, vars)}</h2>
+        <p style="color:#334155;font-size:14px;line-height:1.6;">${fill(t.intro, vars)}</p>
+        ${infoTable}
+        <div style="text-align:center;margin:20px 0;">
+          <p style="margin:0 0 8px;color:#64748b;font-size:13px;">${fill(t.passwordLabel, vars)}</p>
+          <div style="display:inline-block;background:#f1f5f9;border:1px dashed ${BRAND_ACCENT};border-radius:10px;padding:14px 26px;">
+            <span style="font-family:'Courier New',Courier,monospace;font-size:24px;font-weight:bold;letter-spacing:3px;color:${BRAND_ACCENT};">${escapeHtml(
+              password,
+            )}</span>
+          </div>
+        </div>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${frontendUrl}/login" style="background:${BRAND_ACCENT};color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:bold;font-size:14px;display:inline-block;">
+            ${fill(t.buttonLabel, vars)}
+          </a>
+        </div>
+        ${t.note ? highlight(`<em>${fill(t.note, vars)}</em>`) : ''}
+        ${t.nextSteps ? `<p style="color:#334155;font-size:14px;line-height:1.6;">${fill(t.nextSteps, vars)}</p>` : ''}`,
+      footerHtml: fill(t.footer, vars),
+    }),
+  };
+};
+
 /** Email nhắc gia hạn tin tuyển dụng sắp hết hiển thị. */
 const renderJobExpiring = ({ tpl, employer, jobs, days, frontendUrl }) => {
   const t = tpl.jobExpiring;
@@ -489,6 +565,14 @@ const SAMPLE = {
   ],
   alert: { keyword: 'backend', location: 'Đà Nẵng' },
   code: '482913',
+  student: {
+    email: 'sinhvien@example.com',
+    fullName: 'Nguyễn Văn A',
+    studentCode: '102210123',
+    studentClass: '21TCLC_DT2',
+    major: 'Công nghệ Thông tin',
+  },
+  tempPassword: 'Kx7m-Qp2n',
   expiringJobs: [
     { id: 'job1', title: 'Lập trình viên Backend (Node.js)', expiresAt: '03/09/2026', daysLeft: 3, applicationCount: 12 },
     { id: 'job2', title: 'Kỹ sư Dữ liệu', expiresAt: '05/09/2026', daysLeft: 5, applicationCount: 4 },
@@ -564,6 +648,14 @@ const renderPreview = (key, tpl, frontendUrl) => {
       frontendUrl,
     });
   }
+  if (key === 'accountCreated') {
+    return renderAccountCreated({
+      tpl,
+      user: SAMPLE.student,
+      password: SAMPLE.tempPassword,
+      frontendUrl,
+    });
+  }
   throw new Error(`Không có mẫu email tên "${key}"`);
 };
 
@@ -579,6 +671,7 @@ module.exports = {
   renderVerifyEmail,
   renderEmployerDigest,
   renderJobExpiring,
+  renderAccountCreated,
   renderPreview,
   escapeHtml,
 };

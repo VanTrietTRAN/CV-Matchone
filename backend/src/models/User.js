@@ -31,6 +31,20 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    // ─── Thông tin sinh viên (tài khoản do admin import từ file Excel) ──────
+    fullName: { type: String, trim: true },
+    studentClass: { type: String, trim: true },   // Lớp
+    studentCode: { type: String, trim: true },    // MSSV
+    major: { type: String, trim: true },          // Ngành học
+    specialization: { type: String, trim: true }, // Chuyên ngành
+    expectedGraduation: { type: String, trim: true },
+
+    // Tài khoản tạo bằng import có mật khẩu ngẫu nhiên gửi qua email, nên bắt
+    // đổi mật khẩu ở lần đăng nhập đầu tiên. Không đặt default để tài khoản
+    // đăng ký bình thường (undefined) không bị hỏi.
+    mustChangePassword: { type: Boolean },
+    importedAt: { type: Date },
+
     isEmailSubscribed: {
       type: Boolean,
       default: true,

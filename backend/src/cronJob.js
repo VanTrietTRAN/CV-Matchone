@@ -397,9 +397,12 @@ const runMatchingProcess = async () => {
       return { openJobsCount: 0, candidatesProcessed: 0 };
     }
 
+    // $ne: false thay vì === true, để tài khoản tạo trước khi có trường này
+    // (giá trị undefined) vẫn nhận được thư. Người dùng tắt tường minh thì bỏ qua,
+    // và bật lại sẽ tự nhận ở lượt thứ Năm kế tiếp — không cần thao tác gì thêm.
     const candidates = await User.find({
       role: "candidate",
-      isEmailSubscribed: true,
+      isEmailSubscribed: { $ne: false },
     });
 
     for (const candidate of candidates) {
@@ -444,8 +447,10 @@ const startCronJobs = async () => {
         key: 'email_matching_settings',
         value: {
           isEnabled: true,
-          scheduleType: 'daily',
-          cronExpression: '0 12 * * *',
+          scheduleType: 'weekly',
+          // Thứ Năm 14h. node-cron đánh số ngày trong tuần từ 0 (Chủ nhật),
+          // nên thứ Năm là 4.
+          cronExpression: '0 14 * * 4',
         }
       });
     }

@@ -373,8 +373,8 @@ export default function AdminSystemPage() {
                       <SelectContent className="bg-slate-900 border-slate-800">
                         <SelectItem value="demo" className="text-xs text-slate-200">Mỗi phút (Demo)</SelectItem>
                         <SelectItem value="hourly" className="text-xs text-slate-200">Mỗi giờ</SelectItem>
-                        <SelectItem value="daily" className="text-xs text-slate-200">Hàng ngày (7h & 17h)</SelectItem>
-                        <SelectItem value="weekly" className="text-xs text-slate-200">Hàng tuần (Thứ 2)</SelectItem>
+                        <SelectItem value="daily" className="text-xs text-slate-200">Hàng ngày (12h)</SelectItem>
+                        <SelectItem value="weekly" className="text-xs text-slate-200">Hàng tuần (14h thứ Năm)</SelectItem>
                         <SelectItem value="custom" className="text-xs text-slate-200">Tùy chỉnh (Cron Expression)</SelectItem>
                       </SelectContent>
                     </Select>

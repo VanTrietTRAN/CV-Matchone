@@ -330,12 +330,30 @@ const deleteJob = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy tin tuyển dụng" });
     }
 
-    if (job.employerId.toString() !== req.user._id.toString()) {
+    // Route cho phép cả admin, nhưng chỗ này trước đây chỉ so chủ sở hữu nên
+    // admin gọi vào luôn bị 403 — cấp quyền ở một nơi mà chặn ở nơi khác.
+    const isOwner = job.employerId.toString() === req.user._id.toString();
+    if (!isOwner && req.user.role !== "admin") {
       return res.status(403).json({ message: "Không có quyền xóa tin tuyển dụng này" });
     }
 
+    // Xoá tin mà để lại đơn ứng tuyển và thông báo trỏ tới nó thì ứng viên sẽ
+    // thấy đơn không mở được, còn trang quản lý đếm sai số liệu.
+    const Notification = require("../models/Notification");
+    const Application = require("../models/Application");
+    const [apps, notifs] = await Promise.all([
+      Application.deleteMany({ jobId: job._id }),
+      Notification.deleteMany({ jobId: job._id }),
+    ]);
+
     await job.deleteOne();
-    res.json({ message: "Xóa tin tuyển dụng thành công" });
+    res.json({
+      message: "Đã xoá tin tuyển dụng",
+      data: {
+        deletedApplications: apps.deletedCount,
+        deletedNotifications: notifs.deletedCount,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -411,6 +429,7 @@ const getJobsWithMatchPreview = async (req, res) => {
 };
 
 module.exports = {
+  computeJobEmbedding,
   getAllOpenJobs,
   getMyJobs,
   getJobById,

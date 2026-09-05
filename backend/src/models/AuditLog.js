@@ -22,6 +22,8 @@ const auditLogSchema = new mongoose.Schema(
         'RETRY_AI_PARSING',
         'CREATE_SYSTEM_BROADCAST',
         'UPDATE_SYSTEM_SETTINGS',
+        'IMPORT_USERS',
+        'IMPORT_JOBS',
       ],
       index: true,
     },

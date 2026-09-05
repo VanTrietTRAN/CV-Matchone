@@ -56,6 +56,13 @@ router.patch('/jobs/:id/close', closeJob);
 router.delete('/jobs/:id', deleteJob);
 
 router.get('/system', getSystemInfo);
+// ─── Import hàng loạt từ Excel ───────────────────────────────────────────────
+const sheetUpload = require('../middleware/sheetUploadMiddleware');
+const { importUsers, importJobs, downloadTemplate } = require('../controllers/importController');
+router.get('/import/template/:kind', downloadTemplate);
+router.post('/import/users', sheetUpload.single('file'), importUsers);
+router.post('/import/jobs', sheetUpload.single('file'), importJobs);
+
 router.get('/system/email-check', checkEmailConnection);
 router.get('/system/email-templates', getEmailTemplates);
 router.put('/system/email-templates', updateEmailTemplates);

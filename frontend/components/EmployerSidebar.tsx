@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import {
   LayoutDashboard,
   PlusCircle,
+  FileSpreadsheet,
   Users,
   Star,
   Building2,
@@ -23,6 +24,7 @@ import { useUnreadCount } from '@/hooks/use-unread-count'
 const baseItems: NavItem[] = [
   { label: 'Tổng quan', href: '/employer/dashboard', icon: LayoutDashboard },
   { label: 'Đăng tin tuyển dụng', href: '/employer/post-job', icon: PlusCircle },
+  { label: 'Import tin từ Excel', href: '/employer/import-jobs', icon: FileSpreadsheet },
   { label: 'Hồ sơ ứng viên', href: '/employer/candidates', icon: Users },
   { label: 'Đánh giá công ty', href: '/employer/reviews', icon: Star },
   { label: 'Trang công ty', href: '/employer/company-profile', icon: Building2 },

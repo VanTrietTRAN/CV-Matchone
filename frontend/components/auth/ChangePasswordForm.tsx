@@ -46,7 +46,10 @@ const styles = {
   },
 } as const
 
-export default function ChangePasswordForm({ variant = 'light' }: { variant?: Variant } = {}) {
+export default function ChangePasswordForm({
+  variant = 'light',
+  onSuccess,
+}: { variant?: Variant; onSuccess?: () => void } = {}) {
   const s = styles[variant]
   const [form, setForm] = useState(emptyForm)
   const [visible, setVisible] = useState<Record<Field, boolean>>({
@@ -89,6 +92,7 @@ export default function ChangePasswordForm({ variant = 'light' }: { variant?: Va
       })
       toast.success('Đổi mật khẩu thành công.')
       setForm(emptyForm)
+      onSuccess?.()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Đổi mật khẩu thất bại.')
     } finally {
