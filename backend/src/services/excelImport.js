@@ -87,16 +87,16 @@ const buildTemplate = (columns, exampleRow) => {
 
 // ─── Cấu hình cột cho từng loại import ───────────────────────────────────────
 
+/**
+ * Cột cho import tài khoản sinh viên — chốt 5 trường.
+ * Chỉ Họ và tên + Email là bắt buộc; ba trường còn lại thiếu vẫn tạo được tài khoản.
+ */
 const STUDENT_COLUMNS = {
-  fullName: { aliases: ['Họ tên', 'Họ và tên', 'Ho ten', 'Full name', 'Tên'], required: true },
+  fullName: { aliases: ['Họ và tên', 'Họ tên', 'Ho ten', 'Full name', 'Tên'], required: true },
+  major: { aliases: ['Ngành học', 'Ngành', 'Chuyên ngành', 'Major'] },
   email: { aliases: ['Email', 'Email sinh viên', 'Địa chỉ email', 'Mail'], required: true },
-  studentClass: { aliases: ['Lớp', 'Lop', 'Class', 'Lớp học'] },
-  studentCode: { aliases: ['MSSV', 'Mã số sinh viên', 'Mã sinh viên', 'Student ID'] },
-  major: { aliases: ['Ngành học', 'Ngành', 'Major', 'Nganh hoc'] },
-  specialization: { aliases: ['Chuyên ngành', 'Chuyen nganh', 'Specialization'] },
-  expectedGraduation: {
-    aliases: ['Thời gian dự kiến tốt nghiệp', 'Dự kiến tốt nghiệp', 'Tốt nghiệp', 'Graduation'],
-  },
+  phone: { aliases: ['Điện thoại', 'Số điện thoại', 'SĐT', 'Phone'] },
+  note: { aliases: ['Ghi chú', 'Ghi chu', 'Note', 'Notes'] },
 };
 
 /**

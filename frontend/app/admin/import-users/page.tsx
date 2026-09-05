@@ -32,14 +32,16 @@ export default function AdminImportUsersPage() {
             Các cột trong file
           </h2>
           <div className="mb-5 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
-            <p>• <strong className="text-white">Họ tên</strong> — bắt buộc</p>
+            <p>• <strong className="text-white">Họ và tên</strong> — bắt buộc</p>
             <p>• <strong className="text-white">Email</strong> — bắt buộc, dùng để đăng nhập</p>
-            <p>• Lớp</p>
-            <p>• MSSV</p>
             <p>• Ngành học</p>
-            <p>• Chuyên ngành</p>
-            <p>• Thời gian dự kiến tốt nghiệp</p>
+            <p>• Điện thoại</p>
+            <p>• Ghi chú</p>
           </div>
+          <p className="mb-5 rounded-lg bg-slate-800/60 p-3 text-xs text-slate-400">
+            Thiếu ba trường không bắt buộc vẫn tạo được tài khoản. Tiêu đề cột viết khác một chút
+            (&quot;Họ tên&quot;, &quot;SĐT&quot;, &quot;Note&quot;...) hệ thống vẫn nhận ra.
+          </p>
 
           <div className="rounded-xl bg-slate-950 p-5">
             <ExcelImporter

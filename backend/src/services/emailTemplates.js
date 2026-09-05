@@ -105,7 +105,7 @@ const VARIABLES = {
   verifyEmail: ['brand', 'name', 'code', 'minutes'],
   employerDigest: ['brand', 'name', 'count', 'threshold'],
   jobExpiring: ['brand', 'name', 'count', 'days'],
-  accountCreated: ['brand', 'name', 'email', 'major', 'studentCode'],
+  accountCreated: ['brand', 'name', 'email', 'major', 'phone'],
 };
 
 /** Nhãn tiếng Việt cho từng trường, dùng cho giao diện Quản trị. */
@@ -436,14 +436,13 @@ const renderAccountCreated = ({ tpl, user, password, frontendUrl }) => {
     name: user.fullName || user.email,
     email: user.email,
     major: user.major || 'của bạn',
-    studentCode: user.studentCode || '',
+    phone: user.phone || '',
   };
 
   const rows = [
     ['Email đăng nhập', user.email],
-    user.studentCode ? ['MSSV', user.studentCode] : null,
-    user.studentClass ? ['Lớp', user.studentClass] : null,
     user.major ? ['Ngành học', user.major] : null,
+    user.phone ? ['Điện thoại', user.phone] : null,
   ].filter(Boolean);
 
   const infoTable = `
@@ -568,9 +567,8 @@ const SAMPLE = {
   student: {
     email: 'sinhvien@example.com',
     fullName: 'Nguyễn Văn A',
-    studentCode: '102210123',
-    studentClass: '21TCLC_DT2',
     major: 'Công nghệ Thông tin',
+    phone: '0901234567',
   },
   tempPassword: 'Kx7m-Qp2n',
   expiringJobs: [
