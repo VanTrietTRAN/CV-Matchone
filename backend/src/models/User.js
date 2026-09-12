@@ -43,6 +43,24 @@ const userSchema = new mongoose.Schema(
     mustChangePassword: { type: Boolean },
     importedAt: { type: Date },
 
+    // Hàng đợi email chào mừng cho tài khoản import.
+    //
+    // Trước đây email gửi thẳng trong request import: 297 sinh viên × ~6 giây =
+    // 30 phút, trong khi proxy ngắt kết nối sau vài phút. Admin thấy trang treo
+    // rồi lỗi, không biết đã tạo được bao nhiêu, còn server vẫn chạy tiếp ở dưới.
+    //
+    // Nay import chỉ tạo tài khoản rồi đánh dấu 'pending'; một worker nền gửi
+    // thư theo nhịp có kiểm soát. Mật khẩu tạm KHÔNG lưu ở đây — worker sinh mật
+    // khẩu mới ngay lúc gửi, nên database không bao giờ chứa mật khẩu dạng rõ.
+    welcomeEmailStatus: {
+      type: String,
+      enum: ['pending', 'sent', 'failed'],
+      index: true,
+    },
+    welcomeEmailAttempts: { type: Number, default: 0 },
+    welcomeEmailError: { type: String },
+    welcomeEmailSentAt: { type: Date },
+
     isEmailSubscribed: {
       type: Boolean,
       default: true,

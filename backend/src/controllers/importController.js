@@ -6,6 +6,7 @@ const excel = require('../services/excelImport');
 const emailService = require('../services/emailService');
 const { frontendOrigin } = require('../utils/frontendUrl');
 const { logAdminAction } = require('../services/auditLogService');
+const { generatePassword } = require('../utils/passwordGenerator');
 
 /**
  * Import hàng loạt từ file Excel: tài khoản sinh viên (admin) và tin tuyển dụng
@@ -18,23 +19,6 @@ const { logAdminAction } = require('../services/auditLogService');
  *   2. **Xem trước trước khi ghi.** `dryRun` trả về đúng những gì sẽ xảy ra mà
  *      không tạo gì — tạo nhầm 200 tài khoản rồi dọn tay là rất mệt.
  */
-
-const MIN_PASSWORD_LENGTH = 9;
-
-/**
- * Mật khẩu tạm ngẫu nhiên, dễ đọc để chép từ email.
- * Bỏ các ký tự dễ nhìn nhầm: 0/O, 1/l/I.
- */
-const generatePassword = () => {
-  const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < MIN_PASSWORD_LENGTH; i += 1) {
-    out += alphabet[crypto.randomInt(0, alphabet.length)];
-    // Chèn gạch nối cho dễ đọc, không tính vào độ dài yêu cầu
-    if (i === 3) out += '-';
-  }
-  return out;
-};
 
 const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
 
@@ -102,12 +86,14 @@ const importUsers = async (req, res) => {
       }
 
       try {
-        const password = generatePassword();
-        const hashed = await bcrypt.hash(password, await bcrypt.genSalt(10));
+        // Mật khẩu đặt ở đây chỉ là chỗ giữ chỗ và không gửi cho ai. Worker sẽ
+        // sinh mật khẩu thật ngay lúc gửi email, nên không có mật khẩu dạng rõ
+        // nào tồn tại giữa hai bước.
+        const placeholder = await bcrypt.hash(generatePassword(), await bcrypt.genSalt(10));
 
-        const user = await User.create({
+        await User.create({
           email,
-          password: hashed,
+          password: placeholder,
           role: 'candidate',
           fullName: row.fullName,
           major: row.major || '',
@@ -118,20 +104,12 @@ const importUsers = async (req, res) => {
           emailVerified: true,
           mustChangePassword: true,
           importedAt: new Date(),
+          // Xếp hàng chờ worker gửi thư — xem src/services/welcomeEmailWorker.js
+          welcomeEmailStatus: 'pending',
+          welcomeEmailAttempts: 0,
         });
 
-        const sendResult = await emailService.sendAccountCreatedEmail({
-          user,
-          password,
-        });
-
-        created.push({
-          row: row.__row,
-          email,
-          fullName: row.fullName,
-          emailSent: sendResult?.sent === true,
-          emailError: sendResult?.sent === false ? sendResult.error : undefined,
-        });
+        created.push({ row: row.__row, email, fullName: row.fullName });
       } catch (e) {
         failed.push({ row: row.__row, email, reason: e.message });
       }
@@ -147,12 +125,13 @@ const importUsers = async (req, res) => {
       });
     }
 
-    const emailFailures = created.filter((c) => c.emailSent === false).length;
+    const { getQueueStats } = require('../services/welcomeEmailWorker');
+    const queue = apply ? await getQueueStats() : null;
+
     return res.json({
       message: apply
-        ? `Đã tạo ${created.length} tài khoản` +
-          (emailFailures ? `, trong đó ${emailFailures} tài khoản chưa gửi được email` : '') +
-          `. Bỏ qua ${skipped.length}, lỗi ${failed.length}.`
+        ? `Đã tạo ${created.length} tài khoản. Bỏ qua ${skipped.length}, lỗi ${failed.length}. ` +
+          `Email chào mừng đang được gửi dần ở nền (${queue.batchSize} thư mỗi 20 giây).`
         : `Xem trước: sẽ tạo ${created.length} tài khoản, bỏ qua ${skipped.length}, lỗi ${failed.length}.`,
       data: {
         applied: apply,
@@ -161,6 +140,7 @@ const importUsers = async (req, res) => {
         created,
         skipped,
         failed,
+        queue,
       },
     });
   } catch (error) {
@@ -378,4 +358,4 @@ const downloadTemplate = (req, res) => {
   res.send(buffer);
 };
 
-module.exports = { importUsers, importJobs, downloadTemplate, generatePassword };
+module.exports = { importUsers, importJobs, downloadTemplate };

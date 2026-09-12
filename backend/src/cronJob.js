@@ -448,9 +448,9 @@ const startCronJobs = async () => {
         value: {
           isEnabled: true,
           scheduleType: 'weekly',
-          // Thứ Năm 14h. node-cron đánh số ngày trong tuần từ 0 (Chủ nhật),
-          // nên thứ Năm là 4.
-          cronExpression: '0 14 * * 4',
+          // 15h thứ Sáu. node-cron đánh số ngày trong tuần từ 0 (Chủ nhật),
+          // nên thứ Sáu là 5.
+          cronExpression: '0 15 * * 5',
         }
       });
     }

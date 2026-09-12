@@ -63,6 +63,10 @@ router.get('/import/template/:kind', downloadTemplate);
 router.post('/import/users', sheetUpload.single('file'), importUsers);
 router.post('/import/jobs', sheetUpload.single('file'), importJobs);
 
+const { getWelcomeEmailQueue, retryWelcomeEmails } = require('../controllers/adminController');
+router.get('/import/welcome-queue', getWelcomeEmailQueue);
+router.post('/import/welcome-queue/retry', retryWelcomeEmails);
+
 router.get('/system/email-check', checkEmailConnection);
 router.get('/system/email-templates', getEmailTemplates);
 router.put('/system/email-templates', updateEmailTemplates);

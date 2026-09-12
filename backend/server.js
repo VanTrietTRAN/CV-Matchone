@@ -201,6 +201,10 @@ const server = app.listen(PORT, () => {
   // Khởi chạy background AI worker xử lý CV
   const { initCronWorker } = require("./src/services/cronWorker");
   initCronWorker();
+
+  // Worker gửi email chào mừng cho tài khoản do admin import
+  const { initWelcomeEmailWorker } = require("./src/services/welcomeEmailWorker");
+  initWelcomeEmailWorker();
 });
 
 // ─── Graceful Shutdown ────────────────────────────────────────────────────────

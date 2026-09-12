@@ -339,7 +339,7 @@ const getSystemInfo = async (req, res) => {
         demo: 'Mỗi phút (Demo)',
         hourly: 'Mỗi giờ',
         daily: 'Hàng ngày (12h)',
-        weekly: 'Hàng tuần (14h thứ Năm)',
+        weekly: 'Hàng tuần (15h thứ Sáu)',
         custom: 'Tùy chỉnh',
       };
       const label = typeMap[settingsRecord.value.scheduleType] || 'Tùy chỉnh';
@@ -506,6 +506,44 @@ const previewEmailTemplate = async (req, res) => {
   }
 };
 
+/** Trạng thái hàng đợi email chào mừng cho tài khoản import. */
+const getWelcomeEmailQueue = async (req, res) => {
+  try {
+    const worker = require('../services/welcomeEmailWorker');
+    const stats = await worker.getQueueStats();
+
+    // Danh sách những tài khoản gửi hỏng, kèm lý do — để admin biết ai chưa nhận
+    const failedUsers = await User.find({ welcomeEmailStatus: 'failed' })
+      .select('email fullName welcomeEmailError welcomeEmailAttempts')
+      .limit(50)
+      .lean();
+
+    res.json({ data: { ...stats, failedUsers } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/** Đưa các tài khoản gửi hỏng về lại hàng đợi. */
+const retryWelcomeEmails = async (req, res) => {
+  try {
+    const worker = require('../services/welcomeEmailWorker');
+    const count = await worker.retryFailed();
+
+    await logAdminAction({
+      req,
+      action: 'IMPORT_USERS',
+      targetModel: 'User',
+      targetId: null,
+      details: { retriedWelcomeEmails: count },
+    });
+
+    res.json({ message: `Đã xếp lại ${count} email vào hàng đợi.`, data: { count } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const triggerMatchingJob = async (req, res) => {
   try {
     // 1. Nhánh gửi email thử nghiệm (Mock data)
@@ -581,7 +619,7 @@ const getEmailSettings = async (req, res) => {
         value: {
           isEnabled: true,
           scheduleType: 'weekly',
-          cronExpression: '0 14 * * 4',
+          cronExpression: '0 15 * * 5',
         }
       });
     }
@@ -624,8 +662,8 @@ const updateEmailSettings = async (req, res) => {
     if (scheduleType === 'demo') computedCron = '* * * * *';
     else if (scheduleType === 'hourly') computedCron = '0 * * * *';
     else if (scheduleType === 'daily') computedCron = '0 12 * * *';
-    // Mặc định của hệ thống: 14h chiều thứ Năm hằng tuần (0 = Chủ nhật)
-    else if (scheduleType === 'weekly') computedCron = '0 14 * * 4';
+    // Mặc định của hệ thống: 15h thứ Sáu hằng tuần (0 = Chủ nhật)
+    else if (scheduleType === 'weekly') computedCron = '0 15 * * 5';
 
     const settingsRecord = await SystemSetting.findOneAndUpdate(
       { key: 'email_matching_settings' },
@@ -889,6 +927,8 @@ const getBroadcasts = async (req, res) => {
 };
 
 module.exports = {
+  getWelcomeEmailQueue,
+  retryWelcomeEmails,
   getEmailTemplates,
   updateEmailTemplates,
   previewEmailTemplate,
