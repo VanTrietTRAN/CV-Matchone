@@ -49,6 +49,24 @@ const sentTodayCount = async () => {
   return User.countDocuments({ welcomeEmailSentAt: { $gte: start } });
 };
 
+/**
+ * Lỗi này là do hệ thống hay do riêng người nhận?
+ *
+ * Hết quota, mất kết nối, sai thông tin đăng nhập đều sẽ lặp lại y hệt với mọi
+ * tài khoản còn trong hàng đợi. Đếm chúng vào lượt thử của từng người là sai —
+ * chỉ tổ đẩy cả hàng đợi sang trạng thái failed vì một nguyên nhân duy nhất.
+ */
+const SHARED_FAILURE = /quota|limit exceeded|rate limit|535|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|Chưa cấu hình|chưa phải SMTP|giá trị mẫu|too many/i;
+const isSharedFailure = (reason) => SHARED_FAILURE.test(String(reason || ''));
+
+/** Chỉ ghi log mỗi nguyên nhân một lần, tránh đầy log khi hàng đợi lớn. */
+let lastLoggedProblem = null;
+const logConfigProblemOnce = (text) => {
+  if (lastLoggedProblem === text) return;
+  lastLoggedProblem = text;
+  console.warn(`[WelcomeEmail] Tạm dừng hàng đợi: ${text}`);
+};
+
 let running = false;
 let task = null;
 
@@ -63,6 +81,16 @@ const processBatch = async () => {
   let failed = 0;
 
   try {
+    // Chưa cấu hình được SMTP thì KHÔNG đụng vào hàng đợi. Nếu cứ chạy, mọi tài
+    // khoản đều hỏng vì cùng một lý do, và sau 3 lượt là cả nghìn tài khoản bị
+    // đánh dấu failed dù bản thân chúng không có gì sai — admin phải bấm gửi lại
+    // toàn bộ. Lỗi cấu hình phải sửa ở cấu hình, không tính vào lượt thử của ai.
+    const cfg = emailService.getEmailConfig();
+    if (!cfg.configured) {
+      logConfigProblemOnce(cfg.problems.join(' '));
+      return { sent: 0, failed: 0, notConfigured: true, problems: cfg.problems };
+    }
+
     const alreadySent = await sentTodayCount();
     const remaining = DAILY_CAP - alreadySent;
     if (remaining <= 0) {
@@ -94,8 +122,20 @@ const processBatch = async () => {
           user.welcomeEmailError = undefined;
           sent += 1;
         } else {
+          const reason = result?.error || 'Không rõ nguyên nhân';
+
+          // Lỗi dùng chung cho mọi người nhận (hết quota ngày của Brevo, mất kết
+          // nối, sai thông tin đăng nhập) không phải lỗi của tài khoản này. Dừng
+          // cả lượt và để nguyên lượt thử — lượt sau hoặc hôm sau chạy lại.
+          if (isSharedFailure(reason)) {
+            logConfigProblemOnce(reason);
+            user.welcomeEmailError = reason;
+            await user.save();
+            return { sent, failed, halted: true, reason };
+          }
+
           user.welcomeEmailAttempts = (user.welcomeEmailAttempts || 0) + 1;
-          user.welcomeEmailError = result?.error || 'Không rõ nguyên nhân';
+          user.welcomeEmailError = reason;
           if (user.welcomeEmailAttempts >= MAX_ATTEMPTS) {
             user.welcomeEmailStatus = 'failed';
           }
