@@ -137,10 +137,17 @@ export default function AdminImportUsersPage() {
 
             {queue.pending > 0 && (
               <p className="mt-3 text-xs text-slate-400">
-                Hệ thống gửi 15 thư mỗi 20 giây, tối đa {queue.dailyCap} thư/ngày để không vượt
-                giới hạn của Brevo.
+                Hệ thống gửi 15 thư mỗi 20 giây (khoảng 45 thư/phút), tối đa {queue.dailyCap}{' '}
+                thư/ngày — đúng bằng hạn mức gói Brevo Free.
                 {queue.estimatedDaysLeft > 0 &&
                   ` Ước tính còn ${queue.estimatedDaysLeft} ngày để gửi hết.`}
+              </p>
+            )}
+
+            {queue.remainingToday <= 20 && queue.sentToday > 0 && (
+              <p className="mt-3 rounded-lg bg-warning-surface/20 p-3 text-xs text-amber-300">
+                Hôm nay còn {queue.remainingToday} lượt gửi. Chạm trần thì mã xác thực đăng ký và
+                mã đặt lại mật khẩu cũng không gửi được cho tới nửa đêm.
               </p>
             )}
 

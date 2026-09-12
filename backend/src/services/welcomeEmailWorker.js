@@ -27,11 +27,20 @@ const BATCH_SIZE = 15;
 const MAX_ATTEMPTS = 3;
 const SCHEDULE = '*/20 * * * * *'; // mỗi 20 giây
 
-// Trần gửi mỗi ngày cho riêng loại thư này. Gói Brevo Free cho 300 email/ngày,
-// chừa lại phần cho mã xác thực, đặt lại mật khẩu và hai email tổng hợp — những
-// thứ người dùng đang chờ ngay lúc đó. Đụng trần thì hàng đợi tự nằm lại tới hôm
-// sau thay vì đốt sạch quota rồi mọi loại thư khác cùng hỏng.
-const DAILY_CAP = Number(process.env.WELCOME_EMAIL_DAILY_CAP) || 250;
+// Trần gửi mỗi ngày cho riêng loại thư này, đặt bằng đúng hạn mức của gói Brevo
+// Free (300 email/ngày) theo yêu cầu — tức dùng hết quota cho thư chào mừng.
+//
+// Đánh đổi: hôm nào hàng đợi chạm 300 thì mã xác thực đăng ký, mã đặt lại mật
+// khẩu và hai email tổng hợp đều không gửi được nữa cho tới nửa đêm. Muốn chừa
+// lại một phần thì đặt biến WELCOME_EMAIL_DAILY_CAP nhỏ hơn (ví dụ 250).
+//
+// Đặt cao hơn 300 không có tác dụng: Brevo từ chối ngay, và mỗi lần bị từ chối
+// vẫn tính là một lần thử của tài khoản đó nên chỉ tổ đốt lượt thử.
+const BREVO_FREE_DAILY_LIMIT = 300;
+const DAILY_CAP = Math.min(
+  Number(process.env.WELCOME_EMAIL_DAILY_CAP) || BREVO_FREE_DAILY_LIMIT,
+  BREVO_FREE_DAILY_LIMIT,
+);
 
 /** Số thư chào mừng đã gửi kể từ 0h hôm nay. */
 const sentTodayCount = async () => {
