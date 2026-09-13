@@ -322,22 +322,36 @@ const sendEmail = async ({ to, subject, html }) => {
 };
 
 /** Báo sinh viên rằng admin đã tạo sẵn tài khoản, kèm mật khẩu tạm thời. */
-const sendAccountCreatedEmail = async ({ user, password }) => {
+/**
+ * @param {string[]} [to]  Địa chỉ nhận. Mặc định là email đăng nhập. Gửi cả email
+ *   trường thì hai địa chỉ nằm chung MỘT lá thư — hai lá riêng sẽ phải mang cùng
+ *   một mật khẩu, mà lá thứ hai gửi hỏng rồi thử lại là sinh ra mật khẩu khác.
+ * @param {'personal'|'school'|'both'} [mode]  'school' = thư gửi bù chỉ tới email
+ *   trường, kèm lời nhắc mật khẩu ở thư trước không còn dùng được.
+ */
+const sendAccountCreatedEmail = async ({ user, password, to, mode }) => {
   try {
     const t = await initTransporter();
     if (!t) throw new Error(readEmailConfig().problems.join(' ') || 'Chưa cấu hình được SMTP.');
 
+    const recipients = Array.isArray(to) && to.length ? to : [user.email];
     const tpl = await loadTemplates();
     const { subject, html } = templates.renderAccountCreated({
       tpl,
       user,
       password,
+      mode,
       frontendUrl: frontendOrigin(),
     });
 
-    const info = await t.sendMail({ from: readEmailConfig().sender, to: user.email, subject, html });
-    console.log(`[Email] Đã gửi thông tin tài khoản cho ${user.email} (MessageID: ${info.messageId})`);
-    return { sent: true, messageId: info.messageId };
+    const info = await t.sendMail({ from: readEmailConfig().sender, to: recipients, subject, html });
+    console.log(
+      `[Email] Đã gửi thông tin tài khoản cho ${recipients.join(', ')} (MessageID: ${info.messageId})`,
+    );
+    if (info.rejected?.length) {
+      console.warn(`[Email] Máy chủ từ chối một phần người nhận: ${info.rejected.join(', ')}`);
+    }
+    return { sent: true, messageId: info.messageId, rejected: info.rejected || [] };
   } catch (error) {
     // Không ném: import hàng trăm sinh viên, một địa chỉ hỏng không được làm
     // dừng cả lô. Người gọi ghi lại để admin biết ai chưa nhận được thư.

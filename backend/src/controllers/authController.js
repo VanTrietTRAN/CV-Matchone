@@ -629,6 +629,11 @@ const resetPassword = async (req, res) => {
     user.resetPasswordAttempts = 0;
     // Đặt lại mật khẩu qua email cũng chứng minh sở hữu hộp thư, nên xác thực luôn
     if (user.emailVerified === false) user.emailVerified = true;
+    // Sinh viên import tự đặt mật khẩu qua "Quên mật khẩu" thì mật khẩu tạm coi như
+    // đã được thay. Không xoá cờ này thì họ bị bắt đổi mật khẩu thêm lần nữa, và
+    // tệ hơn: hàng đợi gửi bù tới email trường sẽ gửi mật khẩu tạm mới đè lên
+    // mật khẩu họ vừa đặt.
+    if (user.mustChangePassword) user.mustChangePassword = undefined;
     await user.save();
 
     // Clear any active session cookie if logged in

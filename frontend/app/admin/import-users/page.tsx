@@ -4,19 +4,26 @@ import React, { useCallback, useEffect, useState } from 'react'
 import AdminLayout from '@/layouts/AdminLayout'
 import ExcelImporter from '@/components/shared/ExcelImporter'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
-import { Loader2, Mail, RotateCw, UsersRound } from 'lucide-react'
+import { GraduationCap, Loader2, Mail, RotateCw, UsersRound } from 'lucide-react'
+
+const DEFAULT_SCHOOL_DOMAIN = 'sv1.dut.udn.vn'
 
 type Queue = {
   pending: number
   sent: number
   failed: number
+  skipped: number
+  schoolSent: number
+  schoolDomain: string
+  pendingRecipients: number
   sentToday: number
   dailyCap: number
   remainingToday: number
   estimatedDaysLeft: number
-  failedUsers: { email: string; fullName?: string; welcomeEmailError?: string }[]
+  failedUsers: { email: string; fullName?: string; studentId?: string; welcomeEmailError?: string }[]
 }
 
 /**
@@ -28,6 +35,9 @@ type Queue = {
 export default function AdminImportUsersPage() {
   const [queue, setQueue] = useState<Queue | null>(null)
   const [retrying, setRetrying] = useState(false)
+  // Tắt mặc định: bật lên thì mỗi sinh viên mới tốn 2 lượt gửi, admin phải chủ động chọn
+  const [sendSchoolEmail, setSendSchoolEmail] = useState(false)
+  const schoolDomain = queue?.schoolDomain || DEFAULT_SCHOOL_DOMAIN
 
   const loadQueue = useCallback(async () => {
     try {
@@ -82,22 +92,71 @@ export default function AdminImportUsersPage() {
           <div className="mb-5 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
             <p>• <strong className="text-white">Họ và tên</strong> — bắt buộc</p>
             <p>• <strong className="text-white">Email</strong> — bắt buộc, dùng để đăng nhập</p>
+            <p>
+              • <strong className="text-white">MSSV</strong> — bắt buộc khi bật gửi tới email trường
+            </p>
             <p>• Ngành học</p>
             <p>• Điện thoại</p>
             <p>• Ghi chú</p>
           </div>
           <p className="mb-5 rounded-lg bg-slate-800/60 p-3 text-xs text-slate-400">
-            Thiếu ba trường không bắt buộc vẫn tạo được tài khoản. Tiêu đề cột viết khác một chút
-            (&quot;Họ tên&quot;, &quot;SĐT&quot;, &quot;Note&quot;...) hệ thống vẫn nhận ra.
+            Thiếu các trường không bắt buộc vẫn tạo được tài khoản. Tiêu đề cột viết khác một chút
+            (&quot;Họ tên&quot;, &quot;Mã số sinh viên&quot;, &quot;SĐT&quot;, &quot;Note&quot;...)
+            hệ thống vẫn nhận ra.
           </p>
 
           <div className="rounded-xl bg-slate-950 p-5">
             <ExcelImporter
               endpoint="/api/admin/import/users"
               templateUrl="/api/admin/import/template/users"
-              labels={{ unit: 'tài khoản', createVerb: 'tạo' }}
+              extraFields={{ sendSchoolEmail: String(sendSchoolEmail) }}
+              labels={{ unit: 'tài khoản', createVerb: 'tạo', requeueUnit: 'thư tới email trường' }}
               onDone={loadQueue}
-            />
+            >
+              <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <label htmlFor="send-school-email" className="flex cursor-pointer items-start gap-3">
+                    <GraduationCap className="mt-0.5 size-5 shrink-0 text-brand-400" />
+                    <span>
+                      <span className="block text-sm font-semibold text-white">
+                        Gửi thêm tới email trường
+                      </span>
+                      <span className="block text-xs break-all text-slate-400">
+                        MSSV@{schoolDomain}
+                      </span>
+                    </span>
+                  </label>
+                  <Switch
+                    id="send-school-email"
+                    checked={sendSchoolEmail}
+                    onCheckedChange={setSendSchoolEmail}
+                  />
+                </div>
+
+                {sendSchoolEmail && (
+                  <ul className="mt-3 space-y-1.5 border-t border-slate-800 pt-3 text-xs text-slate-300">
+                    <li>
+                      • <strong className="text-white">Sinh viên mới:</strong> một thư gửi cùng lúc
+                      tới email cá nhân và email trường.
+                    </li>
+                    <li>
+                      • <strong className="text-white">Đã có tài khoản, đã đổi mật khẩu:</strong> bỏ
+                      qua.
+                    </li>
+                    <li>
+                      • <strong className="text-white">Đã có tài khoản, chưa đổi mật khẩu:</strong>{' '}
+                      gửi bù <em>chỉ</em> tới email trường, kèm mật khẩu tạm mới. Mật khẩu trong
+                      thư gmail trước sẽ hết hiệu lực — thư mới có ghi rõ điều này.
+                    </li>
+                    <li className="text-amber-300">
+                      • Brevo tính hạn mức theo từng người nhận: mỗi sinh viên mới tốn 2 lượt, nên
+                      một ngày gửi được khoảng {Math.floor((queue?.dailyCap ?? 300) / 2)} sinh viên
+                      mới thay vì {queue?.dailyCap ?? 300}. Phần còn lại tự gửi tiếp vào hôm sau.
+                    </li>
+                  </ul>
+                )}
+              </div>
+            </ExcelImporter>
           </div>
         </div>
 
@@ -123,12 +182,27 @@ export default function AdminImportUsersPage() {
               )}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-4">
-              <QueueStat label="Đang chờ gửi" value={queue.pending} tone="wait" />
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <QueueStat
+                label="Đang chờ gửi"
+                value={queue.pending}
+                hint={
+                  queue.pendingRecipients > queue.pending
+                    ? `${queue.pendingRecipients} lượt gửi`
+                    : undefined
+                }
+                tone="wait"
+              />
               <QueueStat label="Đã gửi" value={queue.sent} tone="ok" />
+              <QueueStat
+                label="Đã gửi email trường"
+                value={queue.schoolSent}
+                hint={`@${queue.schoolDomain}`}
+                tone="ok"
+              />
               <QueueStat label="Gửi hỏng" value={queue.failed} tone="bad" />
               <QueueStat
-                label="Còn gửi được hôm nay"
+                label="Lượt gửi còn hôm nay"
                 value={queue.remainingToday}
                 hint={`${queue.sentToday}/${queue.dailyCap}`}
                 tone="wait"
@@ -137,10 +211,17 @@ export default function AdminImportUsersPage() {
 
             {queue.pending > 0 && (
               <p className="mt-3 text-xs text-slate-400">
-                Hệ thống gửi 15 thư mỗi 20 giây (khoảng 45 thư/phút), tối đa {queue.dailyCap}{' '}
-                thư/ngày — đúng bằng hạn mức gói Brevo Free.
+                Hệ thống gửi 15 thư mỗi 20 giây, tối đa {queue.dailyCap} lượt gửi/ngày — đúng bằng
+                hạn mức gói Brevo Free. Thư gửi cả email cá nhân lẫn email trường tính 2 lượt.
                 {queue.estimatedDaysLeft > 0 &&
-                  ` Ước tính còn ${queue.estimatedDaysLeft} ngày để gửi hết.`}
+                  ` Ước tính cần thêm ${queue.estimatedDaysLeft} ngày để gửi hết.`}
+              </p>
+            )}
+
+            {queue.skipped > 0 && (
+              <p className="mt-3 text-xs text-slate-400">
+                {queue.skipped} thư không gửi vì sinh viên đã tự đặt mật khẩu trước khi tới lượt —
+                gửi mật khẩu tạm mới sẽ ghi đè mật khẩu họ đang dùng.
               </p>
             )}
 

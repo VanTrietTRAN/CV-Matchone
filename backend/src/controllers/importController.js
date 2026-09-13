@@ -7,6 +7,12 @@ const emailService = require('../services/emailService');
 const { frontendOrigin } = require('../utils/frontendUrl');
 const { logAdminAction } = require('../services/auditLogService');
 const { generatePassword } = require('../utils/passwordGenerator');
+const {
+  SCHOOL_EMAIL_DOMAIN,
+  normalizeStudentId,
+  isValidStudentId,
+  schoolEmailOf,
+} = require('../utils/schoolEmail');
 
 /**
  * Import hàng loạt từ file Excel: tài khoản sinh viên (admin) và tin tuyển dụng
@@ -22,6 +28,47 @@ const { generatePassword } = require('../utils/passwordGenerator');
 
 const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
 
+/**
+ * Tài khoản đã có trong hệ thống, admin bật gửi tới email trường: gửi bù hay bỏ qua?
+ *
+ * Các đợt import trước chỉ gửi tới email cá nhân. Nay đối chiếu từng dòng với
+ * dữ liệu thật:
+ *   - Đã đổi mật khẩu lần đầu = đã vào được hệ thống, không cần thư nữa.
+ *   - Chưa đổi, thư cá nhân đã gửi: gửi bù CHỈ tới email trường. Gửi lại cả gmail
+ *     vừa tốn thêm một lượt quota, vừa để sinh viên có hai thư với hai mật khẩu.
+ *   - Thư cá nhân còn chờ gửi hoặc gửi hỏng: chưa ai nhận được gì, nên gửi cả
+ *     hai địa chỉ trong một lá — y như tài khoản mới.
+ *
+ * @returns {{skip: string} | {target: 'school'|'both', label: string}}
+ */
+const decideSchoolResend = (user, schoolEmail) => {
+  if (!user.importedAt) {
+    return { skip: 'Tài khoản tự đăng ký, không phải do import — không gửi mật khẩu tạm' };
+  }
+  if (user.mustChangePassword !== true) {
+    return { skip: 'Sinh viên đã đổi mật khẩu, tài khoản đang hoạt động' };
+  }
+  if (!schoolEmail) {
+    return { skip: 'Không có MSSV nên không gửi được tới email trường' };
+  }
+  if (schoolEmail === String(user.email || '').toLowerCase()) {
+    return { skip: 'Email đăng nhập đã chính là email trường' };
+  }
+  if (user.welcomeEmailStatus === 'pending') {
+    if (user.welcomeEmailTo === 'school' || user.welcomeEmailTo === 'both') {
+      return { skip: 'Đang chờ gửi tới email trường' };
+    }
+    return { target: 'both', label: 'Thư cá nhân chưa gửi — gửi cả hai địa chỉ' };
+  }
+  if (user.schoolEmailSentAt) {
+    return { skip: 'Đã gửi tới email trường trước đó' };
+  }
+  if (user.welcomeEmailStatus === 'failed') {
+    return { target: 'both', label: 'Thư cá nhân gửi hỏng — gửi lại cả hai địa chỉ' };
+  }
+  return { target: 'school', label: 'Chỉ gửi bù tới email trường' };
+};
+
 // ─── Import tài khoản sinh viên ──────────────────────────────────────────────
 
 const importUsers = async (req, res) => {
@@ -32,6 +79,10 @@ const importUsers = async (req, res) => {
 
     // Mặc định là chạy thử. Phải gửi apply=true mới thật sự tạo tài khoản.
     const apply = String(req.body?.apply) === 'true';
+
+    // Admin bật trước khi bấm gửi: thư gửi thêm tới <MSSV>@sv1.dut.udn.vn. Bản xem
+    // trước chạy với đúng lựa chọn này, nên con số admin thấy là con số sẽ xảy ra.
+    const sendSchoolEmail = String(req.body?.sendSchoolEmail) === 'true';
 
     let parsed;
     try {
@@ -46,18 +97,30 @@ const importUsers = async (req, res) => {
         data: { headersFound: parsed.headers },
       });
     }
+    if (sendSchoolEmail && parsed.mapping.studentId === undefined) {
+      return res.status(400).json({
+        message:
+          `Đã bật gửi tới email trường nhưng file không có cột MSSV, nên không dựng được ` +
+          `địa chỉ @${SCHOOL_EMAIL_DOMAIN}. Thêm cột MSSV hoặc tắt tuỳ chọn này.`,
+        data: { headersFound: parsed.headers },
+      });
+    }
     if (!parsed.rows.length) {
       return res.status(400).json({ message: 'File không có dòng dữ liệu nào.' });
     }
 
-    const created = [];
+    const created = []; // tài khoản mới
+    const requeued = []; // tài khoản đã có, xếp lại hàng đợi để gửi tới email trường
     const skipped = [];
     const failed = [];
-    const seenInFile = new Set();
+    const warnings = [];
+    const seenEmails = new Set();
+    const seenStudentIds = new Set();
 
     for (const row of parsed.rows) {
       const email = String(row.email || '').toLowerCase().trim();
-      const label = `Dòng ${row.__row}`;
+      const studentId = normalizeStudentId(row.studentId);
+      const schoolEmail = schoolEmailOf(studentId);
 
       if (!row.fullName) {
         failed.push({ row: row.__row, email, reason: 'Thiếu họ tên' });
@@ -67,21 +130,85 @@ const importUsers = async (req, res) => {
         failed.push({ row: row.__row, email: row.email, reason: 'Email không hợp lệ' });
         continue;
       }
+      if (studentId && !isValidStudentId(studentId)) {
+        failed.push({ row: row.__row, email, reason: `MSSV "${studentId}" chỉ được gồm chữ và số (4–20 ký tự)` });
+        continue;
+      }
       // Trùng ngay trong file — Excel dán từ nhiều nguồn rất hay bị
-      if (seenInFile.has(email)) {
+      if (seenEmails.has(email)) {
         skipped.push({ row: row.__row, email, reason: 'Trùng email với dòng phía trên' });
         continue;
       }
-      seenInFile.add(email);
+      if (studentId && seenStudentIds.has(studentId)) {
+        skipped.push({ row: row.__row, email, reason: `Trùng MSSV ${studentId} với dòng phía trên` });
+        continue;
+      }
+      seenEmails.add(email);
+      if (studentId) seenStudentIds.add(studentId);
 
-      const exists = await User.findOne({ email });
-      if (exists) {
-        skipped.push({ row: row.__row, email, reason: 'Email đã có tài khoản' });
+      // Một MSSV là một hộp thư trường. Hai tài khoản chung MSSV thì hai mật khẩu
+      // tạm cùng đổ về một hộp thư — sinh viên không biết cái nào của tài khoản nào.
+      if (studentId) {
+        const owner = await User.findOne({ studentId, email: { $ne: email } }).select('email').lean();
+        if (owner) {
+          failed.push({ row: row.__row, email, reason: `MSSV ${studentId} đã thuộc tài khoản ${owner.email}` });
+          continue;
+        }
+      }
+
+      const existing = await User.findOne({ email });
+
+      // ── Tài khoản đã có: đối chiếu để quyết định gửi bù hay bỏ qua ──
+      if (existing) {
+        if (!sendSchoolEmail) {
+          skipped.push({ row: row.__row, email, reason: 'Email đã có tài khoản' });
+          continue;
+        }
+
+        const decision = decideSchoolResend(existing, schoolEmail);
+        if (decision.skip) {
+          skipped.push({ row: row.__row, email, reason: decision.skip });
+          continue;
+        }
+
+        try {
+          if (apply) {
+            await User.updateOne(
+              { _id: existing._id },
+              {
+                $set: {
+                  studentId,
+                  welcomeEmailStatus: 'pending',
+                  welcomeEmailTo: decision.target,
+                  welcomeEmailAttempts: 0,
+                },
+                $unset: { welcomeEmailError: '' },
+              },
+            );
+          }
+          requeued.push({
+            row: row.__row,
+            email,
+            fullName: existing.fullName || row.fullName,
+            sendTo: decision.target,
+            reason: decision.label,
+          });
+        } catch (e) {
+          failed.push({ row: row.__row, email, reason: e.message });
+        }
         continue;
       }
 
+      // ── Tài khoản mới ──
+      const sendTo = sendSchoolEmail && schoolEmail && schoolEmail !== email ? 'both' : 'personal';
+      const warning =
+        sendSchoolEmail && !schoolEmail
+          ? { row: row.__row, email, reason: 'Không có MSSV — chỉ gửi tới email cá nhân' }
+          : null;
+
       if (!apply) {
-        created.push({ row: row.__row, email, fullName: row.fullName });
+        created.push({ row: row.__row, email, fullName: row.fullName, sendTo });
+        if (warning) warnings.push(warning);
         continue;
       }
 
@@ -96,6 +223,7 @@ const importUsers = async (req, res) => {
           password: placeholder,
           role: 'candidate',
           fullName: row.fullName,
+          studentId: studentId || undefined,
           major: row.major || '',
           phone: row.phone || '',
           note: row.note || '',
@@ -106,14 +234,19 @@ const importUsers = async (req, res) => {
           importedAt: new Date(),
           // Xếp hàng chờ worker gửi thư — xem src/services/welcomeEmailWorker.js
           welcomeEmailStatus: 'pending',
+          welcomeEmailTo: sendTo,
           welcomeEmailAttempts: 0,
         });
 
-        created.push({ row: row.__row, email, fullName: row.fullName });
+        created.push({ row: row.__row, email, fullName: row.fullName, sendTo });
+        if (warning) warnings.push(warning);
       } catch (e) {
         failed.push({ row: row.__row, email, reason: e.message });
       }
     }
+
+    // Brevo tính hạn mức theo người nhận: thư gửi cả hai địa chỉ tốn 2 lượt
+    const quotaUnits = [...created, ...requeued].reduce((sum, r) => sum + (r.sendTo === 'both' ? 2 : 1), 0);
 
     if (apply) {
       await logAdminAction({
@@ -121,25 +254,37 @@ const importUsers = async (req, res) => {
         action: 'IMPORT_USERS',
         targetModel: 'User',
         targetId: null,
-        details: { created: created.length, skipped: skipped.length, failed: failed.length },
+        details: {
+          created: created.length,
+          requeuedForSchoolEmail: requeued.length,
+          skipped: skipped.length,
+          failed: failed.length,
+          sendSchoolEmail,
+        },
       });
     }
 
     const { getQueueStats } = require('../services/welcomeEmailWorker');
     const queue = apply ? await getQueueStats() : null;
 
+    const resendText = sendSchoolEmail ? `, gửi bù ${requeued.length} thư tới email trường` : '';
     return res.json({
       message: apply
-        ? `Đã tạo ${created.length} tài khoản. Bỏ qua ${skipped.length}, lỗi ${failed.length}. ` +
-          `Email chào mừng đang được gửi dần ở nền (${queue.batchSize} thư mỗi 20 giây).`
-        : `Xem trước: sẽ tạo ${created.length} tài khoản, bỏ qua ${skipped.length}, lỗi ${failed.length}.`,
+        ? `Đã tạo ${created.length} tài khoản${resendText}. Bỏ qua ${skipped.length}, lỗi ${failed.length}. ` +
+          `Email đang được gửi dần ở nền (${queue.batchSize} thư mỗi 20 giây).`
+        : `Xem trước: sẽ tạo ${created.length} tài khoản${resendText}, bỏ qua ${skipped.length}, lỗi ${failed.length}.`,
       data: {
         applied: apply,
+        sendSchoolEmail,
+        schoolDomain: SCHOOL_EMAIL_DOMAIN,
         totalRows: parsed.rows.length,
         truncated: parsed.truncated,
         created,
+        requeued,
         skipped,
         failed,
+        warnings,
+        quotaUnits,
         queue,
       },
     });
@@ -330,8 +475,9 @@ const downloadTemplate = (req, res) => {
       columns: excel.STUDENT_COLUMNS,
       example: {
         fullName: 'Nguyễn Văn A',
+        studentId: '102210123',
         major: 'Công nghệ Thông tin',
-        email: 'nguyenvana@sv.edu.vn',
+        email: 'nguyenvana@gmail.com',
         phone: '0901234567',
         note: 'Dự kiến tốt nghiệp 06/2027',
       },

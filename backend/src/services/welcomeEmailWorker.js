@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const emailService = require('./emailService');
 const { generatePassword } = require('../utils/passwordGenerator');
+const { schoolEmailOf, SCHOOL_EMAIL_DOMAIN } = require('../utils/schoolEmail');
 
 /**
  * Gửi email chào mừng cho tài khoản sinh viên do admin import.
@@ -42,11 +43,52 @@ const DAILY_CAP = Math.min(
   BREVO_FREE_DAILY_LIMIT,
 );
 
-/** Số thư chào mừng đã gửi kể từ 0h hôm nay. */
-const sentTodayCount = async () => {
+const SKIP_REASON =
+  'Không gửi: sinh viên đã tự đặt mật khẩu trước khi tới lượt — gửi mật khẩu tạm mới sẽ ghi đè mật khẩu đó.';
+
+const startOfToday = () => {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  return User.countDocuments({ welcomeEmailSentAt: { $gte: start } });
+  return start;
+};
+
+/**
+ * Số lượt gửi đã dùng kể từ 0h hôm nay.
+ *
+ * Brevo tính hạn mức theo NGƯỜI NHẬN chứ không theo lá thư: một lá gửi cùng lúc
+ * tới gmail và email trường là 2 lượt. Đếm theo lá thì hàng đợi tưởng còn quota,
+ * gửi tiếp, rồi bị Brevo chặn giữa chừng.
+ */
+const sentTodayCount = async () => {
+  const start = startOfToday();
+  const [personal, school] = await Promise.all([
+    User.countDocuments({ welcomeEmailSentAt: { $gte: start } }),
+    User.countDocuments({ schoolEmailSentAt: { $gte: start } }),
+  ]);
+  return personal + school;
+};
+
+/**
+ * Thư của tài khoản này gửi tới đâu, theo `welcomeEmailTo`:
+ *   personal — chỉ email đăng nhập (mặc định, và là mọi tài khoản import cũ)
+ *   school   — chỉ email trường: gửi bù cho người đã nhận thư ở gmail từ trước
+ *   both     — cả hai trong cùng một lá, nên cùng một mật khẩu
+ */
+const recipientsFor = (user) => {
+  const target = user.welcomeEmailTo || 'personal';
+  const personal = String(user.email || '').toLowerCase();
+  const school = schoolEmailOf(user.studentId);
+
+  const toPersonal = target !== 'school';
+  // Email đăng nhập trùng luôn email trường thì chỉ gửi một lần
+  const toSchool = target !== 'personal' && Boolean(school) && school !== personal;
+
+  return {
+    target,
+    to: [toPersonal && personal, toSchool && school].filter(Boolean),
+    personal: toPersonal,
+    school: toSchool,
+  };
 };
 
 /**
@@ -67,6 +109,21 @@ const logConfigProblemOnce = (text) => {
   console.warn(`[WelcomeEmail] Tạm dừng hàng đợi: ${text}`);
 };
 
+/** Ghi một lần thử thất bại vì lý do riêng của tài khoản này. */
+const recordFailure = async (user, reason) => {
+  const attempts = (user.welcomeEmailAttempts || 0) + 1;
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        welcomeEmailAttempts: attempts,
+        welcomeEmailError: reason,
+        ...(attempts >= MAX_ATTEMPTS ? { welcomeEmailStatus: 'failed' } : {}),
+      },
+    },
+  );
+};
+
 let running = false;
 let task = null;
 
@@ -79,6 +136,7 @@ const processBatch = async () => {
 
   let sent = 0;
   let failed = 0;
+  let skipped = 0;
 
   try {
     // Chưa cấu hình được SMTP thì KHÔNG đụng vào hàng đợi. Nếu cứ chạy, mọi tài
@@ -91,8 +149,7 @@ const processBatch = async () => {
       return { sent: 0, failed: 0, notConfigured: true, problems: cfg.problems };
     }
 
-    const alreadySent = await sentTodayCount();
-    const remaining = DAILY_CAP - alreadySent;
+    let remaining = DAILY_CAP - (await sentTodayCount());
     if (remaining <= 0) {
       return { sent: 0, failed: 0, capReached: true, dailyCap: DAILY_CAP };
     }
@@ -107,20 +164,87 @@ const processBatch = async () => {
 
     if (!pending.length) return { sent: 0, failed: 0 };
 
+    let stop = null;
+
     for (const user of pending) {
+      // Sinh viên đã tự đặt mật khẩu (đổi ở lần đăng nhập đầu, hoặc qua Quên mật
+      // khẩu) thì tuyệt đối không gửi mật khẩu tạm mới — làm vậy là ghi đè mật
+      // khẩu họ đang dùng. Chuyện này xảy ra được với thư gửi bù tới email trường,
+      // vì người đó đã nhận thư ở gmail và có thể đã đăng nhập từ trước.
+      if (user.mustChangePassword !== true) {
+        await User.updateOne(
+          { _id: user._id },
+          { $set: { welcomeEmailStatus: 'skipped', welcomeEmailError: SKIP_REASON } },
+        );
+        skipped += 1;
+        continue;
+      }
+
+      const recipients = recipientsFor(user);
+      if (!recipients.to.length) {
+        await User.updateOne(
+          { _id: user._id },
+          {
+            $set: {
+              welcomeEmailStatus: 'failed',
+              welcomeEmailError: 'Không có MSSV hợp lệ để dựng địa chỉ email trường.',
+            },
+          },
+        );
+        failed += 1;
+        continue;
+      }
+
+      // Thư gửi cả hai địa chỉ tốn 2 lượt. Không đủ thì để dành sang hôm sau
+      // thay vì gửi thiếu một địa chỉ.
+      if (recipients.to.length > remaining) {
+        stop = { capReached: true, dailyCap: DAILY_CAP };
+        break;
+      }
+
       try {
         const password = generatePassword();
-        user.password = await bcrypt.hash(password, await bcrypt.genSalt(10));
-        user.mustChangePassword = true;
-        await user.save();
+        const hash = await bcrypt.hash(password, await bcrypt.genSalt(10));
 
-        const result = await emailService.sendAccountCreatedEmail({ user, password });
+        // Gửi TRƯỚC, ghi mật khẩu SAU. Bản cũ làm ngược lại: hễ gửi hỏng — mà hết
+        // quota là chuyện hằng ngày — thì mật khẩu đã bị thay còn thư mới chưa tới.
+        // Với thư gửi bù, đó là người vừa nhận mật khẩu ở gmail bỗng không đăng
+        // nhập được nữa. Nếu gửi xong mà ghi hỏng, tài khoản vẫn 'pending' và lượt
+        // sau gửi lại một mật khẩu mới dùng được — tự lành, chỉ thừa một thư.
+        const result = await emailService.sendAccountCreatedEmail({
+          user,
+          password,
+          to: recipients.to,
+          mode: recipients.target,
+        });
 
         if (result?.sent) {
-          user.welcomeEmailStatus = 'sent';
-          user.welcomeEmailSentAt = new Date();
-          user.welcomeEmailError = undefined;
-          sent += 1;
+          const now = new Date();
+          const stamps = {
+            ...(recipients.personal ? { welcomeEmailSentAt: now } : {}),
+            ...(recipients.school ? { schoolEmailSentAt: now } : {}),
+          };
+
+          // Điều kiện mustChangePassword: true chặn trường hợp sinh viên đổi mật
+          // khẩu đúng lúc thư đang trên đường đi — không đè mật khẩu họ vừa đặt.
+          const r = await User.updateOne(
+            { _id: user._id, mustChangePassword: true },
+            {
+              $set: { password: hash, welcomeEmailStatus: 'sent', ...stamps },
+              $unset: { welcomeEmailError: '' },
+            },
+          );
+
+          if (r.matchedCount) {
+            sent += 1;
+          } else {
+            await User.updateOne(
+              { _id: user._id },
+              { $set: { welcomeEmailStatus: 'skipped', welcomeEmailError: SKIP_REASON, ...stamps } },
+            );
+            skipped += 1;
+          }
+          remaining -= recipients.to.length;
         } else {
           const reason = result?.error || 'Không rõ nguyên nhân';
 
@@ -129,34 +253,28 @@ const processBatch = async () => {
           // cả lượt và để nguyên lượt thử — lượt sau hoặc hôm sau chạy lại.
           if (isSharedFailure(reason)) {
             logConfigProblemOnce(reason);
-            user.welcomeEmailError = reason;
-            await user.save();
-            return { sent, failed, halted: true, reason };
+            await User.updateOne({ _id: user._id }, { $set: { welcomeEmailError: reason } });
+            stop = { halted: true, reason };
+            break;
           }
 
-          user.welcomeEmailAttempts = (user.welcomeEmailAttempts || 0) + 1;
-          user.welcomeEmailError = reason;
-          if (user.welcomeEmailAttempts >= MAX_ATTEMPTS) {
-            user.welcomeEmailStatus = 'failed';
-          }
+          await recordFailure(user, reason);
           failed += 1;
         }
-        await user.save();
       } catch (e) {
         failed += 1;
         try {
-          user.welcomeEmailAttempts = (user.welcomeEmailAttempts || 0) + 1;
-          user.welcomeEmailError = e.message;
-          if (user.welcomeEmailAttempts >= MAX_ATTEMPTS) user.welcomeEmailStatus = 'failed';
-          await user.save();
+          await recordFailure(user, e.message);
         } catch {
           // Ghi trạng thái thất bại cũng hỏng thì bỏ qua, lượt sau thử lại
         }
       }
     }
 
-    console.log(`[WelcomeEmail] Đã gửi ${sent}, thất bại ${failed} trong lượt này.`);
-    return { sent, failed };
+    if (sent || failed || skipped) {
+      console.log(`[WelcomeEmail] Đã gửi ${sent}, thất bại ${failed}, bỏ qua ${skipped} trong lượt này.`);
+    }
+    return { sent, failed, skipped, ...(stop || {}) };
   } finally {
     running = false;
   }
@@ -164,24 +282,41 @@ const processBatch = async () => {
 
 /** Số liệu cho trang quản trị. */
 const getQueueStats = async () => {
-  const [pending, sent, failed, sentToday] = await Promise.all([
+  const [pending, sent, failed, skipped, schoolSent, sentToday, pendingByTarget] = await Promise.all([
     User.countDocuments({ welcomeEmailStatus: 'pending' }),
     User.countDocuments({ welcomeEmailStatus: 'sent' }),
     User.countDocuments({ welcomeEmailStatus: 'failed' }),
+    User.countDocuments({ welcomeEmailStatus: 'skipped' }),
+    User.countDocuments({ schoolEmailSentAt: { $exists: true } }),
     sentTodayCount(),
+    User.aggregate([
+      { $match: { welcomeEmailStatus: 'pending' } },
+      { $group: { _id: '$welcomeEmailTo', n: { $sum: 1 } } },
+    ]),
   ]);
+
+  // Số lượt Brevo cần để gửi hết: thư gửi cả hai địa chỉ tính 2
+  const pendingRecipients = pendingByTarget.reduce((sum, g) => sum + g.n * (g._id === 'both' ? 2 : 1), 0);
   const remainingToday = Math.max(0, DAILY_CAP - sentToday);
+
   return {
     pending,
     sent,
     failed,
+    skipped,
+    schoolSent,
+    schoolDomain: SCHOOL_EMAIL_DOMAIN,
+    pendingRecipients,
     sentToday,
     dailyCap: DAILY_CAP,
     remainingToday,
     batchSize: BATCH_SIZE,
     intervalSeconds: 20,
-    // Ước lượng thô để admin biết bao giờ xong, tính cả việc phải chờ sang ngày mới
-    estimatedDaysLeft: pending > 0 ? Math.ceil(Math.max(0, pending - remainingToday) / DAILY_CAP) + (remainingToday > 0 ? 0 : 1) : 0,
+    // Số ngày phải chờ thêm ngoài hôm nay (0 = xong trong hôm nay)
+    estimatedDaysLeft:
+      pendingRecipients > remainingToday
+        ? Math.ceil((pendingRecipients - remainingToday) / DAILY_CAP)
+        : 0,
   };
 };
 
@@ -206,4 +341,13 @@ const initWelcomeEmailWorker = () => {
   });
 };
 
-module.exports = { initWelcomeEmailWorker, processBatch, getQueueStats, retryFailed, BATCH_SIZE, MAX_ATTEMPTS, DAILY_CAP };
+module.exports = {
+  initWelcomeEmailWorker,
+  processBatch,
+  getQueueStats,
+  retryFailed,
+  recipientsFor,
+  BATCH_SIZE,
+  MAX_ATTEMPTS,
+  DAILY_CAP,
+};

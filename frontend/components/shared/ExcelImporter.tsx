@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { getApiBase } from '@/lib/api'
 import { toast } from 'sonner'
@@ -10,7 +10,9 @@ import {
   CheckCircle2,
   Download,
   FileSpreadsheet,
+  Info,
   Loader2,
+  Mail,
   Upload,
   XCircle,
 } from 'lucide-react'
@@ -33,6 +35,7 @@ type RowResult = {
   emailSent?: boolean
   emailError?: string
   hasEmbedding?: boolean
+  sendTo?: 'personal' | 'school' | 'both'
 }
 
 type ImportResult = {
@@ -40,8 +43,14 @@ type ImportResult = {
   totalRows: number
   truncated?: boolean
   created: RowResult[]
+  /** Bản ghi đã có, được xếp lại để làm tiếp một việc (vd. gửi bù email trường) */
+  requeued?: RowResult[]
   skipped?: RowResult[]
   failed: RowResult[]
+  /** Không chặn việc tạo, nhưng admin nên biết (vd. thiếu MSSV) */
+  warnings?: RowResult[]
+  /** Số lượt gửi email sẽ tốn — Brevo tính theo từng người nhận */
+  quotaUnits?: number
 }
 
 export default function ExcelImporter({
@@ -50,20 +59,31 @@ export default function ExcelImporter({
   extraFields,
   labels,
   onDone,
+  children,
 }: {
   /** Đường dẫn API nhận file, ví dụ /api/admin/import/users */
   endpoint: string
   templateUrl: string
   /** Trường gửi kèm, ví dụ { employerId } khi admin import hộ doanh nghiệp */
   extraFields?: Record<string, string>
-  labels: { unit: string; createVerb: string }
+  labels: { unit: string; createVerb: string; requeueUnit?: string }
   onDone?: () => void
+  /** Tuỳ chọn hiển thị phía trên nút gửi, ví dụ công tắc gửi email trường */
+  children?: React.ReactNode
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState<ImportResult | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
+
+  // Đổi tuỳ chọn sau khi đã xem trước thì bản xem trước không còn đúng nữa (bật
+  // email trường làm thay đổi cả số tài khoản được gửi bù). Bỏ đi để admin phải
+  // xem lại, tránh bấm xác nhận theo con số cũ.
+  const extraKey = JSON.stringify(extraFields || {})
+  useEffect(() => {
+    setPreview(null)
+  }, [extraKey])
 
   const send = async (apply: boolean) => {
     if (!file) {
@@ -145,6 +165,8 @@ export default function ExcelImporter({
           <p className="text-sm text-muted-foreground">Chưa chọn file (.xlsx, .xls hoặc .csv)</p>
         )}
 
+        {children && <div className="mt-4 text-left">{children}</div>}
+
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <Button
             type="button"
@@ -160,7 +182,7 @@ export default function ExcelImporter({
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
             Xem trước
           </Button>
-          {preview && preview.created.length > 0 && (
+          {preview && preview.created.length + (preview.requeued?.length ?? 0) > 0 && (
             <Button
               type="button"
               className="gap-2 bg-brand-600 hover:bg-brand-700"
@@ -169,6 +191,8 @@ export default function ExcelImporter({
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
               Xác nhận {labels.createVerb} {preview.created.length} {labels.unit}
+              {(preview.requeued?.length ?? 0) > 0 &&
+                ` và gửi bù ${preview.requeued!.length} ${labels.requeueUnit || 'bản ghi'}`}
             </Button>
           )}
           {(file || shown) && (
@@ -200,16 +224,41 @@ export default function ExcelImporter({
             </p>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div
+            className={cn(
+              'grid gap-3',
+              (shown.requeued?.length ?? 0) > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'sm:grid-cols-3',
+            )}
+          >
             <Stat
               label={result ? `Đã ${labels.createVerb}` : `Sẽ ${labels.createVerb}`}
               value={shown.created.length}
               tone="ok"
             />
+            {(shown.requeued?.length ?? 0) > 0 && (
+              <Stat
+                label={result ? 'Đã xếp gửi bù' : 'Sẽ gửi bù'}
+                value={shown.requeued!.length}
+                tone="ok"
+              />
+            )}
             <Stat label="Bỏ qua" value={shown.skipped?.length ?? 0} tone="warn" />
             <Stat label="Lỗi" value={shown.failed.length} tone="bad" />
           </div>
 
+          {typeof shown.quotaUnits === 'number' && shown.quotaUnits > 0 && (
+            <p className="flex items-start gap-2 text-left text-xs text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0" />
+              Cần {shown.quotaUnits} lượt gửi email (Brevo tính mỗi địa chỉ nhận là một lượt).
+            </p>
+          )}
+
+          <RowList
+            title={labels.requeueUnit ? `Gửi bù ${labels.requeueUnit}` : 'Xếp lại'}
+            rows={shown.requeued || []}
+            tone="info"
+          />
+          <RowList title="Lưu ý" rows={shown.warnings || []} tone="warn" />
           <RowList title="Bỏ qua" rows={shown.skipped || []} tone="warn" />
           <RowList title="Lỗi" rows={shown.failed} tone="bad" />
 
@@ -250,15 +299,26 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: 'ok'
   )
 }
 
-function RowList({ title, rows, tone }: { title: string; rows: RowResult[]; tone: 'warn' | 'bad' }) {
+function RowList({
+  title,
+  rows,
+  tone,
+}: {
+  title: string
+  rows: RowResult[]
+  tone: 'info' | 'warn' | 'bad'
+}) {
   if (!rows.length) return null
-  const Icon = tone === 'bad' ? XCircle : AlertTriangle
+  const Icon = tone === 'bad' ? XCircle : tone === 'info' ? Mail : AlertTriangle
+  const iconTone = {
+    info: 'text-brand-600',
+    warn: 'text-warning-foreground',
+    bad: 'text-danger-foreground',
+  }
   return (
-    <div className="rounded-lg border border-border p-3">
+    <div className="rounded-lg border border-border p-3 text-left">
       <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
-        <Icon
-          className={cn('size-4', tone === 'bad' ? 'text-danger-foreground' : 'text-warning-foreground')}
-        />
+        <Icon className={cn('size-4', iconTone[tone])} />
         {title} ({rows.length})
       </p>
       <ul className="max-h-48 space-y-1 overflow-y-auto text-xs text-muted-foreground">

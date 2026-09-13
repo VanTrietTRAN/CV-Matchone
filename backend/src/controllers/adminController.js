@@ -514,7 +514,7 @@ const getWelcomeEmailQueue = async (req, res) => {
 
     // Danh sách những tài khoản gửi hỏng, kèm lý do — để admin biết ai chưa nhận
     const failedUsers = await User.find({ welcomeEmailStatus: 'failed' })
-      .select('email fullName welcomeEmailError welcomeEmailAttempts')
+      .select('email fullName studentId welcomeEmailTo welcomeEmailError welcomeEmailAttempts')
       .limit(50)
       .lean();
 

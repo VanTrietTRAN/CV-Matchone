@@ -16,6 +16,8 @@
  * chính email của mình.
  */
 
+const { schoolEmailOf } = require('../utils/schoolEmail');
+
 const BRAND_ACCENT = '#2563eb';
 const RESET_ACCENT = '#7c3aed';
 
@@ -73,6 +75,8 @@ const DEFAULTS = {
       '⚠️ Đây là mật khẩu tạm thời. Hệ thống sẽ yêu cầu bạn đổi mật khẩu ngay trong lần đăng nhập đầu tiên. Không chia sẻ mật khẩu này với ai.',
     nextSteps:
       'Sau khi đăng nhập, hãy tải CV lên hoặc dùng công cụ tạo CV. AI sẽ đọc hồ sơ và gợi ý việc làm phù hợp gửi vào email của bạn.',
+    schoolNote:
+      '📬 Thư này được gửi tới hộp thư sinh viên {{schoolEmail}}. Nếu trước đó bạn đã nhận thư tới {{email}}, mật khẩu trong thư đó không còn dùng được — hãy dùng mật khẩu bên dưới.',
     footer: '© {{brand}} · Email tự động, vui lòng không trả lời',
   },
   jobExpiring: {
@@ -105,7 +109,7 @@ const VARIABLES = {
   verifyEmail: ['brand', 'name', 'code', 'minutes'],
   employerDigest: ['brand', 'name', 'count', 'threshold'],
   jobExpiring: ['brand', 'name', 'count', 'days'],
-  accountCreated: ['brand', 'name', 'email', 'major', 'phone'],
+  accountCreated: ['brand', 'name', 'email', 'major', 'phone', 'studentId', 'schoolEmail'],
 };
 
 /** Nhãn tiếng Việt cho từng trường, dùng cho giao diện Quản trị. */
@@ -121,6 +125,7 @@ const FIELD_LABELS = {
   footerLinkLabel: 'Chữ của link ở chân thư',
   passwordLabel: 'Nhãn ô mật khẩu',
   nextSteps: 'Hướng dẫn bước tiếp theo',
+  schoolNote: 'Ghi chú trong thư gửi bù tới email trường',
 };
 
 const TEMPLATE_LABELS = {
@@ -429,18 +434,30 @@ const renderEmployerDigest = ({ tpl, employer, applicants, threshold, frontendUr
 };
 
 /** Email báo tài khoản sinh viên đã được tạo sẵn, kèm mật khẩu tạm thời. */
-const renderAccountCreated = ({ tpl, user, password, frontendUrl }) => {
+const renderAccountCreated = ({ tpl, user, password, frontendUrl, mode }) => {
   const t = tpl.accountCreated;
+  const schoolEmail = schoolEmailOf(user.studentId) || '';
   const vars = {
     brand: tpl.brand.name,
     name: user.fullName || user.email,
     email: user.email,
     major: user.major || 'của bạn',
     phone: user.phone || '',
+    studentId: user.studentId || '',
+    schoolEmail,
   };
+
+  // Thư gửi bù chỉ tới email trường: sinh viên có thể đã cầm mật khẩu ở thư
+  // gmail trước, nên phải nói rõ mật khẩu đó hết hiệu lực — không thì họ thử mật
+  // khẩu cũ, sai, rồi tưởng tài khoản hỏng.
+  const schoolNoteHtml =
+    mode === 'school' && t.schoolNote && schoolEmail
+      ? highlight(`<em>${fill(t.schoolNote, vars)}</em>`)
+      : '';
 
   const rows = [
     ['Email đăng nhập', user.email],
+    user.studentId ? ['Mã số sinh viên', user.studentId] : null,
     user.major ? ['Ngành học', user.major] : null,
     user.phone ? ['Điện thoại', user.phone] : null,
   ].filter(Boolean);
@@ -465,6 +482,7 @@ const renderAccountCreated = ({ tpl, user, password, frontendUrl }) => {
       bodyHtml: `
         <h2 style="margin-top:0;font-size:18px;">${fill(t.heading, vars)}</h2>
         <p style="color:#334155;font-size:14px;line-height:1.6;">${fill(t.intro, vars)}</p>
+        ${schoolNoteHtml}
         ${infoTable}
         <div style="text-align:center;margin:20px 0;">
           <p style="margin:0 0 8px;color:#64748b;font-size:13px;">${fill(t.passwordLabel, vars)}</p>
@@ -567,6 +585,7 @@ const SAMPLE = {
   student: {
     email: 'sinhvien@example.com',
     fullName: 'Nguyễn Văn A',
+    studentId: '102210123',
     major: 'Công nghệ Thông tin',
     phone: '0901234567',
   },

@@ -36,6 +36,8 @@ const userSchema = new mongoose.Schema(
     major: { type: String, trim: true },   // Ngành học
     phone: { type: String, trim: true },   // Điện thoại
     note: { type: String, trim: true },    // Ghi chú của nhà trường
+    // MSSV — dựng ra email trường <MSSV>@sv1.dut.udn.vn (src/utils/schoolEmail.js)
+    studentId: { type: String, trim: true, index: true },
 
     // Tài khoản tạo bằng import có mật khẩu ngẫu nhiên gửi qua email, nên bắt
     // đổi mật khẩu ở lần đăng nhập đầu tiên. Không đặt default để tài khoản
@@ -52,14 +54,23 @@ const userSchema = new mongoose.Schema(
     // Nay import chỉ tạo tài khoản rồi đánh dấu 'pending'; một worker nền gửi
     // thư theo nhịp có kiểm soát. Mật khẩu tạm KHÔNG lưu ở đây — worker sinh mật
     // khẩu mới ngay lúc gửi, nên database không bao giờ chứa mật khẩu dạng rõ.
+    //
+    // 'skipped': tới lượt gửi thì sinh viên đã tự đặt mật khẩu — không gửi mật
+    // khẩu tạm nữa vì sẽ ghi đè mật khẩu họ đang dùng.
     welcomeEmailStatus: {
       type: String,
-      enum: ['pending', 'sent', 'failed'],
+      enum: ['pending', 'sent', 'failed', 'skipped'],
       index: true,
     },
     welcomeEmailAttempts: { type: Number, default: 0 },
     welcomeEmailError: { type: String },
-    welcomeEmailSentAt: { type: Date },
+    // Thư gửi tới đâu: email đăng nhập, email trường, hay cả hai trong cùng một
+    // lá. Trống = 'personal' (mọi tài khoản import trước khi có email trường).
+    welcomeEmailTo: { type: String, enum: ['personal', 'school', 'both'] },
+    // Hai mốc tách riêng vì Brevo tính hạn mức theo từng người nhận: thư gửi cả
+    // hai địa chỉ tốn 2 lượt, và phải biết ai đã nhận ở email trường để không gửi lại.
+    welcomeEmailSentAt: { type: Date }, // lần cuối gửi thành công tới email đăng nhập
+    schoolEmailSentAt: { type: Date },  // lần cuối gửi thành công tới email trường
 
     isEmailSubscribed: {
       type: Boolean,

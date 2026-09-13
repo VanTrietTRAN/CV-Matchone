@@ -88,11 +88,13 @@ const buildTemplate = (columns, exampleRow) => {
 // ─── Cấu hình cột cho từng loại import ───────────────────────────────────────
 
 /**
- * Cột cho import tài khoản sinh viên — chốt 5 trường.
- * Chỉ Họ và tên + Email là bắt buộc; ba trường còn lại thiếu vẫn tạo được tài khoản.
+ * Cột cho import tài khoản sinh viên.
+ * Chỉ Họ và tên + Email là bắt buộc. MSSV chỉ bắt buộc khi admin bật gửi thêm tới
+ * email trường — importController kiểm tra riêng trường hợp đó.
  */
 const STUDENT_COLUMNS = {
   fullName: { aliases: ['Họ và tên', 'Họ tên', 'Ho ten', 'Full name', 'Tên'], required: true },
+  studentId: { aliases: ['MSSV', 'Mã số sinh viên', 'Mã sinh viên', 'Mã SV', 'Student ID'] },
   major: { aliases: ['Ngành học', 'Ngành', 'Chuyên ngành', 'Major'] },
   email: { aliases: ['Email', 'Email sinh viên', 'Địa chỉ email', 'Mail'], required: true },
   phone: { aliases: ['Điện thoại', 'Số điện thoại', 'SĐT', 'Phone'] },
