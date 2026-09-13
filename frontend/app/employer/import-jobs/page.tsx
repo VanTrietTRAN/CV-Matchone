@@ -29,6 +29,7 @@ export default function EmployerImportJobsPage() {
             <p>• <strong className="text-foreground">Mô tả chi tiết</strong> — bắt buộc</p>
             <p>• Kỹ năng bắt buộc</p>
             <p>• Kỹ năng là lợi thế</p>
+            <p>• Quyền lợi</p>
             <p>• Ngành nghề · Vị trí chuyên môn</p>
             <p>• Hình thức làm việc · Địa điểm làm việc</p>
             <p>• Lương tối thiểu · Lương tối đa · Đơn vị tiền tệ</p>
@@ -36,7 +37,9 @@ export default function EmployerImportJobsPage() {
             <p>• Hạn nộp hồ sơ</p>
           </div>
           <p className="mb-5 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-            Ô nhiều giá trị (kỹ năng, quyền lợi) ngăn nhau bằng dấu chấm phẩy hoặc xuống dòng.
+            Ô nhiều giá trị (kỹ năng, quyền lợi) ngăn nhau bằng dấu phẩy, chấm phẩy hoặc xuống
+            dòng — giống ô nhập ở trang Đăng tin. Kỹ năng bắt buộc và kỹ năng là lợi thế đều
+            được dùng để AI so khớp ứng viên; Quyền lợi hiển thị riêng ở mục Phúc lợi.
             Hạn nộp nhận cả dạng <code className="font-mono">31/12/2026</code> và{' '}
             <code className="font-mono">2026-12-31</code>.
           </p>

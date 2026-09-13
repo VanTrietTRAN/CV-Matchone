@@ -106,8 +106,13 @@ const STUDENT_COLUMNS = {
 const JOB_COLUMNS = {
   title: { aliases: ['Tiêu đề tin tuyển dụng', 'Tiêu đề', 'Vị trí tuyển dụng', 'Title'], required: true },
   description: { aliases: ['Mô tả chi tiết', 'Mô tả công việc', 'Mô tả', 'Description'], required: true },
-  requirements: { aliases: ['Kỹ năng bắt buộc', 'Yêu cầu', 'Yêu cầu ứng viên', 'Requirements'] },
-  benefits: { aliases: ['Kỹ năng là lợi thế', 'Quyền lợi', 'Phúc lợi', 'Benefits'] },
+  // Hai cột kỹ năng khớp đúng hai ô ở form đăng tin. Form gộp cả hai vào
+  // Job.requirements — importController làm y hệt. Trước đây "Kỹ năng là lợi thế"
+  // bị gán nhầm sang benefits: kỹ năng hiện ở mục Phúc lợi trên trang tin, và bị
+  // loại khỏi văn bản tạo vector nên AI so khớp bỏ qua chúng.
+  requiredSkills: { aliases: ['Kỹ năng bắt buộc', 'Yêu cầu', 'Yêu cầu ứng viên', 'Required skills', 'Requirements'] },
+  niceToHaveSkills: { aliases: ['Kỹ năng là lợi thế', 'Kỹ năng ưu tiên', 'Nice to have'] },
+  benefits: { aliases: ['Quyền lợi', 'Phúc lợi', 'Benefits'] },
   industry: { aliases: ['Ngành nghề', 'Lĩnh vực', 'Industry'] },
   specialization: { aliases: ['Vị trí chuyên môn', 'Chuyên môn', 'Specialization'] },
   jobType: { aliases: ['Hình thức làm việc', 'Loại hình', 'Job type'] },

@@ -161,10 +161,16 @@ const parseDate = (value) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-/** Ô "Yêu cầu" và "Quyền lợi" cho phép nhiều dòng hoặc ngăn bằng dấu ; */
+/**
+ * Ô nhiều giá trị (kỹ năng, quyền lợi): ngăn bằng dấu phẩy, chấm phẩy hoặc xuống dòng.
+ *
+ * Dấu phẩy là bắt buộc phải nhận: form đăng tin và trang sửa tin đều tách bằng
+ * dấu phẩy. Trước đây import chỉ tách ; và xuống dòng, nên ô "Node.js, MongoDB"
+ * thành MỘT kỹ năng — tin import trông khác hẳn tin đăng tay, và mở ra sửa là lệch.
+ */
 const parseList = (value) =>
   String(value || '')
-    .split(/\r?\n|;/)
+    .split(/\r?\n|;|,/)
     .map((x) => x.trim())
     .filter(Boolean);
 
@@ -228,7 +234,12 @@ const importJobs = async (req, res) => {
       }
 
       try {
-        const requirements = parseList(row.requirements);
+        // Giống form đăng tin: kỹ năng bắt buộc + kỹ năng là lợi thế cùng vào
+        // requirements, nên cả hai đều được đưa vào vector AI. Bỏ trùng để một
+        // kỹ năng ghi ở cả hai cột không bị tính hai lần.
+        const requirements = [
+          ...new Set([...parseList(row.requiredSkills), ...parseList(row.niceToHaveSkills)]),
+        ];
         const payload = {
           employerId,
           title: row.title,
@@ -331,7 +342,8 @@ const downloadTemplate = (req, res) => {
       example: {
         title: 'Thực tập sinh Lập trình Backend',
         description: 'Tham gia phát triển API cho hệ thống nội bộ.',
-        requirements: 'Biết Node.js;Có kiến thức cơ sở dữ liệu',
+        requiredSkills: 'Node.js, MongoDB',
+        niceToHaveSkills: 'Docker, AWS',
         location: 'Đà Nẵng',
         salary: '5 - 8 triệu',
         jobType: 'internship',
@@ -339,7 +351,7 @@ const downloadTemplate = (req, res) => {
         level: 'Thực tập sinh',
         industry: 'technology',
         education: 'Đại học',
-        benefits: 'Hỗ trợ ăn trưa;Xét tuyển chính thức sau thực tập',
+        benefits: 'Hỗ trợ ăn trưa, Xét tuyển chính thức sau thực tập',
         expiresAt: '31/12/2026',
       },
       filename: 'mau-import-tin-tuyen-dung.xlsx',
