@@ -23,6 +23,7 @@ const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const Job = require('../models/Job');
+const { parseSalaryRange } = require('../utils/salary');
 
 const APPLY = process.argv.includes('--apply');
 
@@ -144,34 +145,11 @@ function extractTrailingMeta(description) {
   return { meta: found, cleaned: lines.slice(0, cut).join('\n').trimEnd() };
 }
 
-/** "15 - 25 triệu" / "Từ 10 triệu" / "Tới 30 triệu" / "VND 15000000 – 25000000" */
-function parseSalary(text) {
-  if (!text || /thoả thuận|thỏa thuận/i.test(text)) return { min: null, max: null, currency: 'VND' };
-
-  const currency = /USD|\$/i.test(text) ? 'USD' : 'VND';
-  const toNumber = (numStr, unitMillion) => {
-    const n = Number(String(numStr).replace(/[.,](?=\d{3}\b)/g, '').replace(',', '.'));
-    if (!Number.isFinite(n)) return null;
-    return unitMillion ? Math.round(n * 1_000_000) : Math.round(n);
-  };
-
-  const isMillion = /triệu/i.test(text);
-  const nums = text.match(/\d+(?:[.,]\d+)?/g) || [];
-
-  if (/^\s*Từ/i.test(text) && nums.length >= 1) {
-    return { min: toNumber(nums[0], isMillion), max: null, currency };
-  }
-  if (/^\s*Tới/i.test(text) && nums.length >= 1) {
-    return { min: null, max: toNumber(nums[0], isMillion), currency };
-  }
-  if (nums.length >= 2) {
-    return { min: toNumber(nums[0], isMillion), max: toNumber(nums[1], isMillion), currency };
-  }
-  if (nums.length === 1) {
-    return { min: toNumber(nums[0], isMillion), max: null, currency };
-  }
-  return { min: null, max: null, currency };
-}
+/**
+ * "15 - 25 triệu" / "Từ 10 triệu" / "Tới 30 triệu" / "VND 15000000 – 25000000".
+ * Bản riêng cũ đọc "15.000.000" thành hai số 15.000 và 0 — dùng bộ đọc chung.
+ */
+const parseSalary = parseSalaryRange;
 
 async function main() {
   const tax = loadTaxonomy();

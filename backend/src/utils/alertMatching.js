@@ -1,5 +1,7 @@
 /** Soft scores / hard filters for JobAlert matching. Soft miss = 0 (not reject). */
 
+const { parseSalaryRange } = require('./salary');
+
 const normalizeText = (str = '') =>
   String(str)
     .toLowerCase()
@@ -31,31 +33,29 @@ const matchLocation = (alertLocation, job) => {
   return jobLoc.includes(loc) || loc.includes(jobLoc);
 };
 
-/** Highest salary found in text, in triệu VND; null if unknown. */
+/** Highest salary found in a salary text ("15 - 25 triệu", "15.000.000đ"), in triệu VND; null if unknown. */
 const extractSalaryMillions = (text = '') => {
-  const norm = normalizeText(text);
-  const numbers = [];
+  const { min, max, currency } = parseSalaryRange(text);
+  const top = Math.max(min || 0, max || 0);
+  return currency === 'VND' && top > 0 ? top / 1e6 : null;
+};
 
-  const reMillion = /(\d+(?:[.,]\d+)?)\s*(?:trieu|tr|m)\b/g;
-  let m;
-  while ((m = reMillion.exec(norm)) !== null) {
-    numbers.push(parseFloat(m[1].replace(',', '.')));
+/**
+ * Highest salary of a job, in triệu VND. Prefers the numeric columns; falls back
+ * to the salary text. Does not scan the description — phone numbers there used
+ * to be read as salaries.
+ */
+const jobSalaryMillions = (job) => {
+  if ((job.currency || 'VND') === 'VND') {
+    const top = Math.max(job.salaryMin || 0, job.salaryMax || 0);
+    if (top > 0) return top / 1e6;
   }
-
-  const reVnd = /(\d{7,9})/g;
-  while ((m = reVnd.exec(norm)) !== null) {
-    numbers.push(Math.round(parseInt(m[1], 10) / 1_000_000));
-  }
-
-  if (numbers.length === 0) return null;
-  return Math.max(...numbers);
+  return extractSalaryMillions(job.salary || '');
 };
 
 const scoreSalary = (minSalary, job) => {
   if (!minSalary || minSalary <= 0) return 0;
-  const jobSalary = extractSalaryMillions(
-    `${job.salary || ''} ${job.description || ''}`
-  );
+  const jobSalary = jobSalaryMillions(job);
   if (jobSalary == null) return 0;
   return jobSalary >= minSalary ? 1 : 0;
 };
@@ -118,6 +118,7 @@ module.exports = {
   matchKeyword,
   matchLocation,
   extractSalaryMillions,
+  jobSalaryMillions,
   scoreSalary,
   scoreExperience,
   scoreJobType,

@@ -43,6 +43,12 @@ export default function EmployerImportJobsPage() {
             Hạn nộp nhận cả dạng <code className="font-mono">31/12/2026</code> và{' '}
             <code className="font-mono">2026-12-31</code>.
           </p>
+          <p className="mb-5 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+            Lương ghi số đủ theo lối Việt Nam, dấu chấm ngăn hàng nghìn:{' '}
+            <code className="font-mono">176.000</code> là 176 nghìn. Đơn vị tiền tệ nhận VND, JPY
+            (hoặc “Yên”), USD, EUR; để trống là VND. Lương đồng hoặc yên dưới 1.000 sẽ được hiểu là
+            hàng nghìn và báo ở mục Lưu ý khi xem trước.
+          </p>
 
           <ExcelImporter
             endpoint="/api/jobs/import"

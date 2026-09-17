@@ -22,9 +22,11 @@ interface JobCardProps {
   company: string
   logo?: string
   location: string
-  salaryMin?: number
-  salaryMax?: number
+  salaryMin?: number | null
+  salaryMax?: number | null
   currency?: string
+  /** Chuỗi lương đã lưu (`job.salary`) — dùng khi tin chưa có salaryMin / salaryMax */
+  salaryText?: string
   workType?: 'remote' | 'hybrid' | 'onsite'
   skills?: string[]
   matchScore?: number | null
@@ -51,6 +53,7 @@ export default function JobCard({
   salaryMin,
   salaryMax,
   currency = 'VND',
+  salaryText,
   workType,
   skills = [],
   matchScore,
@@ -124,7 +127,7 @@ export default function JobCard({
 
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <span className="rounded-md bg-brand-50 px-2 py-1 text-xs font-bold text-salary">
-              {formatSalary(salaryMin, salaryMax, currency)}
+              {formatSalary(salaryMin, salaryMax, currency, salaryText || undefined)}
             </span>
             {location && (
               <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-foreground/70">

@@ -122,6 +122,7 @@ curl http://localhost:5000/health   # Backend: status ok + database connected
 | `backend` | `node src/scripts/dbBackup.js` | Xuất backup database ra `backend/backups/` |
 | `backend` | `node src/scripts/backfillCvEmbedding.js` | Tạo lại vector AI cho CV cũ thiếu embedding và chấm lại điểm đơn ứng tuyển. Bỏ `--apply` để xem trước |
 | `backend` | `node src/scripts/migrateJobMeta.js` | Dọn metadata bị nối vào cuối mô tả tin cũ, đổ về đúng cột. Bỏ `--apply` để xem trước, chạy lại nhiều lần không sao |
+| `backend` | `node src/scripts/syncSalary.js` | Đồng bộ lương của tin cũ: sửa số bị đọc kiểu Mỹ (`176.000` thành 176) và dựng lại chuỗi hiển thị. Bỏ `--apply` để xem trước, chạy lại nhiều lần không sao |
 | `ai` | `uvicorn app.main:app --reload --port 8000` | Chạy AI service |
 
 ## Cấu trúc thư mục

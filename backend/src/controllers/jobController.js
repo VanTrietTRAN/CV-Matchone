@@ -1,6 +1,23 @@
 const Job = require("../models/Job");
 const CvProfile = require("../models/CvProfile");
 const aiService = require("../services/aiService");
+const { parseMoney, normalizeCurrency, formatSalary } = require("../utils/salary");
+
+/**
+ * Chuẩn hoá bộ lương trước khi lưu. Số tiền gửi lên dạng chuỗi ("178.000") được
+ * đọc theo lối Việt Nam thay vì kiểu Mỹ, và chuỗi `salary` luôn dựng lại từ số
+ * để thẻ tin, trang chi tiết và email hiện cùng một mức lương.
+ */
+const roundMoney = (v) => (typeof v === "number" ? Math.round(v) : v);
+
+const syncSalaryFields = (target) => {
+  target.salaryMin = roundMoney(parseMoney(target.salaryMin));
+  target.salaryMax = roundMoney(parseMoney(target.salaryMax));
+  target.currency = normalizeCurrency(target.currency) || "VND";
+  if ((target.salaryMin || 0) > 0 || (target.salaryMax || 0) > 0) {
+    target.salary = formatSalary(target.salaryMin, target.salaryMax, target.currency);
+  }
+};
 
 const computeJobEmbedding = async (title, description, requirements) => {
   const reqArr = Array.isArray(requirements) ? requirements : [];
@@ -194,6 +211,7 @@ const createJob = async (req, res) => {
           : true,
       status: req.body.status || "open",
     };
+    syncSalaryFields(payload);
 
     const embedding = await computeJobEmbedding(
       payload.title,
@@ -224,7 +242,7 @@ const createJobFromOld = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền sao chép tin tuyển dụng này" });
     }
 
-    const copiedJob = await Job.create({
+    const copy = {
       employerId: req.user._id,
       title: req.body.title || oldJob.title,
       description: req.body.description || oldJob.description,
@@ -250,7 +268,9 @@ const createJobFromOld = async (req, res) => {
           : oldJob.isEmailEnabled,
       status: req.body.status || "open",
       embedding: oldJob.embedding || [],
-    });
+    };
+    syncSalaryFields(copy);
+    const copiedJob = await Job.create(copy);
 
     res.status(201).json({ message: "Tạo tin mới từ tin cũ thành công", data: copiedJob });
   } catch (error) {
@@ -301,6 +321,9 @@ const updateJob = async (req, res) => {
         job[field] = req.body[field];
       }
     });
+    if (["salary", "salaryMin", "salaryMax", "currency"].some((f) => req.body[f] !== undefined)) {
+      syncSalaryFields(job);
+    }
 
     if (shouldReembed) {
       const fresh = await computeJobEmbedding(job.title, job.description, job.requirements);

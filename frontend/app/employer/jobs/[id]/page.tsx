@@ -29,7 +29,13 @@ import {
 } from '@/lib/job-categories'
 import { apiFetch } from '@/lib/api'
 import { getStoredUser } from '@/lib/auth-storage'
-import { formatDate, formatSalary, WORK_TYPE_LABEL } from '@/lib/format'
+import {
+  formatDate,
+  formatMoneyInput,
+  formatSalary,
+  parseMoneyInput,
+  WORK_TYPE_LABEL,
+} from '@/lib/format'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -95,8 +101,8 @@ const toForm = (j: Job): FormState => ({
   jobType: j.jobType ?? '',
   experience: j.experience ?? '',
   education: j.education ?? '',
-  salaryMin: j.salaryMin != null ? String(j.salaryMin) : '',
-  salaryMax: j.salaryMax != null ? String(j.salaryMax) : '',
+  salaryMin: formatMoneyInput(j.salaryMin),
+  salaryMax: formatMoneyInput(j.salaryMax),
   currency: j.currency || 'VND',
   benefits: (j.benefits ?? []).join(', '),
   // <input type="date"> chỉ nhận yyyy-mm-dd
@@ -216,8 +222,9 @@ export default function EmployerJobDetailPage() {
     }
     setSaving(true)
     try {
-      const salaryMin = form.salaryMin ? Number(form.salaryMin) : null
-      const salaryMax = form.salaryMax ? Number(form.salaryMax) : null
+      // Ô lương hiện "15.000.000" — Number() sẽ đọc kiểu Mỹ thành 15, nên phải qua parseMoneyInput
+      const salaryMin = parseMoneyInput(form.salaryMin)
+      const salaryMax = parseMoneyInput(form.salaryMax)
 
       const res = await apiFetch<{ data: Job }>(`/api/jobs/${jobId}`, {
         method: 'PUT',
@@ -501,21 +508,25 @@ export default function EmployerJobDetailPage() {
 
               <Field label="Lương tối thiểu">
                 <Input
-                  type="number"
-                  min={0}
+                  id="salaryMin"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   value={form.salaryMin}
-                  onChange={(e) => set('salaryMin', e.target.value)}
-                  placeholder="15000000"
+                  onChange={(e) => set('salaryMin', formatMoneyInput(e.target.value))}
+                  placeholder="15.000.000"
                 />
               </Field>
 
               <Field label="Lương tối đa">
                 <Input
-                  type="number"
-                  min={0}
+                  id="salaryMax"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   value={form.salaryMax}
-                  onChange={(e) => set('salaryMax', e.target.value)}
-                  placeholder="25000000"
+                  onChange={(e) => set('salaryMax', formatMoneyInput(e.target.value))}
+                  placeholder="25.000.000"
                 />
               </Field>
 
@@ -527,6 +538,8 @@ export default function EmployerJobDetailPage() {
                   <SelectContent>
                     <SelectItem value="VND">VND (đồng)</SelectItem>
                     <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="JPY">JPY</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>

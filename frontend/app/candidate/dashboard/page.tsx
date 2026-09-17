@@ -31,6 +31,10 @@ type ApiJob = {
   description: string
   requirements?: string[]
   location?: string
+  salary?: string
+  salaryMin?: number | null
+  salaryMax?: number | null
+  currency?: string
   createdAt: string
   expiresAt?: string
   previewScore?: number | null
@@ -222,6 +226,10 @@ export default function CandidateDashboardPage() {
                     title={job.title}
                     company={employerLabel(job)}
                     location={job.location || 'Chưa cập nhật'}
+                    salaryMin={job.salaryMin}
+                    salaryMax={job.salaryMax}
+                    currency={job.currency}
+                    salaryText={job.salary}
                     skills={job.requirements || []}
                     matchScore={job.previewScore ?? undefined}
                     postedDate={job.createdAt}

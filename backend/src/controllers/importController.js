@@ -8,6 +8,13 @@ const { frontendOrigin } = require('../utils/frontendUrl');
 const { logAdminAction } = require('../services/auditLogService');
 const { generatePassword } = require('../utils/passwordGenerator');
 const {
+  parseMoney,
+  parseSalaryRange,
+  normalizeCurrency,
+  restoreThousands,
+  formatSalary,
+} = require('../utils/salary');
+const {
   SCHOOL_EMAIL_DOMAIN,
   normalizeStudentId,
   isValidStudentId,
@@ -319,6 +326,57 @@ const parseList = (value) =>
     .map((x) => x.trim())
     .filter(Boolean);
 
+/**
+ * Ba cột lương của một dòng -> { fields: salaryMin / salaryMax / currency / salary, warning }.
+ *
+ * Ô "178.000" là 178 nghìn theo cách viết Việt Nam; Number() của JavaScript lại
+ * đọc thành 178, nên phải qua parseMoney. Excel để định dạng Mỹ còn lưu sẵn ô đó
+ * thành con số 178, nên lương đồng / yên dưới 1.000 được hiểu lại là hàng nghìn
+ * và báo thành một dòng "Lưu ý" để người import kiểm tra.
+ * Chỉ điền cột "Mức lương" dạng chữ ("5 - 8 triệu") thì bóc ra số, để thẻ tin
+ * trong danh sách và trang chi tiết hiện cùng một mức lương.
+ */
+// Số gốc trong câu lưu ý, ghi theo lối Việt: 179.667 (kiểu Mỹ) -> "179,667"
+const VI_RAW = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 });
+
+const readSalary = (row) => {
+  let min = parseMoney(row.salaryMin);
+  let max = parseMoney(row.salaryMax);
+  let currency = normalizeCurrency(row.currency);
+
+  if (min == null && max == null && row.salary) {
+    const parsed = parseSalaryRange(row.salary);
+    min = parsed.min;
+    max = parsed.max;
+    currency = currency || parsed.currency;
+  }
+  currency = currency || 'VND';
+
+  const fixedMin = restoreThousands(min, currency);
+  const fixedMax = restoreThousands(max, currency);
+  const restored = (v, fixed) => typeof v === 'number' && fixed !== Math.round(v);
+  const warning =
+    restored(min, fixedMin) || restored(max, fixedMax)
+      ? `Lương ghi ${[...new Set([min, max].filter((v) => v > 0))].map((v) => VI_RAW.format(v)).join(' - ')} ${currency} quá thấp, ` +
+        `đã hiểu là ${formatSalary(fixedMin, fixedMax, currency)}. ` +
+        'Ghi số đủ, dấu chấm ngăn hàng nghìn: 176.000.'
+      : null;
+  min = fixedMin;
+  max = fixedMax;
+
+  const hasNumbers = (min || 0) > 0 || (max || 0) > 0;
+  return {
+    fields: {
+      salaryMin: min > 0 ? min : undefined,
+      salaryMax: max > 0 ? max : undefined,
+      currency,
+      // Có số thì dựng lại chuỗi cho khớp; không có (vd "Thoả thuận") thì giữ chữ gốc
+      salary: hasNumbers ? formatSalary(min, max, currency) : row.salary || '',
+    },
+    warning,
+  };
+};
+
 const importJobs = async (req, res) => {
   try {
     if (!req.file?.buffer?.length) {
@@ -362,6 +420,7 @@ const importJobs = async (req, res) => {
     const { computeJobEmbedding } = require('./jobController');
     const created = [];
     const failed = [];
+    const warnings = [];
 
     for (const row of parsed.rows) {
       if (!row.title || !row.description) {
@@ -371,6 +430,12 @@ const importJobs = async (req, res) => {
           reason: 'Thiếu tiêu đề hoặc mô tả công việc',
         });
         continue;
+      }
+
+      // Đọc lương cả ở bước xem trước để lưu ý hiện ra trước khi bấm xác nhận
+      const pay = readSalary(row);
+      if (pay.warning) {
+        warnings.push({ row: row.__row, title: row.title, reason: pay.warning });
       }
 
       if (!apply) {
@@ -391,10 +456,7 @@ const importJobs = async (req, res) => {
           description: row.description,
           requirements,
           location: row.location || '',
-          salary: row.salary || '',
-          salaryMin: Number(row.salaryMin) || undefined,
-          salaryMax: Number(row.salaryMax) || undefined,
-          currency: row.currency || undefined,
+          ...pay.fields,
           jobType: row.jobType || undefined,
           experience: row.experience || '',
           level: row.level || '',
@@ -457,6 +519,7 @@ const importJobs = async (req, res) => {
         truncated: parsed.truncated,
         created,
         failed,
+        warnings,
       },
     });
   } catch (error) {
@@ -491,6 +554,10 @@ const downloadTemplate = (req, res) => {
         requiredSkills: 'Node.js, MongoDB',
         niceToHaveSkills: 'Docker, AWS',
         location: 'Đà Nẵng',
+        // Số tiền ghi theo lối Việt Nam: dấu chấm ngăn hàng nghìn
+        salaryMin: '5.000.000',
+        salaryMax: '8.000.000',
+        currency: 'VND',
         salary: '5 - 8 triệu',
         jobType: 'internship',
         experience: 'Không yêu cầu',

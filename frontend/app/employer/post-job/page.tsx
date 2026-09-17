@@ -28,7 +28,7 @@ import {
   EXPERIENCE_LEVELS,
 } from '@/lib/job-categories'
 import PositionCombobox from '@/components/employer/PositionCombobox'
-import { formatSalary, WORK_TYPE_LABEL } from '@/lib/format'
+import { formatMoneyInput, formatSalary, parseMoneyInput, WORK_TYPE_LABEL } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const initialFormData = {
@@ -113,6 +113,12 @@ export default function PostJobPage() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  // Ô lương là ô chữ: tự chèn dấu chấm ngăn hàng nghìn khi gõ ("15.000.000")
+  const handleMoneyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: formatMoneyInput(value) }))
+  }
+
   const handleSelect = (name: string, value: string) => {
     setFormData((prev) => {
       const next = { ...prev, [name]: value }
@@ -139,11 +145,11 @@ export default function PostJobPage() {
     const requirements = [...reqSkills, ...niceSkills]
 
 
+    const salaryMin = parseMoneyInput(formData.salaryMin)
+    const salaryMax = parseMoneyInput(formData.salaryMax)
     // Giữ thêm chuỗi đã định dạng để các chỗ đang đọc `job.salary` không phải sửa
     const salaryText =
-      formData.salaryMin || formData.salaryMax
-        ? formatSalary(Number(formData.salaryMin), Number(formData.salaryMax), formData.currency)
-        : ''
+      salaryMin || salaryMax ? formatSalary(salaryMin, salaryMax, formData.currency) : ''
 
     let expiresAt: string | undefined
     if (formData.deadline) {
@@ -169,8 +175,8 @@ export default function PostJobPage() {
           jobType: formData.workType || undefined,
           experience: formData.experienceLevel || undefined,
           education: formData.education || undefined,
-          salaryMin: formData.salaryMin ? Number(formData.salaryMin) : undefined,
-          salaryMax: formData.salaryMax ? Number(formData.salaryMax) : undefined,
+          salaryMin: salaryMin ?? undefined,
+          salaryMax: salaryMax ?? undefined,
           currency: formData.currency,
           salary: salaryText || undefined,
           expiresAt,
@@ -279,30 +285,32 @@ export default function PostJobPage() {
               <Field label="Lương tối thiểu" htmlFor="salaryMin">
                 <Input
                   id="salaryMin"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   name="salaryMin"
-                  min={0}
                   value={formData.salaryMin}
-                  onChange={handleChange}
-                  placeholder="15000000"
+                  onChange={handleMoneyChange}
+                  placeholder="15.000.000"
                 />
               </Field>
 
               <Field label="Lương tối đa" htmlFor="salaryMax">
                 <Input
                   id="salaryMax"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   name="salaryMax"
-                  min={0}
                   value={formData.salaryMax}
-                  onChange={handleChange}
-                  placeholder="25000000"
+                  onChange={handleMoneyChange}
+                  placeholder="25.000.000"
                 />
               </Field>
 
               <Field
                 label="Đơn vị tiền tệ"
-                hint="Để trống mức lương nếu muốn hiển thị “Thoả thuận”."
+                hint="Nhập số đầy đủ, dấu chấm tự chèn: 178.000 là 178 nghìn. Để trống mức lương nếu muốn hiển thị “Thoả thuận”."
                 full
               >
                 <Select
@@ -464,8 +472,8 @@ export default function PostJobPage() {
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
                   <span className="rounded-md bg-brand-50 px-2 py-1 text-xs font-bold text-salary">
                     {formatSalary(
-                      Number(formData.salaryMin) || undefined,
-                      Number(formData.salaryMax) || undefined,
+                      parseMoneyInput(formData.salaryMin),
+                      parseMoneyInput(formData.salaryMax),
                       formData.currency,
                     )}
                   </span>
