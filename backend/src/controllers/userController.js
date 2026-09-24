@@ -10,7 +10,18 @@ const updateMySettings = async (req, res) => {
     const updateData = {};
     if (typeof isEmailSubscribed === 'boolean') updateData.isEmailSubscribed = isEmailSubscribed;
     if (typeof minMatchScore === 'number') updateData.minMatchScore = minMatchScore;
-    if (typeof jobMatchFrequency === 'string') updateData.jobMatchFrequency = jobMatchFrequency;
+    // findByIdAndUpdate không chạy validator của schema, nên phải tự chặn ở đây:
+    // không có dòng này thì một giá trị gõ sai vẫn vào được DB và cron lặng lẽ
+    // hiểu thành "hằng ngày".
+    const FREQUENCIES = ['immediately', 'daily', 'weekly', 'off'];
+    if (typeof jobMatchFrequency === 'string') {
+      if (!FREQUENCIES.includes(jobMatchFrequency)) {
+        return res.status(400).json({
+          message: `Tần suất "${jobMatchFrequency}" không hợp lệ. Chọn một trong: ${FREQUENCIES.join(', ')}.`,
+        });
+      }
+      updateData.jobMatchFrequency = jobMatchFrequency;
+    }
     if (typeof employerDigestLimit === 'number' && employerDigestLimit >= 0) {
       updateData.employerDigestLimit = Math.floor(employerDigestLimit);
     }

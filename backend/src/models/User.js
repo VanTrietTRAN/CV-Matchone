@@ -76,9 +76,13 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // 'off' = tắt hẳn email tổng hợp. Trang Cài đặt email của doanh nghiệp vẫn
+    // gửi lên giá trị này từ trước, nhưng enum không nhận — findByIdAndUpdate
+    // không chạy validator nên nó vẫn được ghi vào DB mà không ai báo lỗi, rồi
+    // chẳng chỗ nào đọc tới. Nay khai báo đúng và cron có đọc (xem cronJob.js).
     jobMatchFrequency: {
       type: String,
-      enum: ['immediately', 'daily', 'weekly'],
+      enum: ['immediately', 'daily', 'weekly', 'off'],
       default: 'daily',
     },
     minMatchScore: {
@@ -109,6 +113,10 @@ const userSchema = new mongoose.Schema(
     // Nhắc hạn tin tuyển dụng. Không đặt default để tài khoản cũ (undefined) vẫn
     // được nhắc — chỗ kiểm tra chỉ bỏ qua khi === false.
     jobExpiryReminder: { type: Boolean },
+
+    // Lần cuối doanh nghiệp nhận email tổng hợp hồ sơ. Cần mốc này để tần suất
+    // "hằng tuần" đếm được 7 ngày, không phụ thuộc vào việc cron chạy mấy lần.
+    lastDigestEmailAt: { type: Date },
 
     // Đặt lại mật khẩu bằng mã 6 số (lưu bản băm, xem src/utils/otp.js)
     resetPasswordToken: { type: String },

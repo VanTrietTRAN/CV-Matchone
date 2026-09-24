@@ -15,7 +15,16 @@ const processBroadcastAsync = async (broadcastId) => {
     if (!broadcast) return;
 
     // Determine target filter query
-    const userFilter = {};
+    //
+    // Tài khoản đã xoá mềm hoặc đang bị khoá không được nhận gì cả: xoá xong mà
+    // vẫn nhận thông báo hệ thống thì với người nhận, tài khoản của họ vẫn tồn
+    // tại. Trước đây bộ lọc chỉ có vai trò nên cả hai nhóm này đều được gửi, và
+    // còn bị đếm vào số "người nhận" trên trang quản trị.
+    //
+    // Cố ý KHÔNG lọc theo isEmailSubscribed: công tắc đó nằm ở mục "Email gợi ý
+    // việc làm", còn đây là thông báo vận hành của hệ thống (bảo trì, đổi chính
+    // sách) — admin chủ động chọn gửi thì phải tới được mọi tài khoản đang dùng.
+    const userFilter = { isDeleted: { $ne: true }, status: { $ne: 'banned' } };
     if (broadcast.targetGroup === 'candidates') {
       userFilter.role = 'candidate';
     } else if (broadcast.targetGroup === 'employers') {

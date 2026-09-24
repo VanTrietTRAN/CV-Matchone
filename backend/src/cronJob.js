@@ -204,6 +204,30 @@ const runCvMatching = async (candidate, cv, openJobs) => {
 // toàn bộ hồ sơ điểm cao trong ngày thành MỘT thư cho mỗi doanh nghiệp. Doanh
 // nghiệp đăng nhiều tin sẽ nhận một thư duy nhất thay vì hàng chục thư rời.
 const DEFAULT_EMPLOYER_THRESHOLD = 70;
+const WEEK_HOURS = 24 * 7;
+// Cho phép lệch nửa ngày: cron chạy đúng 15h mỗi ngày, nếu đòi tròn 7×24 giờ thì
+// lần thứ 7 luôn sớm hơn vài giây và bị đẩy sang ngày thứ 8.
+const WEEKLY_MIN_GAP_MS = 6.5 * 24 * 60 * 60 * 1000;
+
+/**
+ * Doanh nghiệp này có nhận email tổng hợp trong lượt chạy hôm nay không, và nếu
+ * có thì gom hồ sơ trong bao nhiêu giờ trở lại đây.
+ *
+ * Trang Cài đặt email cho doanh nghiệp chọn "Hằng ngày (15h)" / "Hằng tuần" và
+ * có công tắc tắt hẳn (lưu 'off'). Trước đây cron đọc mỗi `isEmailSubscribed`,
+ * nên bật "Hằng tuần" hay tắt công tắc đều không thay đổi gì: thư vẫn về mỗi ngày.
+ */
+const employerDigestWindow = (employer, defaultHours, now) => {
+  const freq = employer.jobMatchFrequency || 'daily';
+  if (freq === 'off') return { skip: 'đã tắt email tổng hợp' };
+  if (freq !== 'weekly') return { hours: defaultHours };
+
+  const last = employer.lastDigestEmailAt ? new Date(employer.lastDigestEmailAt) : null;
+  if (last && now - last < WEEKLY_MIN_GAP_MS) return { skip: 'chọn hằng tuần, chưa tới kỳ' };
+  // Kỳ hằng tuần gom cả tuần chứ không phải 24 giờ như lịch hằng ngày, nếu không
+  // thì "hằng tuần" hoá ra là "mỗi tuần xem một ngày", bỏ sót 6 ngày còn lại.
+  return { hours: WEEK_HOURS };
+};
 
 const runEmployerDigest = async () => {
   const startedAt = new Date();
@@ -212,7 +236,9 @@ const runEmployerDigest = async () => {
   const settings = await SystemSetting.findOne({ key: "employer_digest_settings" });
   const threshold = Number(settings?.value?.minMatchScore) || DEFAULT_EMPLOYER_THRESHOLD;
   const hours = Number(settings?.value?.lookbackHours) || 24;
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  // Lấy rộng nhất (cả tuần) rồi cắt lại theo cửa sổ của từng doanh nghiệp ở dưới:
+  // doanh nghiệp chọn hằng tuần cần 7 ngày, chọn hằng ngày vẫn chỉ thấy `hours` giờ.
+  const since = new Date(Date.now() - Math.max(hours, WEEK_HOURS) * 60 * 60 * 1000);
 
   // Lấy theo ngưỡng mặc định trước, rồi lọc lại theo ngưỡng riêng của từng doanh
   // nghiệp ở dưới. Doanh nghiệp đặt ngưỡng thấp hơn mặc định vẫn nhận đủ hồ sơ.
@@ -226,7 +252,9 @@ const runEmployerDigest = async () => {
     .sort({ matchingScore: -1 });
 
   if (!applications.length) {
-    console.log(`[Cron/Employer] Không có hồ sơ nào đạt ${threshold}% trong ${hours} giờ qua.`);
+    console.log(
+      `[Cron/Employer] Không có hồ sơ nào đạt ${threshold}% trong ${Math.max(hours, WEEK_HOURS)} giờ qua.`,
+    );
     return { employersNotified: 0, applicationsConsidered: 0, threshold };
   }
 
@@ -244,26 +272,36 @@ const runEmployerDigest = async () => {
       skills: app.cvProfileId?.skills || [],
       jobTitle: job.title,
       score: app.matchingScore,
+      appliedAtRaw: app.appliedAt,
       appliedAt: new Date(app.appliedAt).toLocaleString("vi-VN", {
         timeZone: CRON_TIMEZONE,
       }),
     });
   }
 
+  const now = new Date();
   let sentCount = 0;
+  let skippedByFrequency = 0;
   for (const [employerId, allApplicants] of byEmployer) {
     const employer = await User.findById(employerId).select(
-      "email status isDeleted isEmailSubscribed minMatchScore jobMatchFrequency employerDigestLimit"
+      "email status isDeleted isEmailSubscribed minMatchScore jobMatchFrequency employerDigestLimit lastDigestEmailAt"
     );
     // Tôn trọng đúng các điều kiện như email ứng viên: còn hoạt động, chưa xoá,
     // và chưa tắt nhận email
     if (!employer || employer.status !== "active" || employer.isDeleted) continue;
     if (employer.isEmailSubscribed === false) continue;
 
+    const window = employerDigestWindow(employer, hours, now);
+    if (window.skip) {
+      skippedByFrequency += 1;
+      continue;
+    }
+    const windowStart = new Date(now.getTime() - window.hours * 60 * 60 * 1000);
+
     // Cài đặt riêng của doanh nghiệp (trang Cài đặt email) đè lên mặc định hệ thống
     const ownThreshold = Number(employer.minMatchScore) || threshold;
     const applicants = allApplicants
-      .filter((a) => a.score >= ownThreshold)
+      .filter((a) => a.score >= ownThreshold && new Date(a.appliedAtRaw) >= windowStart)
       .sort((a, b) => b.score - a.score);
     if (!applicants.length) continue;
 
@@ -278,16 +316,23 @@ const runEmployerDigest = async () => {
       applicants: finalList,
       threshold: ownThreshold,
     });
-    if (result?.sent) sentCount += 1;
+    if (result?.sent) {
+      sentCount += 1;
+      // Mốc để tần suất "hằng tuần" đếm được kỳ kế tiếp
+      await User.updateOne({ _id: employer._id }, { $set: { lastDigestEmailAt: now } });
+    }
   }
 
   console.log(
     `[Cron/Employer] Xong: ${sentCount}/${byEmployer.size} doanh nghiệp nhận thư, ` +
-      `${applications.length} hồ sơ đạt ngưỡng ${threshold}%.`
+      `${applications.length} hồ sơ đạt ngưỡng ${threshold}%` +
+      (skippedByFrequency ? `, ${skippedByFrequency} bỏ qua theo tần suất đã chọn` : '') +
+      '.'
   );
   return {
     employersNotified: sentCount,
     employersMatched: byEmployer.size,
+    skippedByFrequency,
     applicationsConsidered: applications.length,
     threshold,
   };
@@ -400,9 +445,20 @@ const runMatchingProcess = async () => {
     // $ne: false thay vì === true, để tài khoản tạo trước khi có trường này
     // (giá trị undefined) vẫn nhận được thư. Người dùng tắt tường minh thì bỏ qua,
     // và bật lại sẽ tự nhận ở lượt thứ Năm kế tiếp — không cần thao tác gì thêm.
+    //
+    // Ba điều kiện còn lại là những người KHÔNG được nhận thư, trước đây bị bỏ sót
+    // (email tổng hợp gửi doanh nghiệp đã lọc đúng, phía ứng viên thì chưa):
+    //   - status 'banned': đã bị khoá mà vẫn nhận gợi ý việc làm hằng ngày.
+    //   - isDeleted: tài khoản đã xoá mềm, đáng lẽ im lặng hoàn toàn.
+    //   - emailVerified === false: chưa bấm xác thực nên login còn chặn, gửi thư
+    //     gợi ý việc làm tới đó là gửi vào một địa chỉ chưa ai xác nhận là thật.
+    // Đều dùng $ne để tài khoản cũ (trường undefined) vẫn nhận thư như trước.
     const candidates = await User.find({
       role: "candidate",
       isEmailSubscribed: { $ne: false },
+      status: { $ne: "banned" },
+      isDeleted: { $ne: true },
+      emailVerified: { $ne: false },
     });
 
     for (const candidate of candidates) {
