@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { apiFetch, type AuthResponse } from '@/lib/api'
 import { setAuth } from '@/lib/auth-storage'
-import { HOME_BY_ROLE } from '@/hooks/use-role-guard'
+import { LANDING_BY_ROLE } from '@/hooks/use-role-guard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import Logo from '@/components/brand/Logo'
@@ -67,7 +67,7 @@ function VerifyEmailInner() {
 
       setAuth({ id: data._id, email: data.email, role: data.role })
       toast.success('Xác thực thành công! Chào mừng bạn đến với CVMatchOne.')
-      router.push(HOME_BY_ROLE[data.role])
+      router.push(LANDING_BY_ROLE[data.role])
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Xác thực thất bại')
     } finally {

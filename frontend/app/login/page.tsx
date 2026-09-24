@@ -12,7 +12,7 @@ import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { setAuth } from '@/lib/auth-storage'
 import { apiFetch, ApiError, type AuthResponse } from '@/lib/api'
-import { HOME_BY_ROLE } from '@/hooks/use-role-guard'
+import { LANDING_BY_ROLE } from '@/hooks/use-role-guard'
 
 function LoginContent() {
   const router = useRouter()
@@ -45,7 +45,7 @@ function LoginContent() {
         .then((data) => {
           setAuth({ id: data._id, email: data.email, role: data.role })
           toast.success('Đăng nhập thành công!')
-          router.push(HOME_BY_ROLE[data.role])
+          router.push(LANDING_BY_ROLE[data.role])
         })
         .catch(() => {
           toast.error('Xác thực thất bại. Vui lòng đăng nhập lại.')
@@ -84,7 +84,7 @@ function LoginContent() {
         router.push('/change-password?first=1')
         return
       }
-      router.push(HOME_BY_ROLE[data.role])
+      router.push(LANDING_BY_ROLE[data.role])
     } catch (err) {
       setLoading(false)
       // Tài khoản đăng ký xong nhưng chưa nhập mã: đưa thẳng sang trang xác thực

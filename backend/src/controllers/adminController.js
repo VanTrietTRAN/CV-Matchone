@@ -125,6 +125,48 @@ const updateUserStatus = async (req, res) => {
 };
 
 
+/**
+ * PATCH /api/admin/users/:id/pro — cấp hoặc gỡ nhãn doanh nghiệp PRO.
+ * Chỉ áp dụng cho tài khoản nhà tuyển dụng: PRO là quyền lợi hiển thị của tin
+ * tuyển dụng, gắn cho ứng viên hay admin thì không có ý nghĩa gì.
+ */
+const updateUserPro = async (req, res) => {
+  try {
+    const { isPro } = req.body;
+    if (typeof isPro !== 'boolean') {
+      return res.status(400).json({ message: 'Thiếu trường isPro (true/false)' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user || user.isDeleted) {
+      return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
+    }
+    if (user.role !== 'employer') {
+      return res.status(400).json({ message: 'Chỉ tài khoản nhà tuyển dụng mới gắn được nhãn PRO' });
+    }
+
+    user.isPro = isPro;
+    // Giữ mốc lần đầu được cấp; gỡ PRO thì xoá mốc để lần cấp sau tính lại từ đầu.
+    user.proSince = isPro ? user.proSince || new Date() : undefined;
+    await user.save();
+
+    await logAdminAction({
+      req,
+      action: 'SET_EMPLOYER_PRO',
+      targetModel: 'User',
+      targetId: user._id,
+      details: { email: user.email, isPro },
+    });
+
+    res.json({
+      message: isPro ? `Đã nâng ${user.email} lên doanh nghiệp PRO` : `Đã gỡ nhãn PRO của ${user.email}`,
+      data: { _id: user._id, isPro: user.isPro, proSince: user.proSince },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const deleteUser = async (req, res) => {
   try {
     if (req.params.id === req.user._id.toString()) {
@@ -243,19 +285,27 @@ const getJobs = async (req, res) => {
 
     const total = await Job.countDocuments(filter);
     const jobs = await Job.find(filter)
-      .populate('employerId', 'email')
+      .populate('employerId', 'email isPro')
       .select('-embedding')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
 
-   
-    const jobsWithCount = await Promise.all(
-      jobs.map(async (job) => {
-        const applyCount = await Application.countDocuments({ jobId: job._id });
-        return { ...job.toObject(), applyCount };
-      })
-    );
+    // Đếm hồ sơ cho cả trang bằng một truy vấn thay vì mỗi tin một lần.
+    const counts = await Application.aggregate([
+      { $match: { jobId: { $in: jobs.map((j) => j._id) } } },
+      { $group: { _id: '$jobId', count: { $sum: 1 } } },
+    ]);
+    const applyCountOf = new Map(counts.map((c) => [String(c._id), c.count]));
+
+    const jobsWithCount = jobs.map((job) => {
+      const obj = job.toObject();
+      return {
+        ...obj,
+        applyCount: applyCountOf.get(String(job._id)) || 0,
+        isPro: Boolean(obj.employerId && obj.employerId.isPro),
+      };
+    });
 
     res.json({ data: jobsWithCount, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
@@ -936,6 +986,7 @@ module.exports = {
   getStats,
   getUsers,
   updateUserStatus,
+  updateUserPro,
   deleteUser,
   getJobs,
   closeJob,

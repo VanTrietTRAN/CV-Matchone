@@ -90,6 +90,13 @@ const userSchema = new mongoose.Schema(
       enum: ["active", "banned"],
       default: "active",
     },
+
+    // Doanh nghiệp PRO — chỉ admin bật/tắt (PATCH /api/admin/users/:id/pro).
+    // Tin của họ được xếp lên đầu mọi danh sách việc làm và đầu kết quả tìm kiếm.
+    // Cờ đặt ở User chứ không ở CompanyProfile vì nhà tuyển dụng có thể chưa mở
+    // trang hồ sơ công ty bao giờ — khi đó CompanyProfile chưa tồn tại.
+    isPro: { type: Boolean, default: false },
+    proSince: { type: Date },
     isDeleted: {
       type: Boolean,
       default: false,

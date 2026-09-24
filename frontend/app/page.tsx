@@ -218,7 +218,7 @@ export default function HomePage() {
               </p>
             </div>
             <Button asChild variant="brandOutline">
-              <Link href="/candidate/matches">
+              <Link href="/jobs">
                 Xem tất cả việc làm
                 <ArrowRight />
               </Link>
@@ -229,7 +229,7 @@ export default function HomePage() {
             {categories.map(({ label, icon: Icon, query }) => (
               <Link
                 key={label}
-                href={`/candidate/matches?q=${encodeURIComponent(query)}`}
+                href={`/jobs?q=${encodeURIComponent(query)}`}
                 className="surface-card surface-hover group flex items-center gap-3 p-4"
               >
                 <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-500 group-hover:text-white">

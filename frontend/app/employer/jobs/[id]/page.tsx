@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import EmployerLayout from '@/layouts/EmployerLayout'
 import PageContainer from '@/components/dashboard/PageContainer'
 import StatusBadge from '@/components/StatusBadge'
+import StatCard from '@/components/dashboard/StatCard'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,8 @@ import {
   Lock,
   Copy,
   Trash2,
+  Eye,
+  UserCheck,
 } from 'lucide-react'
 
 type Job = {
@@ -71,6 +74,19 @@ type Job = {
   status: string
   createdAt: string
   employerId?: { _id?: string } | string
+}
+
+/** Số liệu của tin: GET /api/jobs/:id/stats (chủ tin hoặc admin). */
+type JobStats = {
+  views: {
+    total: number
+    user: number
+    guest: number
+    uniqueTotal: number
+    uniqueUser: number
+    uniqueGuest: number
+  }
+  applications: { total: number; byStatus: Record<string, number> }
 }
 
 type FormState = {
@@ -155,7 +171,7 @@ export default function EmployerJobDetailPage() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormState | null>(null)
-  const [applyCount, setApplyCount] = useState<number | null>(null)
+  const [stats, setStats] = useState<JobStats | null>(null)
   const [closeOpen, setCloseOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -194,12 +210,13 @@ export default function EmployerJobDetailPage() {
     if (jobId) load()
   }, [jobId, load])
 
-  // Số hồ sơ đã nhận cho tin này — lấy từ danh sách ứng viên của nhà tuyển dụng
+  // Lượt xem và số hồ sơ của tin này. Lượt xem của chính chủ tin không được
+  // tính vào đây, nên số liệu phản ánh người ngoài quan tâm tới mức nào.
   useEffect(() => {
     if (!jobId) return
-    apiFetch<{ data: unknown[] }>(`/api/applications/job/${jobId}`)
-      .then((r) => setApplyCount(r.data?.length ?? 0))
-      .catch(() => setApplyCount(null))
+    apiFetch<{ data: JobStats }>(`/api/jobs/${jobId}/stats`)
+      .then((r) => setStats(r.data))
+      .catch(() => setStats(null))
   }, [jobId])
 
   const set = (k: keyof FormState, v: string) => {
@@ -358,11 +375,17 @@ export default function EmployerJobDetailPage() {
                   {job.location}
                 </span>
               )}
-              {applyCount !== null && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Users className="size-4" />
-                  {applyCount} hồ sơ
-                </span>
+              {stats && (
+                <>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Users className="size-4" />
+                    {stats.applications.total} hồ sơ
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Eye className="size-4" />
+                    {stats.views.total} lượt xem
+                  </span>
+                </>
               )}
             </div>
           </div>
@@ -419,6 +442,46 @@ export default function EmployerJobDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Số liệu tiếp cận của tin — chỉ chủ tin và admin nhìn thấy */}
+        <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Tổng lượt xem"
+            value={stats?.views.total ?? 0}
+            icon={Eye}
+            tone="warning"
+            hint={`${stats?.views.uniqueTotal ?? 0} người xem khác nhau`}
+            loading={!stats}
+          />
+          <StatCard
+            label="Lượt xem từ người dùng"
+            value={stats?.views.user ?? 0}
+            icon={UserCheck}
+            tone="brand"
+            hint={`${stats?.views.uniqueUser ?? 0} tài khoản đã đăng nhập`}
+            loading={!stats}
+          />
+          <StatCard
+            label="Lượt xem từ khách vãng lai"
+            value={stats?.views.guest ?? 0}
+            icon={Users}
+            tone="neutral"
+            hint={`${stats?.views.uniqueGuest ?? 0} khách khác nhau`}
+            loading={!stats}
+          />
+          <StatCard
+            label="Hồ sơ ứng tuyển"
+            value={stats?.applications.total ?? 0}
+            icon={UserCheck}
+            tone="info"
+            hint={
+              stats?.applications.byStatus?.pending
+                ? `${stats.applications.byStatus.pending} hồ sơ chờ duyệt`
+                : 'Từ tin tuyển dụng này'
+            }
+            loading={!stats}
+          />
+        </section>
 
         {editing ? (
           <div className="surface-card space-y-6 p-6">

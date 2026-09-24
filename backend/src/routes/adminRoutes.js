@@ -5,6 +5,7 @@ const {
   getStats,
   getUsers,
   updateUserStatus,
+  updateUserPro,
   deleteUser,
   getJobs,
   closeJob,
@@ -48,6 +49,7 @@ router.post('/broadcast', createBroadcast);
 
 router.get('/users', getUsers);
 router.patch('/users/:id/status', updateUserStatus);
+router.patch('/users/:id/pro', updateUserPro);
 router.post('/users/:id/reset-password-request', resetUserPasswordByAdmin);
 router.delete('/users/:id', deleteUser);
 

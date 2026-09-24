@@ -28,7 +28,8 @@ export default function HeroSearch() {
     if (q.trim()) params.set('q', q.trim())
     if (loc && loc !== LOCATIONS[0]) params.set('location', loc)
     const query = params.toString()
-    router.push(`/candidate/matches${query ? `?${query}` : ''}`)
+    // Trang tìm việc công khai: khách vãng lai và mọi vai trò đều mở được
+    router.push(`/jobs${query ? `?${query}` : ''}`)
   }
 
   return (

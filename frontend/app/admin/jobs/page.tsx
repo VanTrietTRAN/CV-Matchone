@@ -8,7 +8,7 @@ import TaxonomyFilter, {
   type TaxonomyValue,
 } from '@/components/filters/TaxonomyFilter'
 import { toast } from 'sonner'
-import { Briefcase, Search, RefreshCw, XCircle, Trash2, ChevronLeft, ChevronRight, MapPin, Users } from 'lucide-react'
+import { Briefcase, Search, RefreshCw, XCircle, Trash2, ChevronLeft, ChevronRight, MapPin, Users, Eye, Crown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +19,11 @@ type AdminJob = {
   status: 'open' | 'closed' | 'archived'
   createdAt: string
   applyCount: number
+  // Lượt xem tách theo người đã đăng nhập / khách vãng lai
+  viewCount?: number
+  viewCountUser?: number
+  viewCountGuest?: number
+  isPro?: boolean
   employerId: { email: string } | null
 }
 
@@ -146,6 +151,7 @@ export default function AdminJobsPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Tin tuyển dụng</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Nhà tuyển dụng</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Trạng thái</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Lượt xem</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Ứng tuyển</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Ngày đăng</th>
                   <th className="px-5 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Hành động</th>
@@ -155,14 +161,14 @@ export default function AdminJobsPage() {
                 {loading ? (
                   [...Array(8)].map((_, i) => (
                     <tr key={i}>
-                      {[...Array(6)].map((__, j) => (
+                      {[...Array(7)].map((__, j) => (
                         <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-800 rounded animate-pulse" /></td>
                       ))}
                     </tr>
                   ))
                 ) : jobs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-slate-500">Không tìm thấy tin tuyển dụng nào</td>
+                    <td colSpan={7} className="px-5 py-12 text-center text-slate-500">Không tìm thấy tin tuyển dụng nào</td>
                   </tr>
                 ) : jobs.map((job) => (
                   <tr key={job._id} className="hover:bg-slate-800/50 transition-colors">
@@ -174,11 +180,34 @@ export default function AdminJobsPage() {
                         </p>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-slate-400 text-xs">{job.employerId?.email || '—'}</td>
+                    <td className="px-5 py-4 text-slate-400 text-xs">
+                      <span className="flex items-center gap-1.5">
+                        {job.employerId?.email || '—'}
+                        {job.isPro && (
+                          <span
+                            title="Doanh nghiệp PRO — tin được ưu tiên hiển thị"
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-400"
+                          >
+                            <Crown className="w-3 h-3" />PRO
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-5 py-4">
                       <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', statusCls[job.status])}>
                         {statusLabel[job.status]}
                       </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span
+                        className="flex items-center gap-1 text-slate-300 text-sm"
+                        title={`${job.viewCountUser || 0} lượt từ người dùng đã đăng nhập · ${job.viewCountGuest || 0} lượt từ khách vãng lai`}
+                      >
+                        <Eye className="w-3.5 h-3.5 text-slate-500" />{job.viewCount || 0}
+                      </span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {job.viewCountUser || 0} user · {job.viewCountGuest || 0} vãng lai
+                      </p>
                     </td>
                     <td className="px-5 py-4">
                       <span className="flex items-center gap-1 text-slate-300 text-sm">

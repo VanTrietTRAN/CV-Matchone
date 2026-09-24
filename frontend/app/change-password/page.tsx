@@ -6,7 +6,7 @@ import ChangePasswordForm from '@/components/auth/ChangePasswordForm'
 import Logo from '@/components/brand/Logo'
 import { apiFetch, type AuthResponse } from '@/lib/api'
 import { getStoredUser } from '@/lib/auth-storage'
-import { HOME_BY_ROLE } from '@/hooks/use-role-guard'
+import { LANDING_BY_ROLE } from '@/hooks/use-role-guard'
 import { KeyRound, Loader2 } from 'lucide-react'
 
 /**
@@ -26,7 +26,7 @@ function ChangePasswordInner() {
     apiFetch<AuthResponse & { mustChangePassword?: boolean }>('/api/auth/me')
       .then((me) => {
         if (isFirstLogin && !me.mustChangePassword) {
-          router.replace(HOME_BY_ROLE[me.role])
+          router.replace(LANDING_BY_ROLE[me.role])
           return
         }
         setChecking(false)
@@ -68,7 +68,7 @@ function ChangePasswordInner() {
           <ChangePasswordForm
             onSuccess={() => {
               const user = getStoredUser()
-              router.replace(user ? HOME_BY_ROLE[user.role] : '/login')
+              router.replace(user ? LANDING_BY_ROLE[user.role] : '/login')
             }}
           />
 

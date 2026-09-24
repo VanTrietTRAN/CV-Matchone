@@ -7,10 +7,32 @@ import { getStoredUser, setAuth, type StoredUser } from '@/lib/auth-storage'
 
 export type Role = 'candidate' | 'employer' | 'admin'
 
+/** Khu quản lý của từng vai trò — đích của nút "Quản lý" trên thanh trên cùng. */
 export const HOME_BY_ROLE: Record<Role, string> = {
   candidate: '/candidate/dashboard',
   employer: '/employer/dashboard',
   admin: '/admin/dashboard',
+}
+
+/**
+ * Nơi đưa người dùng tới ngay sau khi đăng nhập / xác thực xong.
+ *
+ * Ứng viên và nhà tuyển dụng vào trang chủ để tìm tin trước đã — đăng nhập xong
+ * mà rơi thẳng vào bảng điều khiển thì không còn đường xem tin của người khác.
+ * Muốn vào khu quản lý thì bấm "Quản lý" ở góc trên bên phải.
+ * Admin không có việc gì ở trang chủ nên vẫn vào thẳng bảng điều khiển.
+ */
+export const LANDING_BY_ROLE: Record<Role, string> = {
+  candidate: '/',
+  employer: '/',
+  admin: '/admin/dashboard',
+}
+
+/** Nhãn khu quản lý, dùng cho tooltip / menu tài khoản ngoài trang công khai. */
+export const AREA_LABEL: Record<Role, string> = {
+  candidate: 'Khu vực ứng viên',
+  employer: 'Khu vực nhà tuyển dụng',
+  admin: 'Khu vực quản trị',
 }
 
 type GuardState =

@@ -32,6 +32,33 @@ const protect = async (req, res, next) => {
     }
 };
 
+/**
+ * Nhận diện người dùng nếu có token, nhưng KHÔNG chặn khi không có.
+ *
+ * Dùng cho các endpoint công khai cần biết "ai đang xem" mà vẫn phải phục vụ
+ * khách vãng lai — ví dụ đếm lượt xem tin tuyển dụng: token hỏng hay hết hạn
+ * thì coi như khách, không trả 401 làm hỏng trang đang mở.
+ */
+const optionalAuth = async (req, res, next) => {
+    let token;
+    if (req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+    }
+
+    if (!token) return next();
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id).select('-password');
+        if (user) req.user = user;
+    } catch {
+        // Token hỏng/hết hạn: cứ coi như khách vãng lai
+    }
+    return next();
+};
+
 const authorize = (...roles) => {
     return (req, res, next) => {
         if (!roles.includes(req.user.role)) {
@@ -43,4 +70,4 @@ const authorize = (...roles) => {
     };
 };
 
-module.exports = { protect, authorize };
+module.exports = { protect, optionalAuth, authorize };

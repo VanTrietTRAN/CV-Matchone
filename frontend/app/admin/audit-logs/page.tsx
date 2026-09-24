@@ -36,6 +36,7 @@ const ACTION_LABELS: Record<string, { label: string; badgeClass: string }> = {
   RETRY_AI_PARSING: { label: 'Chạy lại AI CV', badgeClass: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   CREATE_SYSTEM_BROADCAST: { label: 'Phát thông báo', badgeClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   UPDATE_SYSTEM_SETTINGS: { label: 'Sửa cấu hình hệ thống', badgeClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+  SET_EMPLOYER_PRO: { label: 'Cấp / gỡ nhãn PRO', badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
 }
 
 export default function AuditLogsPage() {
@@ -136,6 +137,7 @@ export default function AuditLogsPage() {
                 <SelectItem value="RETRY_AI_PARSING">Chạy lại AI CV</SelectItem>
                 <SelectItem value="CREATE_SYSTEM_BROADCAST">Phát thông báo</SelectItem>
                 <SelectItem value="UPDATE_SYSTEM_SETTINGS">Sửa cấu hình hệ thống</SelectItem>
+                <SelectItem value="SET_EMPLOYER_PRO">Cấp / gỡ nhãn PRO</SelectItem>
               </SelectContent>
             </Select>
           </div>

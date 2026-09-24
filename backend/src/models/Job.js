@@ -32,6 +32,14 @@ const jobSchema = new mongoose.Schema({
 
     expiresAt: { type: Date },
 
+    // Lượt xem tin. Tách người đã đăng nhập và khách vãng lai vì nhà tuyển dụng
+    // cần biết tin tiếp cận được bao nhiêu người ngoài hệ thống.
+    // viewCount = viewCountUser + viewCountGuest; giữ sẵn tổng để danh sách tin
+    // không phải cộng lại ở mọi chỗ hiển thị. Chi tiết từng người xem: model JobView.
+    viewCount: { type: Number, default: 0 },
+    viewCountUser: { type: Number, default: 0 },
+    viewCountGuest: { type: Number, default: 0 },
+
     // Mốc đã gửi email nhắc hạn cho tin này. Không có mốc thì cron sẽ nhắc lại
     // mỗi ngày cho tới lúc tin hết hạn — phiền và dễ bị đánh dấu spam.
     lastExpiryReminderAt: { type: Date },

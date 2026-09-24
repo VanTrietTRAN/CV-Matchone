@@ -10,7 +10,7 @@ import StatusBadge from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
-import { Briefcase, Users, TrendingUp, Plus, Share2, Lock, Copy, MapPin } from 'lucide-react'
+import { Briefcase, Users, TrendingUp, Plus, Share2, Lock, Copy, MapPin, Eye } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import TaxonomyFilter, {
   hasTaxonomyFilter,
@@ -28,6 +28,11 @@ type JobRow = {
   createdAt: string
   industry?: string
   specialization?: string
+  applyCount?: number
+  // Lượt xem tách theo người đã đăng nhập / khách vãng lai
+  viewCount?: number
+  viewCountUser?: number
+  viewCountGuest?: number
 }
 
 export default function EmployerDashboardPage() {
@@ -102,6 +107,8 @@ export default function EmployerDashboardPage() {
   )
 
   const activeJobsCount = jobs.filter((j) => j.status === 'open').length
+  const totalViews = jobs.reduce((sum, j) => sum + (j.viewCount || 0), 0)
+  const totalGuestViews = jobs.reduce((sum, j) => sum + (j.viewCountGuest || 0), 0)
 
   return (
     <EmployerLayout>
@@ -133,13 +140,21 @@ export default function EmployerDashboardPage() {
           }
         />
 
-        <section className="grid gap-4 sm:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Tin đang tuyển"
             value={activeJobsCount}
             icon={Briefcase}
             tone="brand"
             hint={`Trên tổng ${jobs.length} tin đã đăng`}
+            loading={loading}
+          />
+          <StatCard
+            label="Lượt xem tin"
+            value={totalViews}
+            icon={Eye}
+            tone="warning"
+            hint={`Trong đó ${totalGuestViews} lượt từ khách vãng lai`}
             loading={loading}
           />
           <StatCard
@@ -201,11 +216,13 @@ export default function EmployerDashboardPage() {
               />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm">
+                <table className="w-full min-w-[880px] text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/60 text-left">
                       <th className="px-5 py-3 font-semibold">Tiêu đề tin</th>
                       <th className="px-5 py-3 font-semibold">Địa điểm</th>
+                      <th className="px-5 py-3 font-semibold">Lượt xem</th>
+                      <th className="px-5 py-3 font-semibold">Hồ sơ</th>
                       <th className="px-5 py-3 font-semibold">Ngày đăng</th>
                       <th className="px-5 py-3 font-semibold">Trạng thái</th>
                       <th className="px-5 py-3 text-right font-semibold">Hành động</th>
@@ -229,6 +246,24 @@ export default function EmployerDashboardPage() {
                           <span className="inline-flex items-center gap-1.5">
                             <MapPin className="size-3.5" />
                             {job.location || '—'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className="inline-flex items-center gap-1.5 tabular-nums"
+                            title={`${job.viewCountUser || 0} lượt từ người dùng đã đăng nhập · ${job.viewCountGuest || 0} lượt từ khách vãng lai`}
+                          >
+                            <Eye className="size-3.5 text-muted-foreground" />
+                            {job.viewCount || 0}
+                          </span>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {job.viewCountUser || 0} user · {job.viewCountGuest || 0} vãng lai
+                          </p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="inline-flex items-center gap-1.5 tabular-nums">
+                            <Users className="size-3.5 text-muted-foreground" />
+                            {job.applyCount || 0}
                           </span>
                         </td>
                         <td className="px-5 py-4">

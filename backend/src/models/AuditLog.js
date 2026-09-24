@@ -24,6 +24,7 @@ const auditLogSchema = new mongoose.Schema(
         'UPDATE_SYSTEM_SETTINGS',
         'IMPORT_USERS',
         'IMPORT_JOBS',
+        'SET_EMPLOYER_PRO',
       ],
       index: true,
     },

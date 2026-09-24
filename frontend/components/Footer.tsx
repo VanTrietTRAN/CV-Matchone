@@ -10,6 +10,7 @@ const columns = [
   {
     title: 'Dành cho ứng viên',
     links: [
+      { label: 'Tìm việc làm', href: '/jobs' },
       { label: 'Việc làm gợi ý bằng AI', href: '/candidate/matches' },
       { label: 'Quản lý hồ sơ & CV', href: '/candidate/cv' },
       { label: 'Việc làm đã ứng tuyển', href: '/candidate/applications' },

@@ -4,6 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import MatchBadge from '@/components/MatchBadge'
+import ProBadge from '@/components/ProBadge'
 import SkillTag from '@/components/SkillTag'
 import AIBadge from '@/components/AIBadge'
 import { MapPin, Clock, Building2, CheckCircle2 } from 'lucide-react'
@@ -42,6 +43,14 @@ interface JobCardProps {
   showActions?: boolean
   /** Huy hiệu thứ hạng (#1, #2…) cho danh sách gợi ý AI */
   rank?: number
+  /** Tin của doanh nghiệp PRO — được xếp lên đầu danh sách */
+  isPro?: boolean
+  /**
+   * Người đang xem có ứng tuyển được không. Nhà tuyển dụng và admin xem danh
+   * sách việc làm công khai thì chỉ còn nút "Chi tiết" — bày nút ứng tuyển cho
+   * họ là mời vào một việc họ không làm được.
+   */
+  canApply?: boolean
 }
 
 export default function JobCard({
@@ -67,6 +76,8 @@ export default function JobCard({
   className,
   showActions = true,
   rank,
+  isPro = false,
+  canApply = true,
 }: JobCardProps) {
   const detailHref = href ?? `/candidate/jobs/${id}`
   const remaining = daysUntil(expiresAt)
@@ -77,6 +88,9 @@ export default function JobCard({
       onClick={onClick}
       className={cn(
         'surface-card surface-hover group relative flex flex-col gap-3.5 p-4 sm:p-5',
+        // Tin PRO nằm đầu danh sách; viền nhấn để người đọc thấy ngay đây là tin
+        // ưu tiên chứ không phải danh sách bị sắp xếp lung tung.
+        isPro && 'border-warning/60 ring-1 ring-warning/25',
         onClick && 'cursor-pointer',
         className,
       )}
@@ -123,6 +137,7 @@ export default function JobCard({
             <span className="truncate" title={company}>
               {company}
             </span>
+            {isPro && <ProBadge />}
           </p>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
@@ -192,15 +207,17 @@ export default function JobCard({
                 Đã ứng tuyển
               </Button>
             ) : (
-              <Button
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onApply?.(id)
-                }}
-              >
-                Ứng tuyển
-              </Button>
+              canApply && (
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onApply?.(id)
+                  }}
+                >
+                  Ứng tuyển
+                </Button>
+              )
             )}
           </div>
         )}

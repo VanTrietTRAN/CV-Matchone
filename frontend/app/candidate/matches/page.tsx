@@ -43,6 +43,7 @@ type ApiJob = {
   expiresAt?: string
   employerId?: { email?: string } | string
   previewScore: number | null // null = CV chưa có embedding
+  isPro?: boolean
 }
 
 type SortKey = 'match' | 'newest' | 'deadline'
@@ -143,6 +144,9 @@ function MatchesContent() {
     }
 
     result.sort((a, b) => {
+      // Tin của doanh nghiệp PRO luôn đứng trước, kể cả khi đang sắp xếp theo
+      // tiêu chí khác — giống danh sách việc làm công khai.
+      if (Boolean(a.isPro) !== Boolean(b.isPro)) return a.isPro ? -1 : 1
       if (sort === 'newest') {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       }
@@ -319,6 +323,7 @@ function MatchesContent() {
                   postedDate={job.createdAt}
                   expiresAt={job.expiresAt}
                   applied={appliedIds.has(job._id)}
+                  isPro={job.isPro}
                   rank={sort === 'match' && job.previewScore !== null && index < 3 ? index + 1 : undefined}
                   onApply={() => setApplyModal({ jobId: job._id, jobTitle: job.title })}
                 />

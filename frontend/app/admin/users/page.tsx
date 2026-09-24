@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import AdminLayout from '@/layouts/AdminLayout'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
-import { Users, Search, RefreshCw, Shield, ShieldOff, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Users, Search, RefreshCw, Shield, ShieldOff, Trash2, ChevronLeft, ChevronRight, Crown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -16,6 +16,8 @@ type User = {
   createdAt: string
   googleId?: string
   facebookId?: string
+  /** Doanh nghiệp PRO — tin tuyển dụng được ưu tiên lên đầu danh sách và tìm kiếm */
+  isPro?: boolean
 }
 
 const roleLabel: Record<string, string> = { candidate: 'Ứng viên', employer: 'Nhà tuyển dụng', admin: 'Admin' }
@@ -62,6 +64,27 @@ export default function AdminUsersPage() {
       await apiFetch(`/api/admin/users/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) })
       toast.success(newStatus === 'banned' ? 'Đã khoá tài khoản' : 'Đã kích hoạt tài khoản')
       setUsers(prev => prev.map(u => u._id === id ? { ...u, status: newStatus } : u))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Thao tác thất bại')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleProChange = async (id: string, email: string, nextPro: boolean) => {
+    const question = nextPro
+      ? `Nâng "${email}" lên doanh nghiệp PRO? Tin tuyển dụng của họ sẽ được xếp lên đầu danh sách việc làm và đầu kết quả tìm kiếm.`
+      : `Gỡ nhãn PRO của "${email}"? Tin tuyển dụng của họ trở lại thứ tự thường.`
+    if (!confirm(question)) return
+
+    setActionLoading(id + '-pro')
+    try {
+      await apiFetch(`/api/admin/users/${id}/pro`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isPro: nextPro }),
+      })
+      toast.success(nextPro ? 'Đã nâng lên doanh nghiệp PRO' : 'Đã gỡ nhãn PRO')
+      setUsers(prev => prev.map(u => u._id === id ? { ...u, isPro: nextPro } : u))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Thao tác thất bại')
     } finally {
@@ -180,9 +203,19 @@ export default function AdminUsersPage() {
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', roleCls[user.role])}>
-                        {roleLabel[user.role]}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', roleCls[user.role])}>
+                          {roleLabel[user.role]}
+                        </span>
+                        {user.isPro && (
+                          <span
+                            title="Doanh nghiệp PRO — tin được ưu tiên hiển thị"
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/15 px-2 py-1 text-[10px] font-bold text-amber-400"
+                          >
+                            <Crown className="w-3 h-3" />PRO
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       {user.status === 'banned' ? (
@@ -194,6 +227,23 @@ export default function AdminUsersPage() {
                     <td className="px-5 py-4 text-slate-400 text-xs">{new Date(user.createdAt).toLocaleDateString('vi-VN')}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2 flex-wrap">
+                        {user.role === 'employer' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleProChange(user._id, user.email, !user.isPro)}
+                            disabled={actionLoading === user._id + '-pro'}
+                            className={cn(
+                              'h-7 text-xs gap-1 bg-transparent',
+                              user.isPro
+                                ? 'border-slate-600/40 text-slate-300 hover:bg-slate-700/40'
+                                : 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10',
+                            )}
+                          >
+                            <Crown className="w-3 h-3" /> {user.isPro ? 'Gỡ PRO' : 'Cấp PRO'}
+                          </Button>
+                        )}
+
                         {user.role !== 'admin' && (
                           <Button
                             size="sm"

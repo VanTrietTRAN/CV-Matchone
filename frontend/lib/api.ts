@@ -30,9 +30,9 @@ export type AuthResponse = {
 
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit & { skipAuth?: boolean } = {},
+  options: RequestInit & { skipAuth?: boolean; allowUnauthenticated?: boolean } = {},
 ): Promise<T> {
-  const { skipAuth: _skipAuth, headers, ...rest } = options
+  const { skipAuth: _skipAuth, allowUnauthenticated, headers, ...rest } = options
   const h = new Headers(headers)
   h.set('Content-Type', 'application/json')
 
@@ -61,8 +61,10 @@ export async function apiFetch<T = unknown>(
     if (res.status === 401 && typeof window !== 'undefined') {
       const { clearAuth } = await import('@/lib/auth-storage')
       clearAuth()
-      // Tránh redirect loop nếu đang ở trang login
-      if (!window.location.pathname.startsWith('/login')) {
+      // allowUnauthenticated: trang công khai chỉ hỏi "có ai đang đăng nhập không".
+      // Chưa đăng nhập là câu trả lời hợp lệ ở đó, không phải lý do để đá người
+      // đang xem tin tuyển dụng sang trang đăng nhập.
+      if (!allowUnauthenticated && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'
       }
     }

@@ -1,4 +1,7 @@
+const crypto = require("crypto");
 const Job = require("../models/Job");
+const JobView = require("../models/JobView");
+const Application = require("../models/Application");
 const CvProfile = require("../models/CvProfile");
 const aiService = require("../services/aiService");
 const { parseMoney, normalizeCurrency, formatSalary } = require("../utils/salary");
@@ -139,13 +142,35 @@ const buildJobFilter = (query = {}) => {
   return filter;
 };
 
+/**
+ * Gắn cờ `isPro` cho từng tin dựa trên tài khoản nhà tuyển dụng đã populate.
+ * Cờ nằm ở User nên không sort thẳng trong MongoDB được — đổi lại chỉ tốn đúng
+ * một truy vấn như cũ, không phải hỏi thêm bảng nào.
+ */
+const withProFlag = (jobs) =>
+  jobs.map((job) => {
+    const obj = typeof job.toObject === "function" ? job.toObject() : job;
+    return { ...obj, isPro: Boolean(obj.employerId && obj.employerId.isPro) };
+  });
+
+/**
+ * Tin của doanh nghiệp PRO luôn đứng trước — đây là quyền lợi của gói PRO.
+ * Trong cùng một nhóm thì giữ nguyên tiêu chí sắp xếp thường ngày (`tiebreak`),
+ * nên bật PRO không làm đảo lộn thứ tự còn lại của danh sách.
+ */
+const sortProFirst = (jobs, tiebreak) =>
+  jobs.sort((a, b) => (a.isPro === b.isPro ? tiebreak(a, b) : b.isPro ? 1 : -1));
+
+const byNewest = (a, b) => new Date(b.createdAt) - new Date(a.createdAt);
+
 const getAllOpenJobs = async (req, res) => {
   try {
     const jobs = await Job.find({ status: "open", isDeleted: { $ne: true }, ...buildJobFilter(req.query) })
-      .populate("employerId", "email role")
+      .populate("employerId", "email role isPro")
+      .select("-embedding")
       .sort({ createdAt: -1 });
 
-    res.json({ data: jobs });
+    res.json({ data: sortProFirst(withProFlag(jobs), byNewest) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -156,8 +181,24 @@ const getMyJobs = async (req, res) => {
     const jobs = await Job.find({
       employerId: req.user._id,
       ...buildJobFilter(req.query),
-    }).sort({ createdAt: -1 });
-    res.json({ data: jobs });
+    })
+      .select("-embedding")
+      .sort({ createdAt: -1 });
+
+    // Đếm hồ sơ một lần cho cả danh sách thay vì mỗi tin một truy vấn.
+    // Lượt xem đã nằm sẵn trên chính tin nên không phải đếm lại.
+    const counts = await Application.aggregate([
+      { $match: { jobId: { $in: jobs.map((j) => j._id) } } },
+      { $group: { _id: "$jobId", count: { $sum: 1 } } },
+    ]);
+    const applyCountOf = new Map(counts.map((c) => [String(c._id), c.count]));
+
+    res.json({
+      data: jobs.map((j) => ({
+        ...j.toObject(),
+        applyCount: applyCountOf.get(String(j._id)) || 0,
+      })),
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -166,7 +207,9 @@ const getMyJobs = async (req, res) => {
 const getJobById = async (req, res) => {
   try {
     const CompanyProfile = require('../models/CompanyProfile');
-    const job = await Job.findById(req.params.id).populate("employerId", "email role");
+    const job = await Job.findById(req.params.id)
+      .populate("employerId", "email role isPro")
+      .select("-embedding");
     if (!job) {
       return res.status(404).json({ message: "Không tìm thấy tin tuyển dụng" });
     }
@@ -179,7 +222,7 @@ const getJobById = async (req, res) => {
       _id: { $ne: job._id }
     }).select('title location salary expiresAt createdAt').limit(5);
 
-    res.json({ data: job, companyProfile: companyProfile || null, otherJobs });
+    res.json({ data: withProFlag([job])[0], companyProfile: companyProfile || null, otherJobs });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -363,10 +406,11 @@ const deleteJob = async (req, res) => {
     // Xoá tin mà để lại đơn ứng tuyển và thông báo trỏ tới nó thì ứng viên sẽ
     // thấy đơn không mở được, còn trang quản lý đếm sai số liệu.
     const Notification = require("../models/Notification");
-    const Application = require("../models/Application");
     const [apps, notifs] = await Promise.all([
       Application.deleteMany({ jobId: job._id }),
       Notification.deleteMany({ jobId: job._id }),
+      // Xoá cứng tin thì lịch sử lượt xem cũng không còn chỗ bám vào
+      JobView.deleteMany({ jobId: job._id }),
     ]);
 
     await job.deleteOne();
@@ -405,7 +449,7 @@ const closeJob = async (req, res) => {
 const getJobsWithMatchPreview = async (req, res) => {
   try {
     const jobs = await Job.find({ status: "open", isDeleted: { $ne: true }, ...buildJobFilter(req.query) })
-      .populate("employerId", "email role")
+      .populate("employerId", "email role isPro")
       .sort({ createdAt: -1 });
 
     let cvProfile = await CvProfile.findOne({ userId: req.user._id, isPrimary: true });
@@ -416,23 +460,24 @@ const getJobsWithMatchPreview = async (req, res) => {
     const hasEmbedding = cvEmbedding.length > 0;
 
     const jobsWithScore = await Promise.all(
-      jobs.map(async (job) => {
-        const jobObj = job.toObject();
+      // `embedding` chỉ dùng để chấm điểm ở đây; tách ra khỏi phần trả về vì
+      // mỗi vector là 768 số — gửi kèm cả danh sách thì response phình vô ích.
+      withProFlag(jobs).map(async ({ embedding, ...job }) => {
         let previewScore = null;
-        if (hasEmbedding && job.embedding && job.embedding.length > 0) {
+        if (hasEmbedding && embedding && embedding.length > 0) {
           try {
-            const raw = await aiService.calculateMatchingScore(cvEmbedding, job.embedding);
+            const raw = await aiService.calculateMatchingScore(cvEmbedding, embedding);
             previewScore = Math.round(Math.min(1, Math.max(0, raw)) * 100);
           } catch {
             previewScore = null;
           }
         }
-        return { ...jobObj, previewScore };
+        return { ...job, previewScore };
       })
     );
 
 
-    jobsWithScore.sort((a, b) => {
+    sortProFirst(jobsWithScore, (a, b) => {
       if (a.previewScore === null && b.previewScore === null) return 0;
       if (a.previewScore === null) return 1;
       if (b.previewScore === null) return -1;
@@ -451,8 +496,151 @@ const getJobsWithMatchPreview = async (req, res) => {
   }
 };
 
+// Cùng một người mở lại tin trong khoảng này chỉ tính 1 lượt — nếu không, giữ
+// F5 vài giây là số liệu của nhà tuyển dụng thành vô nghĩa.
+const VIEW_DEDUPE_MS = 30 * 60 * 1000;
+
+/**
+ * Danh tính người xem: id tài khoản khi đã đăng nhập, còn khách vãng lai thì
+ * băm IP + User-Agent. Băm để không lưu IP thô của khách vào database, vẫn đủ
+ * để nhận ra cùng một người giữa hai lần mở trang.
+ */
+const visitorKeyOf = (req) => {
+  if (req.user) return `u:${req.user._id}`;
+  const ip =
+    (req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+    req.socket?.remoteAddress ||
+    "unknown";
+  const ua = req.headers["user-agent"] || "unknown";
+  const hash = crypto.createHash("sha256").update(`${ip}|${ua}`).digest("hex");
+  return `g:${hash.slice(0, 32)}`;
+};
+
+/**
+ * POST /api/jobs/:id/view — ghi nhận một lượt xem tin tuyển dụng.
+ * Mở cho cả khách vãng lai; `optionalAuth` cho biết người xem là ai nếu có token.
+ */
+const recordJobView = async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id).select("employerId isDeleted");
+    if (!job || job.isDeleted) {
+      return res.status(404).json({ message: "Không tìm thấy tin tuyển dụng" });
+    }
+
+    // Chủ tin và admin không được tính: nhà tuyển dụng mở tin của mình ra xem
+    // vài lần là số liệu đã sai, mà đó lại chính là số liệu họ đang đọc.
+    const isOwner = req.user && String(job.employerId) === String(req.user._id);
+    if (isOwner || req.user?.role === "admin") {
+      return res.json({ data: { counted: false, reason: "owner" } });
+    }
+
+    const isGuest = !req.user;
+    const visitorKey = visitorKeyOf(req);
+    const now = new Date();
+    const seen = await JobView.findOne({ jobId: job._id, visitorKey });
+
+    if (seen && now - seen.lastViewedAt < VIEW_DEDUPE_MS) {
+      return res.json({ data: { counted: false, reason: "recent" } });
+    }
+
+    if (seen) {
+      seen.views += 1;
+      seen.lastViewedAt = now;
+      await seen.save();
+    } else {
+      try {
+        await JobView.create({
+          jobId: job._id,
+          userId: req.user?._id || null,
+          visitorKey,
+          isGuest,
+          views: 1,
+          firstViewedAt: now,
+          lastViewedAt: now,
+        });
+      } catch (err) {
+        // Hai tab mở cùng lúc cùng chạm vào chỉ mục duy nhất (jobId, visitorKey).
+        // Lượt kia đã được tính rồi, lượt này bỏ qua.
+        if (err.code === 11000) {
+          return res.json({ data: { counted: false, reason: "duplicate" } });
+        }
+        throw err;
+      }
+    }
+
+    const updated = await Job.findByIdAndUpdate(
+      job._id,
+      { $inc: { viewCount: 1, [isGuest ? "viewCountGuest" : "viewCountUser"]: 1 } },
+      { new: true, select: "viewCount viewCountUser viewCountGuest" },
+    );
+
+    res.json({
+      data: {
+        counted: true,
+        viewCount: updated.viewCount,
+        viewCountUser: updated.viewCountUser,
+        viewCountGuest: updated.viewCountGuest,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * GET /api/jobs/:id/stats — số liệu một tin tuyển dụng cho chủ tin và admin:
+ * bao nhiêu lượt xem (người dùng / vãng lai, tổng lượt và số người khác nhau)
+ * và bao nhiêu hồ sơ ứng tuyển.
+ */
+const getJobStats = async (req, res) => {
+  try {
+    const job = await Job.findById(req.params.id).select(
+      "title employerId viewCount viewCountUser viewCountGuest",
+    );
+    if (!job) {
+      return res.status(404).json({ message: "Không tìm thấy tin tuyển dụng" });
+    }
+
+    const isOwner = String(job.employerId) === String(req.user._id);
+    if (!isOwner && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Không có quyền xem số liệu tin tuyển dụng này" });
+    }
+
+    const [applications, uniqueViewers, uniqueUsers, byStatus] = await Promise.all([
+      Application.countDocuments({ jobId: job._id }),
+      JobView.countDocuments({ jobId: job._id }),
+      JobView.countDocuments({ jobId: job._id, isGuest: false }),
+      Application.aggregate([
+        { $match: { jobId: job._id } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    res.json({
+      data: {
+        views: {
+          total: job.viewCount || 0,
+          user: job.viewCountUser || 0,
+          guest: job.viewCountGuest || 0,
+          uniqueTotal: uniqueViewers,
+          uniqueUser: uniqueUsers,
+          uniqueGuest: uniqueViewers - uniqueUsers,
+        },
+        applications: {
+          total: applications,
+          byStatus: byStatus.reduce((acc, s) => ({ ...acc, [s._id]: s.count }), {}),
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   computeJobEmbedding,
+  recordJobView,
+  getJobStats,
   getAllOpenJobs,
   getMyJobs,
   getJobById,
