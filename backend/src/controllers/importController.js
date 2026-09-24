@@ -301,6 +301,254 @@ const importUsers = async (req, res) => {
   }
 };
 
+// ─── Import tài khoản doanh nghiệp ───────────────────────────────────────────
+
+/**
+ * Doanh nghiệp đã có trong hệ thống: gửi lại thư mời hay bỏ qua?
+ *
+ * Cùng tinh thần với `decideSchoolResend` của sinh viên — chỉ gửi lại khi chắc
+ * chắn không đè lên mật khẩu mà người ta đang dùng:
+ *   - Tự đăng ký: mật khẩu do chính họ đặt, tuyệt đối không cấp mật khẩu tạm.
+ *   - Đã đổi mật khẩu lần đầu: đang dùng bình thường, không cần thư nữa.
+ *   - Đang chờ trong hàng đợi: thư sắp gửi rồi, xếp lại chỉ tổ gửi hai lần.
+ *   - Còn lại (gửi hỏng, hoặc đã gửi mà chưa ai đăng nhập): xếp lại hàng đợi,
+ *     worker sinh mật khẩu mới ngay lúc gửi nên mật khẩu trong thư cũ hết hiệu lực.
+ */
+const decideEmployerResend = (user) => {
+  if (!user.importedAt) {
+    return { skip: 'Doanh nghiệp tự đăng ký — không cấp lại mật khẩu tạm' };
+  }
+  if (user.mustChangePassword !== true) {
+    return { skip: 'Doanh nghiệp đã đổi mật khẩu, tài khoản đang hoạt động' };
+  }
+  if (user.welcomeEmailStatus === 'pending') {
+    return { skip: 'Thư mời đang chờ gửi trong hàng đợi' };
+  }
+  if (user.welcomeEmailStatus === 'failed') {
+    return { label: 'Thư mời gửi hỏng — xếp lại hàng đợi' };
+  }
+  return { label: 'Đã gửi thư mời nhưng chưa đăng nhập lần nào — gửi lại' };
+};
+
+/**
+ * Chỉ điền vào những ô hồ sơ công ty đang trống.
+ *
+ * File Excel của admin là dữ liệu ban đầu; nếu doanh nghiệp đã tự sửa tên, số
+ * điện thoại hay địa chỉ trong trang hồ sơ của họ thì lần import sau không được
+ * ghi đè lên — đó là dữ liệu của họ, mới hơn dữ liệu trong file.
+ */
+const fillEmptyProfileFields = (profile, row) => {
+  const patch = {};
+  if (!profile.companyName && row.companyName) patch.companyName = row.companyName;
+  if (!profile.phone && row.phone) patch.phone = row.phone;
+  if (!profile.address && row.address) patch.address = row.address;
+  return patch;
+};
+
+const importEmployers = async (req, res) => {
+  try {
+    if (!req.file?.buffer?.length) {
+      return res.status(400).json({ message: 'Vui lòng chọn file Excel (.xlsx) hoặc .csv.' });
+    }
+
+    const apply = String(req.body?.apply) === 'true';
+
+    let parsed;
+    try {
+      parsed = excel.parseSheet(req.file.buffer, excel.COMPANY_COLUMNS);
+    } catch (e) {
+      return res.status(400).json({ message: `Không đọc được file: ${e.message}` });
+    }
+
+    if (parsed.missingColumns.length) {
+      return res.status(400).json({
+        message: `File thiếu cột bắt buộc: ${parsed.missingColumns.join(', ')}.`,
+        data: { headersFound: parsed.headers },
+      });
+    }
+    if (!parsed.rows.length) {
+      return res.status(400).json({ message: 'File không có dòng dữ liệu nào.' });
+    }
+
+    const CompanyProfile = require('../models/CompanyProfile');
+    const created = [];
+    const requeued = [];
+    const skipped = [];
+    const failed = [];
+    const seenEmails = new Set();
+
+    for (const row of parsed.rows) {
+      const email = String(row.email || '').toLowerCase().trim();
+      const companyName = String(row.companyName || '').trim();
+
+      if (!companyName) {
+        failed.push({ row: row.__row, email, reason: 'Thiếu tên doanh nghiệp' });
+        continue;
+      }
+      if (!isValidEmail(email)) {
+        failed.push({ row: row.__row, email: row.email, reason: 'Email không hợp lệ' });
+        continue;
+      }
+      // Email vừa là khoá chính vừa là tên đăng nhập: trùng trong cùng một file
+      // thì dòng sau không tạo thêm được gì, chỉ làm tưởng đã tạo hai tài khoản.
+      if (seenEmails.has(email)) {
+        skipped.push({ row: row.__row, email, reason: 'Trùng email với dòng phía trên' });
+        continue;
+      }
+      seenEmails.add(email);
+
+      const existing = await User.findOne({ email });
+
+      if (existing) {
+        if (existing.role !== 'employer') {
+          const roleLabel = existing.role === 'admin' ? 'quản trị viên' : 'ứng viên';
+          failed.push({
+            row: row.__row,
+            email,
+            reason: `Email này đang là tài khoản ${roleLabel}, không chuyển thành doanh nghiệp được`,
+          });
+          continue;
+        }
+
+        const decision = decideEmployerResend(existing);
+        if (decision.skip) {
+          skipped.push({ row: row.__row, email, reason: decision.skip });
+          continue;
+        }
+
+        try {
+          if (apply) {
+            await User.updateOne(
+              { _id: existing._id },
+              {
+                $set: {
+                  welcomeEmailStatus: 'pending',
+                  welcomeEmailTo: 'personal',
+                  welcomeEmailAttempts: 0,
+                },
+                $unset: { welcomeEmailError: '' },
+              },
+            );
+
+            const profile = await CompanyProfile.findOne({ userId: existing._id });
+            if (!profile) {
+              await CompanyProfile.create({
+                userId: existing._id,
+                companyName,
+                phone: row.phone || '',
+                address: row.address || '',
+              });
+            } else {
+              const patch = fillEmptyProfileFields(profile, { ...row, companyName });
+              if (Object.keys(patch).length) {
+                await CompanyProfile.updateOne({ _id: profile._id }, { $set: patch });
+              }
+            }
+          }
+          requeued.push({
+            row: row.__row,
+            email,
+            fullName: companyName,
+            sendTo: 'personal',
+            reason: decision.label,
+          });
+        } catch (e) {
+          failed.push({ row: row.__row, email, reason: e.message });
+        }
+        continue;
+      }
+
+      // ── Doanh nghiệp mới ──
+      if (!apply) {
+        created.push({ row: row.__row, email, fullName: companyName, sendTo: 'personal' });
+        continue;
+      }
+
+      try {
+        // Như import sinh viên: mật khẩu ở đây chỉ để giữ chỗ và không gửi cho ai.
+        // Worker sinh mật khẩu thật ngay lúc gửi thư, nên giữa hai bước không tồn
+        // tại mật khẩu dạng rõ nào trong database.
+        const placeholder = await bcrypt.hash(generatePassword(), await bcrypt.genSalt(10));
+
+        const user = await User.create({
+          email,
+          password: placeholder,
+          role: 'employer',
+          fullName: companyName,
+          phone: row.phone || '',
+          // Admin nhập hộ nên coi như địa chỉ đã được xác nhận; bắt doanh nghiệp
+          // xác thực thêm một lần nữa là làm hai bước cho cùng một việc.
+          emailVerified: true,
+          mustChangePassword: true,
+          importedAt: new Date(),
+          welcomeEmailStatus: 'pending',
+          welcomeEmailTo: 'personal',
+          welcomeEmailAttempts: 0,
+        });
+
+        // Hồ sơ công ty phải có ngay: tên công ty hiện trên mọi tin tuyển dụng và
+        // trong chính thư mời gửi đi. Không có hồ sơ thì tin đăng hộ hiện tên là
+        // phần đầu địa chỉ email.
+        await CompanyProfile.create({
+          userId: user._id,
+          companyName,
+          phone: row.phone || '',
+          address: row.address || '',
+        });
+
+        created.push({ row: row.__row, email, fullName: companyName, sendTo: 'personal' });
+      } catch (e) {
+        failed.push({ row: row.__row, email, reason: e.message });
+      }
+    }
+
+    if (apply) {
+      await logAdminAction({
+        req,
+        action: 'IMPORT_EMPLOYERS',
+        targetModel: 'User',
+        targetId: null,
+        details: {
+          created: created.length,
+          requeued: requeued.length,
+          skipped: skipped.length,
+          failed: failed.length,
+        },
+      });
+    }
+
+    const { getQueueStats } = require('../services/welcomeEmailWorker');
+    const queue = apply ? await getQueueStats({ role: 'employer' }) : null;
+
+    return res.json({
+      message: apply
+        ? `Đã tạo ${created.length} tài khoản doanh nghiệp` +
+          (requeued.length ? `, gửi lại thư mời cho ${requeued.length} doanh nghiệp` : '') +
+          `. Bỏ qua ${skipped.length}, lỗi ${failed.length}. ` +
+          `Thư mời đang được gửi dần ở nền (${queue.batchSize} thư mỗi 20 giây).`
+        : `Xem trước: sẽ tạo ${created.length} tài khoản doanh nghiệp` +
+          (requeued.length ? `, gửi lại ${requeued.length} thư mời` : '') +
+          `, bỏ qua ${skipped.length}, lỗi ${failed.length}.`,
+      data: {
+        applied: apply,
+        totalRows: parsed.rows.length,
+        truncated: parsed.truncated,
+        created,
+        requeued,
+        skipped,
+        failed,
+        warnings: [],
+        // Thư mời doanh nghiệp chỉ gửi tới một địa chỉ nên mỗi tài khoản tốn 1 lượt
+        quotaUnits: created.length + requeued.length,
+        queue,
+      },
+    });
+  } catch (error) {
+    console.error('[Import Employers]', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // ─── Import tin tuyển dụng ───────────────────────────────────────────────────
 
 /** "01/09/2026", "2026-09-01" hoặc ô ngày của Excel -> Date. */
@@ -546,6 +794,16 @@ const downloadTemplate = (req, res) => {
       },
       filename: 'mau-import-sinh-vien.xlsx',
     },
+    employers: {
+      columns: excel.COMPANY_COLUMNS,
+      example: {
+        companyName: 'Công ty TNHH Công nghệ Mẫu',
+        phone: '0236 123 4567',
+        email: 'tuyendung@congtymau.vn',
+        address: '54 Nguyễn Lương Bằng, Liên Chiểu, Đà Nẵng',
+      },
+      filename: 'mau-import-doanh-nghiep.xlsx',
+    },
     jobs: {
       columns: excel.JOB_COLUMNS,
       example: {
@@ -583,4 +841,4 @@ const downloadTemplate = (req, res) => {
   res.send(buffer);
 };
 
-module.exports = { importUsers, importJobs, downloadTemplate };
+module.exports = { importUsers, importEmployers, importJobs, downloadTemplate };

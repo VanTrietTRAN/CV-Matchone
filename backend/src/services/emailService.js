@@ -361,6 +361,43 @@ const sendAccountCreatedEmail = async ({ user, password, to, mode }) => {
   }
 };
 
+/**
+ * Thư mời doanh nghiệp do admin import, kèm mật khẩu đăng nhập lần đầu.
+ *
+ * Không ném lỗi, giống thư sinh viên: worker gửi hàng loạt, một địa chỉ hỏng
+ * không được làm dừng cả hàng đợi — người gọi ghi lại để admin biết ai chưa nhận.
+ */
+const sendCompanyAccountCreatedEmail = async ({ user, company, password }) => {
+  try {
+    const t = await initTransporter();
+    if (!t) throw new Error(readEmailConfig().problems.join(' ') || 'Chưa cấu hình được SMTP.');
+
+    const tpl = await loadTemplates();
+    const { subject, html } = templates.renderCompanyAccountCreated({
+      tpl,
+      user,
+      company,
+      password,
+      frontendUrl: frontendOrigin(),
+    });
+
+    const info = await t.sendMail({
+      from: readEmailConfig().sender,
+      to: user.email,
+      subject,
+      html,
+    });
+    console.log(
+      `[Email] Đã gửi thư mời doanh nghiệp tới ${user.email} (MessageID: ${info.messageId})`,
+    );
+    return { sent: true, messageId: info.messageId, rejected: info.rejected || [] };
+  } catch (error) {
+    const reason = describeSmtpError(error);
+    console.error(`[Email] Lỗi gửi thư mời doanh nghiệp tới ${user?.email}: ${reason}`);
+    return { sent: false, error: reason };
+  }
+};
+
 /** Nhắc doanh nghiệp gia hạn các tin sắp hết hiển thị. */
 const sendJobExpiringEmail = async ({ employer, jobs, days }) => {
   try {
@@ -454,6 +491,7 @@ module.exports = {
   sendEmployerDigestEmail,
   sendJobExpiringEmail,
   sendAccountCreatedEmail,
+  sendCompanyAccountCreatedEmail,
   getEmailConfig,
   verifyEmailConnection,
   invalidateTemplateCache,

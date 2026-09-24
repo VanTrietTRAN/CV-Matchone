@@ -17,16 +17,41 @@ khoản Brevo**.
 
 ## 0. Hệ thống gửi những email nào
 
-| Email | Kích hoạt khi | Mã nguồn |
-|---|---|---|
-| Gợi ý việc làm theo AI | Cron theo lịch admin đặt (mặc định 7h và 17h) | `cronJob.js` |
-| Thông báo việc làm theo từ khoá | Cùng lượt cron | `cronJob.js` |
-| Đặt lại mật khẩu | Người dùng bấm "Quên mật khẩu" | `authController.js` |
-| Admin hỗ trợ đặt lại mật khẩu | Admin bấm trong trang Tài khoản | `adminController.js` |
-| Thông báo toàn hệ thống | Admin gửi broadcast có tick "Gửi email" | `broadcastWorker.js` |
+| Email | Gửi cho ai | Kích hoạt khi | Mã nguồn |
+|---|---|---|---|
+| Mã xác thực email | Người vừa đăng ký | Ngay lúc đăng ký, và khi bấm "Gửi lại mã" | `authController.js` |
+| Đặt lại mật khẩu | Người yêu cầu | Bấm "Quên mật khẩu" | `authController.js` |
+| Admin hỗ trợ đặt lại mật khẩu | Tài khoản được chọn | Admin bấm trong trang Tài khoản | `adminController.js` |
+| Thư mời sinh viên (kèm mật khẩu tạm) | Tài khoản sinh viên do admin import | Worker nền sau khi import | `welcomeEmailWorker.js` |
+| Thư mời doanh nghiệp (kèm mật khẩu tạm) | Tài khoản doanh nghiệp do admin import | Worker nền sau khi import | `welcomeEmailWorker.js` |
+| Gợi ý việc làm theo AI | Ứng viên | Cron theo lịch admin đặt | `cronJob.js` |
+| Thông báo việc làm theo từ khoá | Ứng viên có tạo thông báo | Cùng lượt cron | `cronJob.js` |
+| Tổng hợp hồ sơ phù hợp | Doanh nghiệp | Cron riêng, mặc định 15h hằng ngày | `cronJob.js` |
+| Nhắc hạn tin tuyển dụng | Doanh nghiệp | Cron riêng, mặc định 9h hằng ngày | `cronJob.js` |
+| Thông báo toàn hệ thống | Nhóm admin chọn | Admin gửi broadcast có tick "Gửi email" | `broadcastWorker.js` |
 
 Tất cả đi qua một đường duy nhất: `backend/src/services/emailService.js` →
-SMTP relay của Brevo.
+SMTP relay của Brevo. Lời văn của mọi mẫu thư sửa được ở **Quản trị → Nội dung
+email** (lưu trong database, không cần deploy lại).
+
+### Ai KHÔNG nhận được thư
+
+Áp dụng cho mọi email định kỳ và thư mời, không phải chỉ một vài loại:
+
+| Trường hợp | Kết quả |
+|---|---|
+| Tài khoản bị khoá (`status: banned`) | Không nhận bất cứ thư nào, kể cả broadcast |
+| Tài khoản đã xoá mềm (`isDeleted`) | Như trên |
+| Chưa xác thực email (`emailVerified === false`) | Không nhận email định kỳ — login cũng đang chặn họ |
+| Ứng viên tắt "Email gợi ý việc làm" | Không nhận gợi ý việc làm |
+| Doanh nghiệp tắt "Tần suất nhận email" (`off`) | Không nhận email tổng hợp hồ sơ |
+| Doanh nghiệp chọn "Hằng tuần" | Chỉ nhận mỗi tuần một lần, và thư gom hồ sơ cả tuần |
+| Doanh nghiệp tắt "Nhắc hạn tin tuyển dụng" | Không nhận thư nhắc hạn |
+| Sinh viên / doanh nghiệp đã tự đổi mật khẩu | Không nhận lại thư mời — gửi mật khẩu tạm mới sẽ đè lên mật khẩu họ đang dùng |
+
+Broadcast cố ý **không** xét công tắc "Email gợi ý việc làm": đó là thông báo vận
+hành của hệ thống (bảo trì, đổi chính sách), còn công tắc kia chỉ nói về thư gợi
+ý việc làm.
 
 ---
 

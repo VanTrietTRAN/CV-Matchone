@@ -6,6 +6,7 @@ const {
   getUsers,
   updateUserStatus,
   updateUserPro,
+  getEmployerOptions,
   deleteUser,
   getJobs,
   closeJob,
@@ -53,6 +54,9 @@ router.patch('/users/:id/pro', updateUserPro);
 router.post('/users/:id/reset-password-request', resetUserPasswordByAdmin);
 router.delete('/users/:id', deleteUser);
 
+// Danh sách doanh nghiệp cho ô chọn "tin thuộc về ai" ở trang import tin
+router.get('/employers', getEmployerOptions);
+
 router.get('/jobs', getJobs);
 router.patch('/jobs/:id/close', closeJob);
 router.delete('/jobs/:id', deleteJob);
@@ -60,9 +64,10 @@ router.delete('/jobs/:id', deleteJob);
 router.get('/system', getSystemInfo);
 // ─── Import hàng loạt từ Excel ───────────────────────────────────────────────
 const sheetUpload = require('../middleware/sheetUploadMiddleware');
-const { importUsers, importJobs, downloadTemplate } = require('../controllers/importController');
+const { importUsers, importEmployers, importJobs, downloadTemplate } = require('../controllers/importController');
 router.get('/import/template/:kind', downloadTemplate);
 router.post('/import/users', sheetUpload.single('file'), importUsers);
+router.post('/import/employers', sheetUpload.single('file'), importEmployers);
 router.post('/import/jobs', sheetUpload.single('file'), importJobs);
 
 const { getWelcomeEmailQueue, retryWelcomeEmails } = require('../controllers/adminController');

@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const CompanyProfile = require('../models/CompanyProfile');
 const emailService = require('./emailService');
 const { generatePassword } = require('../utils/passwordGenerator');
 const { schoolEmailOf, SCHOOL_EMAIL_DOMAIN } = require('../utils/schoolEmail');
@@ -67,6 +68,13 @@ const sentTodayCount = async () => {
   ]);
   return personal + school;
 };
+
+/**
+ * Hàng đợi này phục vụ cả hai loại tài khoản do admin import: sinh viên (ứng
+ * viên) và doanh nghiệp. Mọi thứ dùng chung — nhịp gửi, hạn mức ngày, cách sinh
+ * mật khẩu — chỉ khác nội dung thư, vì người đọc là hai đối tượng khác hẳn nhau.
+ */
+const isEmployerAccount = (user) => user.role === 'employer';
 
 /**
  * Thư của tài khoản này gửi tới đâu, theo `welcomeEmailTo`:
@@ -158,6 +166,9 @@ const processBatch = async () => {
       welcomeEmailStatus: 'pending',
       welcomeEmailAttempts: { $lt: MAX_ATTEMPTS },
       isDeleted: { $ne: true },
+      // Admin khoá tài khoản ngay sau khi import (import nhầm danh sách chẳng
+      // hạn) thì thư mời kèm mật khẩu tạm không được gửi đi nữa.
+      status: { $ne: 'banned' },
     })
       .sort({ importedAt: 1 }) // ai được tạo trước thì nhận thư trước
       .limit(Math.min(BATCH_SIZE, remaining));
@@ -205,18 +216,25 @@ const processBatch = async () => {
       try {
         const password = generatePassword();
         const hash = await bcrypt.hash(password, await bcrypt.genSalt(10));
+        // Tên và địa chỉ công ty nằm ở CompanyProfile, không ở User — thư mời
+        // doanh nghiệp xưng hô bằng tên công ty nên phải đọc thêm hồ sơ này.
+        const company = isEmployerAccount(user)
+          ? await CompanyProfile.findOne({ userId: user._id }).select('companyName phone address')
+          : null;
 
         // Gửi TRƯỚC, ghi mật khẩu SAU. Bản cũ làm ngược lại: hễ gửi hỏng — mà hết
         // quota là chuyện hằng ngày — thì mật khẩu đã bị thay còn thư mới chưa tới.
         // Với thư gửi bù, đó là người vừa nhận mật khẩu ở gmail bỗng không đăng
         // nhập được nữa. Nếu gửi xong mà ghi hỏng, tài khoản vẫn 'pending' và lượt
         // sau gửi lại một mật khẩu mới dùng được — tự lành, chỉ thừa một thư.
-        const result = await emailService.sendAccountCreatedEmail({
-          user,
-          password,
-          to: recipients.to,
-          mode: recipients.target,
-        });
+        const result = isEmployerAccount(user)
+          ? await emailService.sendCompanyAccountCreatedEmail({ user, company, password })
+          : await emailService.sendAccountCreatedEmail({
+              user,
+              password,
+              to: recipients.to,
+              mode: recipients.target,
+            });
 
         if (result?.sent) {
           const now = new Date();
@@ -281,16 +299,19 @@ const processBatch = async () => {
 };
 
 /** Số liệu cho trang quản trị. */
-const getQueueStats = async () => {
+const getQueueStats = async (filter = {}) => {
+  // `filter` khoanh vùng theo vai trò (vd { role: 'employer' }) để trang import
+  // doanh nghiệp không hiện lẫn số liệu của hàng đợi sinh viên. Hạn mức gửi
+  // trong ngày thì vẫn là con số chung — cả hai loại thư tiêu cùng một quota.
   const [pending, sent, failed, skipped, schoolSent, sentToday, pendingByTarget] = await Promise.all([
-    User.countDocuments({ welcomeEmailStatus: 'pending' }),
-    User.countDocuments({ welcomeEmailStatus: 'sent' }),
-    User.countDocuments({ welcomeEmailStatus: 'failed' }),
-    User.countDocuments({ welcomeEmailStatus: 'skipped' }),
-    User.countDocuments({ schoolEmailSentAt: { $exists: true } }),
+    User.countDocuments({ ...filter, welcomeEmailStatus: 'pending' }),
+    User.countDocuments({ ...filter, welcomeEmailStatus: 'sent' }),
+    User.countDocuments({ ...filter, welcomeEmailStatus: 'failed' }),
+    User.countDocuments({ ...filter, welcomeEmailStatus: 'skipped' }),
+    User.countDocuments({ ...filter, schoolEmailSentAt: { $exists: true } }),
     sentTodayCount(),
     User.aggregate([
-      { $match: { welcomeEmailStatus: 'pending' } },
+      { $match: { ...filter, welcomeEmailStatus: 'pending' } },
       { $group: { _id: '$welcomeEmailTo', n: { $sum: 1 } } },
     ]),
   ]);
@@ -321,9 +342,9 @@ const getQueueStats = async () => {
 };
 
 /** Đưa các tài khoản thất bại về lại hàng đợi. */
-const retryFailed = async () => {
+const retryFailed = async (filter = {}) => {
   const r = await User.updateMany(
-    { welcomeEmailStatus: 'failed' },
+    { ...filter, welcomeEmailStatus: 'failed' },
     { $set: { welcomeEmailStatus: 'pending', welcomeEmailAttempts: 0, welcomeEmailError: null } },
   );
   return r.modifiedCount;

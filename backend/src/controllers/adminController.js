@@ -266,6 +266,53 @@ const getAuditLogs = async (req, res) => {
 };
 
 
+/**
+ * GET /api/admin/employers — danh sách nhà tuyển dụng cho ô chọn ở trang import
+ * tin tuyển dụng của admin.
+ *
+ * /api/admin/users trả về User thuần, không có tên công ty (nằm ở CompanyProfile),
+ * mà chọn doanh nghiệp theo email thì admin phải tự nhớ email nào là công ty nào.
+ */
+const getEmployerOptions = async (req, res) => {
+  try {
+    const search = String(req.query.search || '').trim();
+    const CompanyProfile = require('../models/CompanyProfile');
+
+    const employers = await User.find({ role: 'employer', isDeleted: { $ne: true } })
+      .select('email isPro status fullName importedAt mustChangePassword')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const profiles = await CompanyProfile.find({
+      userId: { $in: employers.map((e) => e._id) },
+    })
+      .select('userId companyName')
+      .lean();
+    const nameOf = new Map(profiles.map((p) => [String(p.userId), p.companyName]));
+
+    let list = employers.map((e) => ({
+      _id: e._id,
+      email: e.email,
+      companyName: nameOf.get(String(e._id)) || e.fullName || '',
+      isPro: Boolean(e.isPro),
+      status: e.status,
+      // Tài khoản import chưa đăng nhập lần nào — admin nên biết để còn nhắc
+      pendingFirstLogin: Boolean(e.importedAt && e.mustChangePassword === true),
+    }));
+
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (e) => e.email.toLowerCase().includes(q) || e.companyName.toLowerCase().includes(q),
+      );
+    }
+
+    res.json({ data: list });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const getJobs = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -557,13 +604,22 @@ const previewEmailTemplate = async (req, res) => {
 };
 
 /** Trạng thái hàng đợi email chào mừng cho tài khoản import. */
+/**
+ * Hàng đợi thư mời của tài khoản do admin import.
+ * ?role=employer|candidate khoanh vùng theo loại tài khoản — trang import doanh
+ * nghiệp và trang import sinh viên dùng chung endpoint nhưng đọc số của riêng mình.
+ */
+const welcomeQueueFilter = (role) =>
+  role === 'employer' || role === 'candidate' ? { role } : {};
+
 const getWelcomeEmailQueue = async (req, res) => {
   try {
     const worker = require('../services/welcomeEmailWorker');
-    const stats = await worker.getQueueStats();
+    const filter = welcomeQueueFilter(req.query.role);
+    const stats = await worker.getQueueStats(filter);
 
     // Danh sách những tài khoản gửi hỏng, kèm lý do — để admin biết ai chưa nhận
-    const failedUsers = await User.find({ welcomeEmailStatus: 'failed' })
+    const failedUsers = await User.find({ ...filter, welcomeEmailStatus: 'failed' })
       .select('email fullName studentId welcomeEmailTo welcomeEmailError welcomeEmailAttempts')
       .limit(50)
       .lean();
@@ -578,14 +634,15 @@ const getWelcomeEmailQueue = async (req, res) => {
 const retryWelcomeEmails = async (req, res) => {
   try {
     const worker = require('../services/welcomeEmailWorker');
-    const count = await worker.retryFailed();
+    const filter = welcomeQueueFilter(req.query.role);
+    const count = await worker.retryFailed(filter);
 
     await logAdminAction({
       req,
-      action: 'IMPORT_USERS',
+      action: filter.role === 'employer' ? 'IMPORT_EMPLOYERS' : 'IMPORT_USERS',
       targetModel: 'User',
       targetId: null,
-      details: { retriedWelcomeEmails: count },
+      details: { retriedWelcomeEmails: count, role: filter.role || 'all' },
     });
 
     res.json({ message: `Đã xếp lại ${count} email vào hàng đợi.`, data: { count } });
@@ -987,6 +1044,7 @@ module.exports = {
   getUsers,
   updateUserStatus,
   updateUserPro,
+  getEmployerOptions,
   deleteUser,
   getJobs,
   closeJob,

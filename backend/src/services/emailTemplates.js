@@ -79,6 +79,25 @@ const DEFAULTS = {
       '📬 Thư này được gửi tới hộp thư sinh viên {{schoolEmail}}. Nếu trước đó bạn đã nhận thư tới {{email}}, mật khẩu trong thư đó không còn dùng được — hãy dùng mật khẩu bên dưới.',
     footer: '© {{brand}} · Email tự động, vui lòng không trả lời',
   },
+  companyAccountCreated: {
+    subject: '[{{brand}}] Tài khoản nhà tuyển dụng của {{company}} đã sẵn sàng',
+    heading: 'Kính gửi {{company}},',
+    intro:
+      '{{brand}} trân trọng thông báo: tài khoản nhà tuyển dụng của Quý công ty đã được khởi tạo trên nền tảng tuyển dụng ứng dụng AI của chúng tôi. Quý công ty có thể đăng nhập ngay bằng thông tin bên dưới để bắt đầu tiếp cận ứng viên.',
+    benefitsLead: 'Ngay sau khi đăng nhập, Quý công ty có thể:',
+    // Mỗi quyền lợi cách nhau bằng dấu | — admin sửa được lời văn mà không phải
+    // đụng vào HTML, vẫn ra đúng một danh sách gạch đầu dòng.
+    benefits:
+      'Đăng tin tuyển dụng không giới hạn, hiển thị ngay với ứng viên phù hợp|Nhận hồ sơ đã được AI chấm điểm mức độ phù hợp với mô tả công việc|Xây dựng trang giới thiệu công ty riêng, có đánh giá từ nhân sự|Toàn quyền quản lý những tin tuyển dụng do {{brand}} đăng hộ Quý công ty',
+    passwordLabel: 'Mật khẩu đăng nhập lần đầu',
+    buttonLabel: 'Kích hoạt tài khoản ngay',
+    note:
+      '🔒 Đây là mật khẩu tạm thời do hệ thống cấp. Vì lý do an toàn, hệ thống sẽ yêu cầu Quý công ty đặt mật khẩu mới ngay trong lần đăng nhập đầu tiên.',
+    nextSteps:
+      'Nếu Quý công ty đã có tin tuyển dụng do đội ngũ {{brand}} đăng hộ, các tin đó đã nằm sẵn trong mục Quản lý tin tuyển dụng của tài khoản này và Quý công ty có toàn quyền chỉnh sửa, gia hạn hay đóng tin.',
+    support: 'Mọi vướng mắc trong quá trình sử dụng, Quý công ty vui lòng phản hồi lại email này để được hỗ trợ.',
+    footer: '© {{brand}} · Nền tảng tuyển dụng ứng dụng AI',
+  },
   jobExpiring: {
     subject: '[{{brand}}] {{count}} tin tuyển dụng sắp hết hạn',
     greeting: 'Chào {{name}},',
@@ -110,6 +129,7 @@ const VARIABLES = {
   employerDigest: ['brand', 'name', 'count', 'threshold'],
   jobExpiring: ['brand', 'name', 'count', 'days'],
   accountCreated: ['brand', 'name', 'email', 'major', 'phone', 'studentId', 'schoolEmail'],
+  companyAccountCreated: ['brand', 'company', 'email', 'phone', 'address'],
 };
 
 /** Nhãn tiếng Việt cho từng trường, dùng cho giao diện Quản trị. */
@@ -126,6 +146,9 @@ const FIELD_LABELS = {
   passwordLabel: 'Nhãn ô mật khẩu',
   nextSteps: 'Hướng dẫn bước tiếp theo',
   schoolNote: 'Ghi chú trong thư gửi bù tới email trường',
+  benefitsLead: 'Câu dẫn vào danh sách quyền lợi',
+  benefits: 'Danh sách quyền lợi (ngăn nhau bằng dấu |)',
+  support: 'Lời mời liên hệ hỗ trợ',
 };
 
 const TEMPLATE_LABELS = {
@@ -136,6 +159,7 @@ const TEMPLATE_LABELS = {
   employerDigest: 'Hồ sơ phù hợp cho doanh nghiệp (15h)',
   jobExpiring: 'Nhắc hạn tin tuyển dụng',
   accountCreated: 'Tài khoản sinh viên do admin tạo',
+  companyAccountCreated: 'Thư mời doanh nghiệp do admin import',
 };
 
 const escapeHtml = (value) =>
@@ -504,6 +528,100 @@ const renderAccountCreated = ({ tpl, user, password, frontendUrl, mode }) => {
   };
 };
 
+/**
+ * Thư mời doanh nghiệp do admin import.
+ *
+ * Khác thư sinh viên ở chỗ người đọc là một tổ chức chưa từng nghe tới hệ thống:
+ * phải đủ trang trọng để không bị coi là thư rác, và phải trả lời ngay được câu
+ * "vào đó thì được gì" — nên có danh sách quyền lợi và một nút bấm duy nhất,
+ * thay vì chỉ ném ra mật khẩu như thư sinh viên.
+ */
+const renderCompanyAccountCreated = ({ tpl, user, company, password, frontendUrl }) => {
+  const t = tpl.companyAccountCreated;
+  const companyName = company?.companyName || user.fullName || user.email;
+  const vars = {
+    brand: tpl.brand.name,
+    company: companyName,
+    email: user.email,
+    phone: company?.phone || user.phone || '',
+    address: company?.address || '',
+  };
+
+  const rows = [
+    ['Email đăng nhập', user.email],
+    vars.phone ? ['Số điện thoại', vars.phone] : null,
+    vars.address ? ['Địa chỉ', vars.address] : null,
+  ].filter(Boolean);
+
+  const infoTable = `
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      ${rows
+        .map(
+          ([k, v]) => `
+        <tr>
+          <td style="padding:6px 0;color:#64748b;font-size:14px;width:40%;">${escapeHtml(k)}</td>
+          <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;">${escapeHtml(v)}</td>
+        </tr>`,
+        )
+        .join('')}
+    </table>`;
+
+  const benefitItems = String(t.benefits || '')
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const benefitsHtml = benefitItems.length
+    ? `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin:20px 0;">
+        <p style="margin:0 0 10px;color:#0f172a;font-size:14px;font-weight:600;">${fill(
+          t.benefitsLead,
+          vars,
+        )}</p>
+        <table style="width:100%;border-collapse:collapse;">
+          ${benefitItems
+            .map(
+              (item) => `
+          <tr>
+            <td style="padding:4px 8px 4px 0;vertical-align:top;color:${BRAND_ACCENT};font-size:14px;font-weight:bold;width:18px;">✓</td>
+            <td style="padding:4px 0;color:#334155;font-size:14px;line-height:1.6;">${fill(item, vars)}</td>
+          </tr>`,
+            )
+            .join('')}
+        </table>
+      </div>`
+    : '';
+
+  return {
+    subject: fillPlain(t.subject, vars),
+    html: layout({
+      brand: tpl.brand,
+      bodyHtml: `
+        <h2 style="margin-top:0;font-size:18px;color:#0f172a;">${fill(t.heading, vars)}</h2>
+        <p style="color:#334155;font-size:14px;line-height:1.7;">${fill(t.intro, vars)}</p>
+        ${infoTable}
+        <div style="text-align:center;margin:20px 0;">
+          <p style="margin:0 0 8px;color:#64748b;font-size:13px;">${fill(t.passwordLabel, vars)}</p>
+          <div style="display:inline-block;background:#f1f5f9;border:1px dashed ${BRAND_ACCENT};border-radius:10px;padding:14px 26px;">
+            <span style="font-family:'Courier New',Courier,monospace;font-size:24px;font-weight:bold;letter-spacing:3px;color:${BRAND_ACCENT};">${escapeHtml(
+              password,
+            )}</span>
+          </div>
+        </div>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${frontendUrl}/login?role=employer" style="background:${BRAND_ACCENT};color:#fff;padding:14px 34px;text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px;display:inline-block;">
+            ${fill(t.buttonLabel, vars)}
+          </a>
+        </div>
+        ${benefitsHtml}
+        ${t.note ? highlight(`<em>${fill(t.note, vars)}</em>`) : ''}
+        ${t.nextSteps ? `<p style="color:#334155;font-size:14px;line-height:1.7;">${fill(t.nextSteps, vars)}</p>` : ''}
+        ${t.support ? `<p style="color:#64748b;font-size:13px;line-height:1.6;">${fill(t.support, vars)}</p>` : ''}`,
+      footerHtml: fill(t.footer, vars),
+    }),
+  };
+};
+
 /** Email nhắc gia hạn tin tuyển dụng sắp hết hiển thị. */
 const renderJobExpiring = ({ tpl, employer, jobs, days, frontendUrl }) => {
   const t = tpl.jobExpiring;
@@ -590,6 +708,14 @@ const SAMPLE = {
     phone: '0901234567',
   },
   tempPassword: 'Kx7m-Qp2n',
+  companyAccount: {
+    user: { email: 'tuyendung@congtymau.vn', fullName: 'Công ty TNHH Mẫu' },
+    company: {
+      companyName: 'Công ty TNHH Mẫu',
+      phone: '0236 123 4567',
+      address: '54 Nguyễn Lương Bằng, Liên Chiểu, Đà Nẵng',
+    },
+  },
   expiringJobs: [
     { id: 'job1', title: 'Lập trình viên Backend (Node.js)', expiresAt: '03/09/2026', daysLeft: 3, applicationCount: 12 },
     { id: 'job2', title: 'Kỹ sư Dữ liệu', expiresAt: '05/09/2026', daysLeft: 5, applicationCount: 4 },
@@ -673,6 +799,15 @@ const renderPreview = (key, tpl, frontendUrl) => {
       frontendUrl,
     });
   }
+  if (key === 'companyAccountCreated') {
+    return renderCompanyAccountCreated({
+      tpl,
+      user: SAMPLE.companyAccount.user,
+      company: SAMPLE.companyAccount.company,
+      password: SAMPLE.tempPassword,
+      frontendUrl,
+    });
+  }
   throw new Error(`Không có mẫu email tên "${key}"`);
 };
 
@@ -689,6 +824,7 @@ module.exports = {
   renderEmployerDigest,
   renderJobExpiring,
   renderAccountCreated,
+  renderCompanyAccountCreated,
   renderPreview,
   escapeHtml,
 };

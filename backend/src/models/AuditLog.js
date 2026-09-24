@@ -23,6 +23,7 @@ const auditLogSchema = new mongoose.Schema(
         'CREATE_SYSTEM_BROADCAST',
         'UPDATE_SYSTEM_SETTINGS',
         'IMPORT_USERS',
+        'IMPORT_EMPLOYERS',
         'IMPORT_JOBS',
         'SET_EMPLOYER_PRO',
       ],

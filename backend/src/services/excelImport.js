@@ -102,6 +102,26 @@ const STUDENT_COLUMNS = {
 };
 
 /**
+ * Cột cho import tài khoản doanh nghiệp.
+ *
+ * Email vừa là khoá chính vừa là tên đăng nhập, nên bắt buộc; tên doanh nghiệp
+ * bắt buộc vì nó hiện trên mọi tin tuyển dụng và trong chính thư mời gửi đi.
+ * Điện thoại và địa chỉ chỉ để điền sẵn hồ sơ công ty, thiếu vẫn tạo được.
+ */
+const COMPANY_COLUMNS = {
+  companyName: {
+    aliases: ['Tên doanh nghiệp', 'Tên công ty', 'Doanh nghiệp', 'Công ty', 'Company name'],
+    required: true,
+  },
+  phone: { aliases: ['Số điện thoại', 'Điện thoại', 'SĐT', 'Phone'] },
+  email: {
+    aliases: ['Email', 'Email doanh nghiệp', 'Địa chỉ email', 'Email đăng nhập', 'Mail'],
+    required: true,
+  },
+  address: { aliases: ['Địa chỉ', 'Dia chi', 'Trụ sở', 'Address'] },
+};
+
+/**
  * Cột cho import tin tuyển dụng — đặt tên theo đúng nhãn ở trang "Đăng tin
  * tuyển dụng" để người dùng không phải học một bộ từ vựng thứ hai.
  */
@@ -134,6 +154,7 @@ module.exports = {
   buildTemplate,
   normalizeHeader,
   STUDENT_COLUMNS,
+  COMPANY_COLUMNS,
   JOB_COLUMNS,
   MAX_ROWS,
 };
