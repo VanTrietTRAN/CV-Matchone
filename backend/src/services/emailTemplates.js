@@ -162,8 +162,18 @@ const TEMPLATE_LABELS = {
   companyAccountCreated: 'Thư mời doanh nghiệp do admin import',
 };
 
+/**
+ * Chuẩn hoá NFKC mọi chữ do người dùng nhập trước khi đưa vào thư.
+ *
+ * Doanh nghiệp hay dán tiêu đề tin "chữ đẹp" chép từ Facebook, thật ra là kí tự
+ * toán học Unicode (𝑵𝒉𝒂̂𝒏 𝒗𝒊𝒆̂𝒏 thay cho "Nhân viên"). Bộ lọc thư rác coi đó
+ * là dấu hiệu né bộ lọc của spam. NFKC đổi về đúng chữ thường, dấu tiếng Việt
+ * vẫn giữ nguyên.
+ */
+const normalizeText = (value) => String(value ?? '').normalize('NFKC');
+
 const escapeHtml = (value) =>
-  String(value ?? '')
+  normalizeText(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -181,8 +191,39 @@ const fill = (text, vars = {}) =>
 /** Như `fill` nhưng dùng cho tiêu đề thư — không escape vì đây là plain text. */
 const fillPlain = (text, vars = {}) =>
   String(text ?? '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) =>
-    key in vars ? String(vars[key] ?? '') : '',
+    key in vars ? normalizeText(vars[key]) : '',
   );
+
+/** Số tin tối đa trong một thư, và tối đa bao nhiêu tin của cùng một công ty. */
+const EMAIL_MAX_JOBS = 5;
+const EMAIL_MAX_PER_COMPANY = 2;
+
+/**
+ * Chọn tin đưa vào thư từ danh sách đã sắp theo điểm.
+ *
+ * Thư dài hàng chục tin, mỗi tin một link theo dõi, mà phần lớn của một công ty
+ * thì trông như thư quảng cáo hàng loạt — đúng kiểu bộ lọc nghi ngờ, và người
+ * nhận cũng không đọc hết. Giữ vài tin điểm cao nhất, mỗi công ty tối đa hai
+ * tin; phần còn lại dẫn về trang web bằng một link "xem thêm".
+ */
+const pickJobsForEmail = (jobs) => {
+  const perCompany = new Map();
+  const picked = [];
+  for (const job of jobs || []) {
+    if (picked.length >= EMAIL_MAX_JOBS) break;
+    const key = normalizeText(job.companyName).trim().toLowerCase() || `#${job.id}`;
+    const n = perCompany.get(key) || 0;
+    if (n >= EMAIL_MAX_PER_COMPANY) continue;
+    perCompany.set(key, n + 1);
+    picked.push(job);
+  }
+  return { picked, remaining: (jobs?.length || 0) - picked.length };
+};
+
+const moreJobsLink = (remaining, url) =>
+  remaining > 0
+    ? `<p style="text-align:center;margin:8px 0 0;"><a href="${url}" style="color:#2563eb;font-weight:500;">Xem thêm ${remaining} việc làm khác trên website</a></p>`
+    : '';
 
 /** Gộp giá trị admin lưu lên trên mặc định. Trường trống coi như dùng mặc định. */
 const mergeTemplates = (stored) => {
@@ -243,8 +284,9 @@ const highlight = (html, accent = BRAND_ACCENT) => `
 const renderJobMatch = ({ tpl, user, jobs, frontendUrl }) => {
   const t = tpl.jobMatch;
   const vars = { brand: tpl.brand.name, name: user.fullName || 'bạn', count: jobs.length };
+  const { picked, remaining } = pickJobsForEmail(jobs);
 
-  const jobsHtml = jobs
+  const jobsHtml = picked
     .map((job) =>
       jobCard({
         title: job.title,
@@ -272,7 +314,8 @@ const renderJobMatch = ({ tpl, user, jobs, frontendUrl }) => {
         <p>${fill(t.intro, vars)}</p>
         ${t.note ? highlight(`<em>${fill(t.note, vars)}</em>`) : ''}
         <p>${fill(t.listLead, vars)}</p>
-        <div style="margin-top:24px;">${jobsHtml}</div>`,
+        <div style="margin-top:24px;">${jobsHtml}</div>
+        ${moreJobsLink(remaining, `${frontendUrl}/candidate/matches`)}`,
       footerHtml: `${fill(t.footer, vars)}<br/>${footerLink}`,
     }),
   };
@@ -288,8 +331,9 @@ const renderJobAlert = ({ tpl, target, alert, jobs, frontendUrl }) => {
     keyword: alert.keyword,
     location: alert.location || 'Tất cả',
   };
+  const { picked, remaining } = pickJobsForEmail(jobs);
 
-  const jobsHtml = jobs
+  const jobsHtml = picked
     .map((job) => {
       const tagsHtml = (job.matchedBy || [])
         .map(
@@ -327,8 +371,9 @@ const renderJobAlert = ({ tpl, target, alert, jobs, frontendUrl }) => {
       bodyHtml: `
         <h2 style="margin-top:0;">${fill(t.greeting, vars)}</h2>
         <p>${fill(t.intro, vars)}</p>
-        ${highlight(`🔎 ${criteria}`)}
-        <div style="margin-top:24px;">${jobsHtml}</div>`,
+        ${highlight(criteria)}
+        <div style="margin-top:24px;">${jobsHtml}</div>
+        ${moreJobsLink(remaining, `${frontendUrl}/candidate/job-alerts`)}`,
       footerHtml: `${fill(t.footer, vars)}<br/>${footerLink}`,
     }),
   };
