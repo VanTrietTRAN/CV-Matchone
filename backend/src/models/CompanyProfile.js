@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { normalizeText } = require('../utils/normalizeText');
 
 const companyProfileSchema = new mongoose.Schema({
   userId: {
@@ -7,7 +8,7 @@ const companyProfileSchema = new mongoose.Schema({
     required: true,
     unique: true, 
   },
-  companyName: { type: String, default: '' },
+  companyName: { type: String, default: '', set: normalizeText },
 
   // Ảnh thương hiệu, lưu dạng data URL (image/jpeg) đã được trình duyệt thu nhỏ.
   // Trang hồ sơ công ty vốn chỉ vẽ một dải gradient ghi "Ảnh bìa công ty" và một

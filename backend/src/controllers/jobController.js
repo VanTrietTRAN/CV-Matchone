@@ -4,6 +4,7 @@ const JobView = require("../models/JobView");
 const Application = require("../models/Application");
 const CvProfile = require("../models/CvProfile");
 const aiService = require("../services/aiService");
+const { normalizeText } = require("../utils/normalizeText");
 const { parseMoney, normalizeCurrency, formatSalary } = require("../utils/salary");
 
 /**
@@ -24,7 +25,11 @@ const syncSalaryFields = (target) => {
 
 const computeJobEmbedding = async (title, description, requirements) => {
   const reqArr = Array.isArray(requirements) ? requirements : [];
-  const text = [title, description, ...reqArr].filter(Boolean).join("\n").substring(0, 3000);
+  // Chuẩn hoá trước khi tính vector: chữ "font hoa mỹ" mô hình đọc ra vô nghĩa
+  const text = normalizeText([title, description, ...reqArr].filter(Boolean).join("\n")).substring(
+    0,
+    3000,
+  );
   if (!text.trim()) {
     return [];
   }

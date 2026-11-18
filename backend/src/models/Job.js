@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { normalizeText } = require('../utils/normalizeText');
 
 const jobSchema = new mongoose.Schema({
     employerId: {
@@ -6,10 +7,12 @@ const jobSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    title: { type: String, required: true },
+    // Chuẩn hoá ngay khi gán: chữ "font hoa mỹ" chép từ mạng xã hội làm hỏng tìm
+    // kiếm, embedding và khiến email gợi ý vào Spam (xem utils/normalizeText).
+    title: { type: String, required: true, set: normalizeText },
     description: { type: String, required: true },
     requirements: [{ type: String }],
-    location: { type: String },
+    location: { type: String, set: normalizeText },
 
     salary: { type: String, default: '' },        
     jobType: { type: String, default: '' },         // VD: "Nhân viên chính thức", "Part-time", "Remote"

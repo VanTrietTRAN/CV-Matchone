@@ -17,6 +17,7 @@
  */
 
 const { schoolEmailOf } = require('../utils/schoolEmail');
+const { normalizeText: sharedNormalize } = require('../utils/normalizeText');
 
 const BRAND_ACCENT = '#2563eb';
 const RESET_ACCENT = '#7c3aed';
@@ -163,14 +164,10 @@ const TEMPLATE_LABELS = {
 };
 
 /**
- * Chuẩn hoá NFKC mọi chữ do người dùng nhập trước khi đưa vào thư.
- *
- * Doanh nghiệp hay dán tiêu đề tin "chữ đẹp" chép từ Facebook, thật ra là kí tự
- * toán học Unicode (𝑵𝒉𝒂̂𝒏 𝒗𝒊𝒆̂𝒏 thay cho "Nhân viên"). Bộ lọc thư rác coi đó
- * là dấu hiệu né bộ lọc của spam. NFKC đổi về đúng chữ thường, dấu tiếng Việt
- * vẫn giữ nguyên.
+ * Chuẩn hoá mọi chữ người dùng nhập trước khi vào thư (xem utils/normalizeText).
+ * Model đã chuẩn hoá khi lưu; làm lại ở đây cho dữ liệu cũ và tên lấy từ chỗ khác.
  */
-const normalizeText = (value) => String(value ?? '').normalize('NFKC');
+const normalizeText = (value) => String(sharedNormalize(String(value ?? '')));
 
 const escapeHtml = (value) =>
   normalizeText(value)
