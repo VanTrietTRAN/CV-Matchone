@@ -51,6 +51,7 @@ type EmailConfig = {
   user: string
   keyPrefix: string
   sender: string
+  replyTo?: string
   problems: string[]
   warnings: string[]
   ok?: boolean
@@ -298,6 +299,7 @@ export default function AdminSystemPage() {
                   <InfoRow label="SMTP login" value={info.email.user || '(chưa đặt)'} />
                   <InfoRow label="SMTP key" value={info.email.keyPrefix || '(chưa đặt)'} />
                   <InfoRow label="Địa chỉ gửi" value={info.email.sender} />
+                  <InfoRow label="Nhận trả lời" value={info.email.replyTo || '(chưa đặt)'} />
 
                   {info.email.problems.map((p) => (
                     <p key={p} className="flex items-start gap-2 rounded-md bg-red-500/10 p-2.5 text-xs leading-relaxed text-red-300">

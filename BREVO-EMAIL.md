@@ -284,7 +284,7 @@ SENDER_EMAIL=CVMatchOne <no-reply@cvoneclickmatch.com>
 
 ## 3. Đặt biến môi trường trên Railway
 
-Railway → service **backend** → tab **Variables** → thêm 5 biến:
+Railway → service **backend** → tab **Variables** → thêm 6 biến:
 
 ```
 EMAIL_HOST=smtp-relay.brevo.com
@@ -292,7 +292,11 @@ EMAIL_PORT=587
 EMAIL_USER=<SMTP login dạng xxxxxx@smtp-brevo.com>
 EMAIL_PASS=<SMTP key bắt đầu bằng xsmtpsib->
 SENDER_EMAIL=CVMatchOne <no-reply@cvoneclickmatch.com>
+REPLY_TO=CVMatchOne <support@cvoneclickmatch.com>
 ```
+
+`REPLY_TO` là nơi nhận khi người dùng bấm **Trả lời**. Chỉ đặt sau khi hộp thư
+đó đã nhận được thư thật (mục 8.3), nếu không câu trả lời vẫn bị trả lại.
 
 **Kiểm tra luôn ba biến này** — chúng quyết định link bên trong email:
 
@@ -466,7 +470,92 @@ Trước đây cấu hình Brevo gần như không thể dò được:
 
 ---
 
-## 8. Nguồn tham khảo
+## 8. Khi thư vào spam
+
+Kiểm tra DNS ngày 18/11/2026: `brevo-code`, DKIM (`brevo1`/`brevo2._domainkey`),
+DMARC, SPF của tên miền trả thư `noreply.cvoneclickmatch.com` và ba CNAME branded
+đều **đúng và phân giải được**. Xác thực không phải nguyên nhân. Nghi phạm chính
+là **tên miền còn mới** (đăng ký 17/08/2026) gửi từ **IP dùng chung** của gói Free
+— Gmail chưa có lịch sử để tin.
+
+Code đã xử lý phần của mình: mọi thư có thêm bản văn bản thuần, gửi qua pool kết
+nối, và có `Reply-To` khi đặt `REPLY_TO`. Ba việc dưới đây phải làm bằng tài khoản
+của bạn.
+
+### 8.1 Đọc "Show original" của một thư bị vào spam
+
+Đây là bằng chứng duy nhất cho biết Gmail thực sự thấy gì.
+
+1. Mở Gmail **trên máy tính** (ứng dụng điện thoại không có chức năng này).
+2. Vào **Spam**, mở một thư của CVMatchOne.
+3. Bấm dấu **⋮** cạnh nút Trả lời → **Show original** (*Hiển thị bản gốc*).
+4. Bảng đầu trang có ba dòng, cần cả ba là **PASS**:
+
+| Dòng | PASS nghĩa là | FAIL thì |
+|---|---|---|
+| **SPF** | Brevo được phép gửi thay tên miền | Kiểm tra TXT của `noreply.cvoneclickmatch.com` |
+| **DKIM** | Chữ ký có `d=cvoneclickmatch.com` hợp lệ | Kiểm tra hai CNAME `brevo1`/`brevo2._domainkey` |
+| **DMARC** | Một trong hai cái trên khớp tên miền ở dòng From | Xem dòng DKIM có ghi `cvoneclickmatch.com` hay tên miền Brevo |
+
+Cả ba PASS mà vẫn vào spam → nguyên nhân là uy tín (8.2, 8.4), không phải cấu hình.
+
+Gửi kèm toàn bộ nội dung trang (nút **Copy to clipboard**) khi nhờ người khác xem —
+trong đó có dòng `Received: from ...` cho biết IP Brevo đã dùng.
+
+### 8.2 Google Postmaster Tools
+
+Cho biết Gmail chấm uy tín tên miền ra sao và tỉ lệ bị người nhận báo spam.
+
+1. Vào <https://postmaster.google.com>, đăng nhập bằng một tài khoản Google bất kỳ.
+2. Bấm **+** (hoặc **Get started**), nhập `cvoneclickmatch.com`.
+3. Google đưa một bản ghi dạng `google-site-verification=xxxxxxxx`.
+4. Cloudflare → `cvoneclickmatch.com` → **DNS** → **Add record**:
+   `Type = TXT`, `Name = @`, `Content =` giá trị vừa copy. **Save**.
+   Bản ghi `brevo-code` đang có ở `@` giữ nguyên — một tên mang được nhiều TXT.
+5. Quay lại Postmaster bấm **Verify**.
+
+> Biểu đồ chỉ có số liệu khi tên miền gửi tới Gmail **đủ nhiều mỗi ngày**. Google
+> không công bố ngưỡng cụ thể; lượng nhỏ thì các biểu đồ sẽ trống. Trống không có
+> nghĩa là cấu hình sai.
+
+### 8.3 Hộp thư nhận trả lời (`REPLY_TO`)
+
+Thư gửi từ `no-reply@cvoneclickmatch.com`, và tên miền gốc không có MX, nên người
+nhận bấm **Trả lời** là thư bị trả lại — trong khi thư mời doanh nghiệp lại viết
+*"vui lòng phản hồi lại email này"*. Cloudflare Email Routing tạo miễn phí một địa
+chỉ `support@cvoneclickmatch.com` chuyển tiếp về Gmail của bạn.
+
+1. Cloudflare → `cvoneclickmatch.com` → **Email** → **Email Routing** → bật lên.
+   Cloudflare đề nghị thêm bản ghi **MX** và một **TXT SPF** ở tên miền gốc → đồng ý.
+2. Tab **Destination addresses** → thêm Gmail nhận thư → bấm link xác nhận
+   Cloudflare gửi tới Gmail đó.
+3. Tab **Routing rules** → **Create address**: `support` → **Send to an email** →
+   chọn Gmail vừa xác nhận.
+4. Từ một Gmail khác, gửi thử tới `support@cvoneclickmatch.com`. Nhận được mới đi tiếp.
+5. Railway → **Variables** → `REPLY_TO=CVMatchOne <support@cvoneclickmatch.com>` →
+   **Restart**. `/health` hết cảnh báo REPLY_TO là xong.
+
+> **Có ảnh hưởng tới Brevo không?** Không. MX và SPF mới nằm ở tên miền gốc; thư
+> Brevo dùng tên miền trả thư `noreply.cvoneclickmatch.com` với SPF riêng, còn
+> DMARC đạt nhờ DKIM. Có MX còn giúp tên miền gửi trông "thật" hơn với bộ lọc.
+> Chỉ thêm mới, không sửa bản ghi nào đang có (xem cảnh báo ở mục 2.5).
+
+### 8.4 Làm ấm tên miền
+
+Uy tín tích luỹ theo **tuần**, không phải theo vài lượt bấm.
+
+- Giữ lượng gửi đều, tăng dần. Tránh dồn hàng trăm thư một lúc khi tên miền còn
+  mới — chia đợt import ra nhiều ngày nếu được.
+- Nhờ vài người quen: tìm thư trong Spam → **Báo cáo không phải thư rác** → trả lời
+  vài chữ (cần 8.3 xong trước, không thì câu trả lời bị trả lại). Việc này giúp
+  ngay cho chính hộp thư đó và góp một phần vào uy tín chung — không phải công tắc
+  đưa mọi thư vào Inbox.
+- Tiêu đề quảng cáo (*"siêu phù hợp! 🎉"*) bị trừ điểm hơn tiêu đề thông tin.
+  Sửa được ở **Quản trị → Nội dung email**.
+
+---
+
+## 9. Nguồn tham khảo
 
 - [Brevo — SMTP relay integration](https://developers.brevo.com/docs/smtp-integration)
 - [Brevo — Send transactional emails using Brevo SMTP](https://help.brevo.com/hc/en-us/articles/7924908994450-Send-transactional-emails-using-Brevo-SMTP)

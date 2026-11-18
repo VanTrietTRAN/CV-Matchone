@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const { frontendOrigin } = require('../utils/frontendUrl');
+const { htmlToText } = require('../utils/htmlToText');
 const templates = require('./emailTemplates');
 
 /**
@@ -56,6 +57,7 @@ const readEmailConfig = () => {
   const user = val('EMAIL_USER') || val('BREVO_USER');
   const pass = val('EMAIL_PASS') || val('BREVO_SMTP_KEY');
   const sender = val('SENDER_EMAIL') || DEFAULT_SENDER;
+  const replyTo = val('REPLY_TO');
 
   const problems = [];
   const warnings = [];
@@ -80,7 +82,7 @@ const readEmailConfig = () => {
   }
 
   // So sánh chuỗi thô với chuỗi đã cắt: lệch nghĩa là có khoảng trắng thừa.
-  for (const name of ['EMAIL_USER', 'EMAIL_PASS', 'EMAIL_HOST', 'SENDER_EMAIL']) {
+  for (const name of ['EMAIL_USER', 'EMAIL_PASS', 'EMAIL_HOST', 'SENDER_EMAIL', 'REPLY_TO']) {
     if (raw(name) && raw(name) !== raw(name).trim()) {
       warnings.push(`${name} có khoảng trắng hoặc xuống dòng thừa — đã tự cắt bỏ.`);
     }
@@ -100,6 +102,18 @@ const readEmailConfig = () => {
       `SENDER_EMAIL = "${sender}" vẫn trỏ tới tên miền mẫu. Địa chỉ gửi phải thuộc ` +
         'tên miền đã xác thực trong Brevo, nếu không email sẽ bị từ chối hoặc vào spam.',
     );
+  }
+
+  // Địa chỉ gửi là no-reply@ và tên miền gốc không có hộp thư (không có MX),
+  // nên người nhận bấm "Trả lời" là thư bị trả lại — trong khi thư mời doanh
+  // nghiệp lại mời họ phản hồi. REPLY_TO chuyển câu trả lời tới hộp thư có người đọc.
+  if (!replyTo) {
+    warnings.push(
+      'Chưa đặt REPLY_TO. Người nhận bấm "Trả lời" sẽ gửi về địa chỉ no-reply không có ' +
+        'hộp thư và bị trả lại. Đặt REPLY_TO bằng một hộp thư có người đọc.',
+    );
+  } else if (!/@/.test(replyTo)) {
+    problems.push(`REPLY_TO = "${replyTo}" không chứa địa chỉ email hợp lệ.`);
   }
 
   if (port !== 587 && port !== 465 && port !== 2525) {
@@ -123,6 +137,7 @@ const readEmailConfig = () => {
     user,
     pass,
     sender,
+    replyTo,
     configured: problems.length === 0,
     problems,
     warnings,
@@ -139,7 +154,8 @@ const logOnce = (level, text) => {
 
 /** Cấu hình đã che khoá bí mật — an toàn để trả ra /health và trang admin. */
 const getEmailConfig = () => {
-  const { host, port, user, pass, sender, configured, problems, warnings } = readEmailConfig();
+  const { host, port, user, pass, sender, replyTo, configured, problems, warnings } =
+    readEmailConfig();
   return {
     configured,
     host,
@@ -148,6 +164,7 @@ const getEmailConfig = () => {
     user: user ? `${user.slice(0, 3)}***@${user.split('@')[1] || '?'}` : '',
     keyPrefix: pass ? `${pass.slice(0, 9)}...` : '',
     sender,
+    replyTo,
     linkOrigin: frontendOrigin(),
     problems,
     warnings,
@@ -174,6 +191,12 @@ const initTransporter = async () => {
       secure: isSecure,
       auth: { user: cfg.user, pass: cfg.pass },
       ...(isSecure ? {} : { requireTLS: true }),
+      // Giữ kết nối mở và dùng lại. Không có pool thì import trăm sinh viên là
+      // trăm lần bắt tay TCP + TLS + AUTH liên tiếp — dễ bị Brevo ghìm tốc độ.
+      // Vài kết nối song song là đủ; mở nhiều hơn chỉ dồn tải sang Brevo.
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 100,
     });
 
     console.log(`[Email] Đã khởi tạo SMTP transporter (${cfg.host}:${cfg.port}).`);
@@ -182,6 +205,39 @@ const initTransporter = async () => {
     console.error('[Email] Lỗi khởi tạo SMTP transporter:', error.message);
     return null;
   }
+};
+
+/**
+ * Bỏ transporter hiện tại để lần gửi sau dựng lại (phòng khi biến môi trường
+ * vừa sửa). Phải đóng pool trước, không thì các kết nối cũ treo lại mãi.
+ */
+const resetTransporter = () => {
+  if (transporter) {
+    try {
+      transporter.close();
+    } catch {
+      /* đã đóng sẵn */
+    }
+  }
+  transporter = null;
+};
+
+/**
+ * Đường gửi duy nhất cho mọi loại thư. Thêm vào đây những gì thư nào cũng cần,
+ * thay vì lặp lại ở từng hàm:
+ *   - `from` mặc định là địa chỉ gửi đã cấu hình;
+ *   - `replyTo` (nếu đặt REPLY_TO) để câu trả lời tới hộp thư có người đọc;
+ *   - phần văn bản thuần dựng từ HTML (thư chỉ có HTML bị bộ lọc rác trừ điểm).
+ */
+const deliver = (t, { html, text, ...rest }) => {
+  const { sender, replyTo } = readEmailConfig();
+  return t.sendMail({
+    from: sender,
+    ...(replyTo ? { replyTo } : {}),
+    ...rest,
+    html,
+    text: text || htmlToText(html),
+  });
 };
 
 /**
@@ -201,7 +257,7 @@ const verifyEmailConnection = async () => {
     return { ok: true, host: cfg.host, port: cfg.port, warnings: cfg.warnings };
   } catch (error) {
     // Buộc dựng lại ở lần sau, phòng khi biến môi trường vừa được sửa
-    transporter = null;
+    resetTransporter();
     return { ok: false, error: describeSmtpError(error), warnings: cfg.warnings };
   }
 };
@@ -247,8 +303,7 @@ const sendJobMatchEmail = async (user, matchedJobs) => {
       frontendUrl: frontendOrigin(),
     });
 
-    const info = await t.sendMail({
-      from: readEmailConfig().sender,
+    const info = await deliver(t, {
       to: user.email,
       subject,
       html,
@@ -280,8 +335,7 @@ const sendJobAlertEmail = async (target, alert, matchedJobs) => {
       frontendUrl: frontendOrigin(),
     });
 
-    const info = await t.sendMail({
-      from: readEmailConfig().sender,
+    const info = await deliver(t, {
       to: target.email,
       subject,
       html,
@@ -310,13 +364,13 @@ const sendEmail = async ({ to, subject, html }) => {
       html,
     };
 
-    const info = await t.sendMail(mailOptions);
+    const info = await deliver(t, mailOptions);
     console.log(`[Email Service] Đã gửi email thành công tới ${to} (MessageID: ${info.messageId})`);
     return info;
   } catch (error) {
     const reason = describeSmtpError(error);
     console.error(`[Email] Lỗi gửi email tới ${to}: ${reason}`);
-    transporter = null;
+    resetTransporter();
     throw new Error(reason);
   }
 };
@@ -344,7 +398,7 @@ const sendAccountCreatedEmail = async ({ user, password, to, mode }) => {
       frontendUrl: frontendOrigin(),
     });
 
-    const info = await t.sendMail({ from: readEmailConfig().sender, to: recipients, subject, html });
+    const info = await deliver(t, { to: recipients, subject, html });
     console.log(
       `[Email] Đã gửi thông tin tài khoản cho ${recipients.join(', ')} (MessageID: ${info.messageId})`,
     );
@@ -381,8 +435,7 @@ const sendCompanyAccountCreatedEmail = async ({ user, company, password }) => {
       frontendUrl: frontendOrigin(),
     });
 
-    const info = await t.sendMail({
-      from: readEmailConfig().sender,
+    const info = await deliver(t, {
       to: user.email,
       subject,
       html,
@@ -414,8 +467,7 @@ const sendJobExpiringEmail = async ({ employer, jobs, days }) => {
       frontendUrl: frontendOrigin(),
     });
 
-    const info = await t.sendMail({
-      from: readEmailConfig().sender,
+    const info = await deliver(t, {
       to: employer.email,
       subject,
       html,
@@ -465,8 +517,7 @@ const sendEmployerDigestEmail = async ({ employer, applicants, threshold }) => {
       frontendUrl: frontendOrigin(),
     });
 
-    const info = await t.sendMail({
-      from: readEmailConfig().sender,
+    const info = await deliver(t, {
       to: employer.email,
       subject,
       html,
