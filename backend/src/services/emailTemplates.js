@@ -28,18 +28,18 @@ const DEFAULTS = {
     tagline: 'Hệ thống tuyển dụng thông minh AI',
   },
   jobMatch: {
-    subject: '[{{brand}}] Có {{count}} việc làm mới siêu phù hợp với bạn! 🎉',
+    subject: '[{{brand}}] {{count}} việc làm mới phù hợp với CV của bạn',
     greeting: 'Chào {{name}},',
     intro:
-      'Hệ thống AI vừa quét và phát hiện có {{count}} công việc mới rất phù hợp với kỹ năng và kinh nghiệm trong CV của bạn.',
-    note: '💡 Độ phù hợp (AI) được tính dựa trên CV chính của bạn: {{name}}.',
-    listLead: 'Dưới đây là danh sách gợi ý dành riêng cho bạn:',
+      'Dựa trên kỹ năng và kinh nghiệm trong CV của bạn, {{brand}} tìm thấy {{count}} việc làm mới phù hợp.',
+    note: 'Độ phù hợp được tính dựa trên CV chính của bạn: {{name}}.',
+    listLead: 'Danh sách việc làm:',
     footer:
       'Bạn nhận được email này vì đã bật tính năng "Nhận email gợi ý việc làm AI". Để thay đổi tần suất hoặc tắt thông báo, vui lòng truy cập Cài đặt thông báo.',
     footerLinkLabel: 'Cài đặt thông báo',
   },
   jobAlert: {
-    subject: '[{{brand}}] {{count}} việc làm mới khớp thông báo "{{keyword}}" 🔔',
+    subject: '[{{brand}}] {{count}} việc làm mới khớp thông báo "{{keyword}}"',
     greeting: 'Chào {{name}},',
     intro: 'Có {{count}} việc làm mới khớp với thông báo việc làm bạn đã tạo:',
     footer:
@@ -48,7 +48,7 @@ const DEFAULTS = {
   },
   passwordReset: {
     subject: '[{{brand}}] Mã đặt lại mật khẩu: {{code}}',
-    heading: '🔑 Đặt lại mật khẩu',
+    heading: 'Đặt lại mật khẩu',
     intro:
       'Xin chào {{name}}, chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại {{brand}}. Nhập mã bên dưới để đặt mật khẩu mới.',
     note:
@@ -57,7 +57,7 @@ const DEFAULTS = {
   },
   verifyEmail: {
     subject: '[{{brand}}] Mã xác thực tài khoản: {{code}}',
-    heading: '👋 Chào mừng bạn đến với {{brand}}',
+    heading: 'Chào mừng bạn đến với {{brand}}',
     intro:
       'Cảm ơn bạn đã đăng ký. Nhập mã bên dưới để xác thực địa chỉ email và bắt đầu sử dụng tài khoản.',
     note:
@@ -66,36 +66,36 @@ const DEFAULTS = {
   },
   accountCreated: {
     subject: '[{{brand}}] Tài khoản của bạn đã sẵn sàng',
-    heading: '🎓 Chào {{name}}',
+    heading: 'Chào {{name}},',
     intro:
       'Nhà trường đã tạo sẵn tài khoản {{brand}} cho bạn để tìm việc làm và thực tập phù hợp với ngành {{major}}. Đăng nhập bằng thông tin bên dưới.',
     passwordLabel: 'Mật khẩu tạm thời',
-    buttonLabel: 'Đăng nhập ngay',
+    buttonLabel: 'Đăng nhập',
     note:
       '⚠️ Đây là mật khẩu tạm thời. Hệ thống sẽ yêu cầu bạn đổi mật khẩu ngay trong lần đăng nhập đầu tiên. Không chia sẻ mật khẩu này với ai.',
     nextSteps:
       'Sau khi đăng nhập, hãy tải CV lên hoặc dùng công cụ tạo CV. AI sẽ đọc hồ sơ và gợi ý việc làm phù hợp gửi vào email của bạn.',
     schoolNote:
-      '📬 Thư này được gửi tới hộp thư sinh viên {{schoolEmail}}. Nếu trước đó bạn đã nhận thư tới {{email}}, mật khẩu trong thư đó không còn dùng được — hãy dùng mật khẩu bên dưới.',
+      'Thư này được gửi tới hộp thư sinh viên {{schoolEmail}}. Nếu trước đó bạn đã nhận thư tới {{email}}, mật khẩu trong thư đó không còn dùng được — hãy dùng mật khẩu bên dưới.',
     footer: '© {{brand}} · Email tự động, vui lòng không trả lời',
   },
   companyAccountCreated: {
     subject: '[{{brand}}] Tài khoản nhà tuyển dụng của {{company}} đã sẵn sàng',
     heading: 'Kính gửi {{company}},',
     intro:
-      '{{brand}} trân trọng thông báo: tài khoản nhà tuyển dụng của Quý công ty đã được khởi tạo trên nền tảng tuyển dụng ứng dụng AI của chúng tôi. Quý công ty có thể đăng nhập ngay bằng thông tin bên dưới để bắt đầu tiếp cận ứng viên.',
+      'Tài khoản nhà tuyển dụng của Quý công ty trên {{brand}} đã được khởi tạo. Quý công ty đăng nhập bằng thông tin bên dưới để quản lý tin tuyển dụng và hồ sơ ứng viên.',
     benefitsLead: 'Ngay sau khi đăng nhập, Quý công ty có thể:',
     // Mỗi quyền lợi cách nhau bằng dấu | — admin sửa được lời văn mà không phải
     // đụng vào HTML, vẫn ra đúng một danh sách gạch đầu dòng.
     benefits:
-      'Đăng tin tuyển dụng không giới hạn, hiển thị ngay với ứng viên phù hợp|Nhận hồ sơ đã được AI chấm điểm mức độ phù hợp với mô tả công việc|Xây dựng trang giới thiệu công ty riêng, có đánh giá từ nhân sự|Toàn quyền quản lý những tin tuyển dụng do {{brand}} đăng hộ Quý công ty',
+      'Đăng tin tuyển dụng và hiển thị tới ứng viên phù hợp|Nhận hồ sơ đã được AI chấm điểm mức độ phù hợp với mô tả công việc|Xây dựng trang giới thiệu công ty riêng, có đánh giá từ nhân sự|Toàn quyền quản lý những tin tuyển dụng do {{brand}} đăng hộ Quý công ty',
     passwordLabel: 'Mật khẩu đăng nhập lần đầu',
-    buttonLabel: 'Kích hoạt tài khoản ngay',
+    buttonLabel: 'Đăng nhập',
     note:
-      '🔒 Đây là mật khẩu tạm thời do hệ thống cấp. Vì lý do an toàn, hệ thống sẽ yêu cầu Quý công ty đặt mật khẩu mới ngay trong lần đăng nhập đầu tiên.',
+      'Đây là mật khẩu tạm thời do hệ thống cấp. Vì lý do an toàn, hệ thống sẽ yêu cầu Quý công ty đặt mật khẩu mới ngay trong lần đăng nhập đầu tiên.',
     nextSteps:
       'Nếu Quý công ty đã có tin tuyển dụng do đội ngũ {{brand}} đăng hộ, các tin đó đã nằm sẵn trong mục Quản lý tin tuyển dụng của tài khoản này và Quý công ty có toàn quyền chỉnh sửa, gia hạn hay đóng tin.',
-    support: 'Mọi vướng mắc trong quá trình sử dụng, Quý công ty vui lòng phản hồi lại email này để được hỗ trợ.',
+    support: 'Nếu cần hỗ trợ, Quý công ty có thể trả lời trực tiếp email này.',
     footer: '© {{brand}} · Nền tảng tuyển dụng ứng dụng AI',
   },
   jobExpiring: {

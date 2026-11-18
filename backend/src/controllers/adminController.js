@@ -545,7 +545,11 @@ const updateEmailTemplates = async (req, res) => {
       if (!from || typeof from !== 'object') continue;
       const picked = {};
       for (const field of Object.keys(tpl.DEFAULTS[group])) {
-        if (typeof from[field] === 'string') picked[field] = from[field].trim();
+        if (typeof from[field] !== 'string') continue;
+        const v = from[field].trim();
+        // Chỉ lưu ô admin thực sự sửa. Lưu cả ô trùng mặc định thì lời văn bị
+        // "đóng băng": lần sau sửa mặc định trong code, thư vẫn dùng bản cũ.
+        if (v && v !== tpl.DEFAULTS[group][field]) picked[field] = v;
       }
       if (Object.keys(picked).length) clean[group] = picked;
     }
