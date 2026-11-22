@@ -34,6 +34,17 @@ Tất cả đi qua một đường duy nhất: `backend/src/services/emailServic
 SMTP relay của Brevo. Lời văn của mọi mẫu thư sửa được ở **Quản trị → Nội dung
 email** (lưu trong database, không cần deploy lại).
 
+### Ba làn ưu tiên (chi tiết ở mục 9)
+
+| Làn | Gồm | Trần/ngày | Nhịp gửi | Khi Circuit Breaker ngắt |
+|---|---|---|---|---|
+| **P0 · Bảo mật** | Mã xác thực, đặt lại mật khẩu, admin hỗ trợ đặt lại | 60 giữ riêng (mượn được 60 đệm) | Gửi ngay | **Vẫn gửi** |
+| **P1 · Thư mời** | Thư mời sinh viên, doanh nghiệp | 100 | 20 thư/giờ, giãn 60–90 giây | Dừng |
+| **P2 · Gợi ý** | Gợi ý việc làm, thông báo từ khoá, tổng hợp hồ sơ, nhắc hạn tin, broadcast | 80 | 15 thư/giờ, chỉ 09:00–17:00 | Dừng |
+
+Tổng trần mềm **240/300**: 60 lượt để trống làm vùng đệm. P1 và P2 nghỉ Chủ nhật.
+Ba tuần đầu sau khi triển khai chạy theo lộ trình warm-up (110 → 170 → 210 → 240).
+
 ### Ai KHÔNG nhận được thư
 
 Áp dụng cho mọi email định kỳ và thư mời, không phải chỉ một vài loại:
@@ -48,10 +59,14 @@ email** (lưu trong database, không cần deploy lại).
 | Doanh nghiệp chọn "Hằng tuần" | Chỉ nhận mỗi tuần một lần, và thư gom hồ sơ cả tuần |
 | Doanh nghiệp tắt "Nhắc hạn tin tuyển dụng" | Không nhận thư nhắc hạn |
 | Sinh viên / doanh nghiệp đã tự đổi mật khẩu | Không nhận lại thư mời — gửi mật khẩu tạm mới sẽ đè lên mật khẩu họ đang dùng |
+| Đã nhận đủ 1 thư mời + 1 thư nhắc | Import lại cũng không gửi thêm; thư nhắc phải cách thư mời ≥ 7 ngày |
+| Không đăng nhập/dùng hệ thống trong 30 ngày (14 ngày ở tuần 2 warm-up) | Không nhận thư làn P2 (gợi ý, tổng hợp, nhắc hạn, email broadcast) |
+| Địa chỉ trong danh sách chặn (hard bounce, báo spam, huỷ nhận, Brevo chặn) | Không nhận thư P1/P2. Thư P0 người dùng tự yêu cầu vẫn gửi |
 
 Broadcast cố ý **không** xét công tắc "Email gợi ý việc làm": đó là thông báo vận
 hành của hệ thống (bảo trì, đổi chính sách), còn công tắc kia chỉ nói về thư gợi
-ý việc làm.
+ý việc làm. Thông báo trong ứng dụng tới mọi tài khoản; riêng **email** broadcast
+đi làn P2 nên chỉ tới người hoạt động gần đây và không quá sức gửi của 48 giờ.
 
 ---
 
@@ -298,6 +313,20 @@ REPLY_TO=CVMatchOne <support@cvoneclickmatch.com>
 `REPLY_TO` là nơi nhận khi người dùng bấm **Trả lời**. Chỉ đặt sau khi hộp thư
 đó đã nhận được thư thật (mục 8.3), nếu không câu trả lời vẫn bị trả lại.
 
+Thêm các biến cho 3 làn và Circuit Breaker (mục 9):
+
+```
+SECURITY_SENDER_EMAIL=CVMatchOne <security@cvoneclickmatch.com>
+API_PUBLIC_URL=https://<địa chỉ public của backend>
+BREVO_WEBHOOK_TOKEN=<chuỗi ngẫu nhiên dài, cũng dán vào webhook Brevo>
+EMAIL_ALERT_TELEGRAM_BOT_TOKEN=...   # hoặc EMAIL_ALERT_SLACK_WEBHOOK=...
+EMAIL_ALERT_TELEGRAM_CHAT_ID=...
+```
+
+`SECURITY_SENDER_EMAIL` phải cùng tên miền đã xác thực (mục 2). `API_PUBLIC_URL`
+là địa chỉ **backend** (không phải frontend) — link huỷ nhận trong header
+`List-Unsubscribe` trỏ thẳng vào đó.
+
 **Kiểm tra luôn ba biến này** — chúng quyết định link bên trong email:
 
 ```
@@ -339,9 +368,11 @@ Múi giờ đã cố định là **Asia/Ho_Chi_Minh** (`CRON_TIMEZONE`), nên "7
 giờ Việt Nam. Không khai báo múi giờ thì node-cron dùng giờ container — Railway
 chạy UTC, lệch 7 tiếng.
 
-**Lưu ý quota:** gói Free 300 email/ngày. Mỗi lượt cron gửi tối đa một email cho
-mỗi ứng viên có CV và đang bật nhận thư. Trên 150 ứng viên hoạt động thì lịch
-"hàng ngày, 2 lần" đã chạm trần.
+**Lưu ý quota:** cron không gửi thẳng nữa mà **xếp hàng** vào outbox làn P2 (tối
+đa 80 thư/ngày, chỉ 09:00–17:00). Mỗi lượt cron chỉ xếp tối đa bằng sức gửi của 48
+giờ; người lâu chưa nhận thư gợi ý xếp trước, nên khi trần không đủ thì mỗi lượt
+tới một nhóm khác. Thư quá 48 giờ chưa tới lượt thì tự huỷ thay vì dồn sang tuần
+sau. Lịch dày hơn không làm gửi được nhiều hơn — chỉ làm thư cũ bị thay bởi thư mới.
 
 ---
 
@@ -555,7 +586,83 @@ Uy tín tích luỹ theo **tuần**, không phải theo vài lượt bấm.
 
 ---
 
-## 9. Nguồn tham khảo
+## 9. Phân luồng 3 làn và Circuit Breaker
+
+Thư từng rơi vào Spam không phải vì mốc 300 thư/ngày, mà vì **chạy kịch trần
+nhiều ngày liền** bằng danh sách import lạnh và hàng đợi gợi ý tràn, trộn chung
+với thư đổi mật khẩu. Mã nguồn: `backend/src/services/mail/` (`policy.js` chứa mọi
+con số và ngưỡng).
+
+### 9.1 Lộ trình warm-up
+
+| Bậc | P0 | P1 | P2 | Tổng | Ghi chú |
+|---|---|---|---|---|---|
+| Tuần 1 | 60 | 50 | 0 | 110 | Tắt P2, lọc sạch danh sách |
+| Tuần 2 | 60 | 70 | 40 | 170 | P2 chỉ cho người dùng 14 ngày |
+| Tuần 3 | 60 | 90 | 60 | 210 | |
+| Tuần 4+ | 60 | 100 | 80 | 240 | Vận hành ổn định |
+
+Hệ thống bắt đầu ở tuần 1 và **tự lên bậc** sau mỗi 7 ngày nếu 7 ngày đó có hard
+bounce < 2%, không có báo cáo spam và breaker đang đóng. Đổi bậc tay ở **Quản trị →
+Hệ thống → Đường gửi mail**, hoặc ép bằng `EMAIL_WARMUP_STAGE=4` (tắt warm-up).
+
+Gói trả phí: đặt `EMAIL_PROVIDER_DAILY_LIMIT` — mọi trần co giãn theo cùng tỉ lệ.
+
+### 9.2 Circuit Breaker
+
+| Tín hiệu | Giảm tốc (THROTTLED, 6h) | Ngắt (OPEN) |
+|---|---|---|
+| Báo cáo spam | — | ≥ 1 / 24h → nghỉ 72h |
+| Hard bounce | ≥ 3 / 24h | ≥ 6 / 24h → nghỉ 24h |
+| Deferred / soft bounce | ≥ 5 và > 8% trong 1 giờ | ≥ 5 và > 15% trong 1 giờ → nghỉ 24h |
+| Lỗi SMTP 421/451/550 liên tiếp | 2 lỗi | 3 lỗi → nghỉ 12h |
+
+- **THROTTLED:** tắt P2, P1 còn 50% và 1 thư/2 phút.
+- **OPEN:** dừng P1 và P2. Hết giờ nghỉ → **HALF_OPEN**: gửi thăm dò tối đa 20 thư;
+  sạch 24h thì tự đóng, có spam/hard bounce thì ngắt lại.
+- **P0 không bao giờ bị ngắt.**
+- Địa chỉ spam/hard bounce/huỷ nhận vào danh sách chặn (`email_suppression_list`).
+- Lô import có ≥ 3 hard bounce trong 24h bị **dừng riêng** (mỗi file import một mã
+  lô); các lô sạch vẫn chạy. Rà lại file rồi bấm **Mở lại** ở trang Hệ thống.
+- Mỗi lần ngắt gửi cảnh báo Telegram/Slack (nếu đặt biến) và Sentry.
+
+### 9.3 Bật webhook Brevo
+
+Không có webhook thì breaker chỉ thấy lỗi SMTP trả về ngay, **không** thấy báo cáo
+spam hay hard bounce (hai tín hiệu quan trọng nhất).
+
+1. Đặt `BREVO_WEBHOOK_TOKEN` trên Railway (vd. `openssl rand -hex 32`), Restart.
+2. Brevo → **Transactional** → **Settings** → **Webhook** → **Add a new webhook**:
+   - URL: `https://<backend>/webhooks/brevo`
+   - Sự kiện: *Hard bounce, Soft bounce, Blocked, Spam, Invalid email, Deferred,
+     Unsubscribed* (thêm *Delivered* nếu muốn thống kê).
+   - Xác thực: **Bearer token** = giá trị `BREVO_WEBHOOK_TOKEN`
+     (hoặc Basic auth với mật khẩu = token).
+3. Kiểm tra: trang Hệ thống không còn cảnh báo "Chưa đặt BREVO_WEBHOOK_TOKEN";
+   gọi thử không kèm token phải nhận `401`.
+
+> Chưa đối chiếu bằng ảnh giao diện Brevo: nếu form tạo webhook không có ô xác
+> thực, tạo bằng API `POST https://api.brevo.com/v3/webhooks` với
+> `{"type":"transactional","url":"...","events":[...],"auth":{"type":"bearer","token":"..."}}`.
+> Endpoint từ chối mọi sự kiện khi chưa đặt token — ai cũng gửi được sự kiện "spam"
+> giả thì ai cũng tắt được đường gửi mail.
+
+### 9.4 Lọc trước khi import
+
+Bản xem trước và lần chạy thật đều: chuẩn hoá (trim, viết thường), loại tên miền
+gõ nhầm (`gmial.com`, `gmai.com`…), loại tên miền không có bản ghi MX, bỏ qua địa
+chỉ trong danh sách chặn. DNS chập chờn thì chỉ cảnh báo, không chặn.
+
+### 9.5 Huỷ nhận một chạm (RFC 8058)
+
+Thư P2 mang header `List-Unsubscribe` + `List-Unsubscribe-Post` (cần
+`API_PUBLIC_URL`). Gmail hiện nút "Huỷ đăng ký" cạnh tên người gửi — người nhận bấm
+nút đó thay vì "Báo cáo spam". Link mở bằng trình duyệt chỉ hiện trang xác nhận,
+không huỷ ngay (trình quét link của hộp thư tự mở mọi link trong thư).
+
+---
+
+## 10. Nguồn tham khảo
 
 - [Brevo — SMTP relay integration](https://developers.brevo.com/docs/smtp-integration)
 - [Brevo — Send transactional emails using Brevo SMTP](https://help.brevo.com/hc/en-us/articles/7924908994450-Send-transactional-emails-using-Brevo-SMTP)

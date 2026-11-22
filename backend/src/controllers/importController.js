@@ -7,6 +7,9 @@ const emailService = require('../services/emailService');
 const { frontendOrigin } = require('../utils/frontendUrl');
 const { logAdminAction } = require('../services/auditLogService');
 const { generatePassword } = require('../utils/passwordGenerator');
+const hygiene = require('../services/mail/hygiene');
+const governor = require('../services/mail/governor');
+const { INVITE_MAX_SENDS, INVITE_RESEND_GAP_MS } = require('../services/mail/policy');
 const {
   parseMoney,
   parseSalaryRange,
@@ -36,6 +39,40 @@ const {
 const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
 
 /**
+ * Lọc danh sách trước khi import (Pre-Flight Hygiene) — danh sách import là danh
+ * sách lạnh, mỗi địa chỉ hỏng là một hard bounce kéo uy tín tên miền xuống:
+ *   1. cú pháp + tên miền gõ nhầm (gmial.com, gmai.com...) → loại;
+ *   2. tên miền không có bản ghi MX → loại (DNS chập chờn thì chỉ cảnh báo);
+ *   3. địa chỉ đã nằm trong danh sách chặn (từng hard bounce/báo spam) → bỏ qua.
+ * Kiểm tra MX và danh sách chặn làm MỘT lượt cho cả file trước vòng lặp.
+ */
+const preflight = async (rows) => {
+  const emails = rows.map((r) => hygiene.normalizeEmail(r.email)).filter((e) => !hygiene.syntaxProblem(e));
+  const [domains, blocked] = await Promise.all([
+    hygiene.checkDomains(emails),
+    governor.suppressedAmong(emails),
+  ]);
+  return {
+    /** @returns {{fail?: string, skip?: string, warn?: string}} */
+    check(email) {
+      const syntax = hygiene.syntaxProblem(email);
+      if (syntax) return { fail: syntax };
+      const mx = domains.get(hygiene.domainOf(email));
+      if (mx && !mx.ok) return { fail: mx.reason };
+      if (blocked.has(email)) {
+        return { skip: `Địa chỉ nằm trong danh sách chặn (${blocked.get(email)}) — gửi tiếp sẽ hại uy tín tên miền` };
+      }
+      if (mx?.uncertain) return { warn: mx.reason };
+      return {};
+    },
+  };
+};
+
+/** Đã gửi bao nhiêu thư mời (tài khoản gửi trước khi có bộ đếm thì tính từ trạng thái). */
+const invitesSent = (user) =>
+  Math.max(user.welcomeEmailSendCount || 0, user.welcomeEmailSentAt || user.welcomeEmailStatus === 'sent' ? 1 : 0);
+
+/**
  * Tài khoản đã có trong hệ thống, admin bật gửi tới email trường: gửi bù hay bỏ qua?
  *
  * Các đợt import trước chỉ gửi tới email cá nhân. Nay đối chiếu từng dòng với
@@ -60,6 +97,9 @@ const decideSchoolResend = (user, schoolEmail) => {
   }
   if (schoolEmail === String(user.email || '').toLowerCase()) {
     return { skip: 'Email đăng nhập đã chính là email trường' };
+  }
+  if (invitesSent(user) >= INVITE_MAX_SENDS) {
+    return { skip: `Đã gửi đủ ${INVITE_MAX_SENDS} thư (1 thư mời + 1 thư nhắc) — không gửi thêm` };
   }
   if (user.welcomeEmailStatus === 'pending') {
     if (user.welcomeEmailTo === 'school' || user.welcomeEmailTo === 'both') {
@@ -123,6 +163,9 @@ const importUsers = async (req, res) => {
     const warnings = [];
     const seenEmails = new Set();
     const seenStudentIds = new Set();
+    const hygieneCheck = await preflight(parsed.rows);
+    // Mỗi file một mã lô: breaker dừng riêng lô sinh nhiều hard bounce
+    const importBatchId = apply ? hygiene.newImportBatchId('stu') : null;
 
     for (const row of parsed.rows) {
       const email = String(row.email || '').toLowerCase().trim();
@@ -137,6 +180,16 @@ const importUsers = async (req, res) => {
         failed.push({ row: row.__row, email: row.email, reason: 'Email không hợp lệ' });
         continue;
       }
+      const hy = hygieneCheck.check(email);
+      if (hy.fail) {
+        failed.push({ row: row.__row, email, reason: hy.fail });
+        continue;
+      }
+      if (hy.skip) {
+        skipped.push({ row: row.__row, email, reason: hy.skip });
+        continue;
+      }
+      if (hy.warn) warnings.push({ row: row.__row, email, reason: hy.warn });
       if (studentId && !isValidStudentId(studentId)) {
         failed.push({ row: row.__row, email, reason: `MSSV "${studentId}" chỉ được gồm chữ và số (4–20 ký tự)` });
         continue;
@@ -188,6 +241,7 @@ const importUsers = async (req, res) => {
                   welcomeEmailStatus: 'pending',
                   welcomeEmailTo: decision.target,
                   welcomeEmailAttempts: 0,
+                  importBatchId,
                 },
                 $unset: { welcomeEmailError: '' },
               },
@@ -243,6 +297,7 @@ const importUsers = async (req, res) => {
           welcomeEmailStatus: 'pending',
           welcomeEmailTo: sendTo,
           welcomeEmailAttempts: 0,
+          importBatchId,
         });
 
         created.push({ row: row.__row, email, fullName: row.fullName, sendTo });
@@ -267,6 +322,7 @@ const importUsers = async (req, res) => {
           skipped: skipped.length,
           failed: failed.length,
           sendSchoolEmail,
+          importBatchId,
         },
       });
     }
@@ -278,7 +334,7 @@ const importUsers = async (req, res) => {
     return res.json({
       message: apply
         ? `Đã tạo ${created.length} tài khoản${resendText}. Bỏ qua ${skipped.length}, lỗi ${failed.length}. ` +
-          `Email đang được gửi dần ở nền (${queue.batchSize} thư mỗi 20 giây).`
+          `Thư mời gửi dần ở nền (tối đa ${queue.hourlyCap} thư/giờ, ${queue.dailyCap} lượt hôm nay). Mã lô: ${importBatchId}.`
         : `Xem trước: sẽ tạo ${created.length} tài khoản${resendText}, bỏ qua ${skipped.length}, lỗi ${failed.length}.`,
       data: {
         applied: apply,
@@ -293,6 +349,7 @@ const importUsers = async (req, res) => {
         warnings,
         quotaUnits,
         queue,
+        importBatchId,
       },
     });
   } catch (error) {
@@ -327,7 +384,15 @@ const decideEmployerResend = (user) => {
   if (user.welcomeEmailStatus === 'failed') {
     return { label: 'Thư mời gửi hỏng — xếp lại hàng đợi' };
   }
-  return { label: 'Đã gửi thư mời nhưng chưa đăng nhập lần nào — gửi lại' };
+  // Tối đa 1 thư mời + 1 thư nhắc, thư nhắc cách thư trước ít nhất 7 ngày:
+  // người không mở thư mời thì gửi dồn thêm chỉ tổ bị bấm "Báo cáo spam".
+  if (invitesSent(user) >= INVITE_MAX_SENDS) {
+    return { skip: `Đã gửi đủ ${INVITE_MAX_SENDS} thư (1 thư mời + 1 thư nhắc) — không gửi thêm` };
+  }
+  if (user.welcomeEmailSentAt && Date.now() - new Date(user.welcomeEmailSentAt) < INVITE_RESEND_GAP_MS) {
+    return { skip: 'Thư mời vừa gửi chưa đủ 7 ngày — chờ rồi mới gửi thư nhắc' };
+  }
+  return { label: 'Đã gửi thư mời nhưng chưa đăng nhập lần nào — gửi thư nhắc' };
 };
 
 /**
@@ -375,7 +440,10 @@ const importEmployers = async (req, res) => {
     const requeued = [];
     const skipped = [];
     const failed = [];
+    const warnings = [];
     const seenEmails = new Set();
+    const hygieneCheck = await preflight(parsed.rows);
+    const importBatchId = apply ? hygiene.newImportBatchId('emp') : null;
 
     for (const row of parsed.rows) {
       const email = String(row.email || '').toLowerCase().trim();
@@ -389,6 +457,16 @@ const importEmployers = async (req, res) => {
         failed.push({ row: row.__row, email: row.email, reason: 'Email không hợp lệ' });
         continue;
       }
+      const hy = hygieneCheck.check(email);
+      if (hy.fail) {
+        failed.push({ row: row.__row, email, reason: hy.fail });
+        continue;
+      }
+      if (hy.skip) {
+        skipped.push({ row: row.__row, email, reason: hy.skip });
+        continue;
+      }
+      if (hy.warn) warnings.push({ row: row.__row, email, reason: hy.warn });
       // Email vừa là khoá chính vừa là tên đăng nhập: trùng trong cùng một file
       // thì dòng sau không tạo thêm được gì, chỉ làm tưởng đã tạo hai tài khoản.
       if (seenEmails.has(email)) {
@@ -425,6 +503,7 @@ const importEmployers = async (req, res) => {
                   welcomeEmailStatus: 'pending',
                   welcomeEmailTo: 'personal',
                   welcomeEmailAttempts: 0,
+                  importBatchId,
                 },
                 $unset: { welcomeEmailError: '' },
               },
@@ -484,6 +563,7 @@ const importEmployers = async (req, res) => {
           welcomeEmailStatus: 'pending',
           welcomeEmailTo: 'personal',
           welcomeEmailAttempts: 0,
+          importBatchId,
         });
 
         // Hồ sơ công ty phải có ngay: tên công ty hiện trên mọi tin tuyển dụng và
@@ -513,6 +593,7 @@ const importEmployers = async (req, res) => {
           requeued: requeued.length,
           skipped: skipped.length,
           failed: failed.length,
+          importBatchId,
         },
       });
     }
@@ -525,7 +606,7 @@ const importEmployers = async (req, res) => {
         ? `Đã tạo ${created.length} tài khoản doanh nghiệp` +
           (requeued.length ? `, gửi lại thư mời cho ${requeued.length} doanh nghiệp` : '') +
           `. Bỏ qua ${skipped.length}, lỗi ${failed.length}. ` +
-          `Thư mời đang được gửi dần ở nền (${queue.batchSize} thư mỗi 20 giây).`
+          `Thư mời gửi dần ở nền (tối đa ${queue.hourlyCap} thư/giờ, ${queue.dailyCap} lượt hôm nay). Mã lô: ${importBatchId}.`
         : `Xem trước: sẽ tạo ${created.length} tài khoản doanh nghiệp` +
           (requeued.length ? `, gửi lại ${requeued.length} thư mời` : '') +
           `, bỏ qua ${skipped.length}, lỗi ${failed.length}.`,
@@ -537,10 +618,11 @@ const importEmployers = async (req, res) => {
         requeued,
         skipped,
         failed,
-        warnings: [],
+        warnings,
         // Thư mời doanh nghiệp chỉ gửi tới một địa chỉ nên mỗi tài khoản tốn 1 lượt
         quotaUnits: created.length + requeued.length,
         queue,
+        importBatchId,
       },
     });
   } catch (error) {

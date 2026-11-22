@@ -71,6 +71,21 @@ const userSchema = new mongoose.Schema(
     // hai địa chỉ tốn 2 lượt, và phải biết ai đã nhận ở email trường để không gửi lại.
     welcomeEmailSentAt: { type: Date }, // lần cuối gửi thành công tới email đăng nhập
     schoolEmailSentAt: { type: Date },  // lần cuối gửi thành công tới email trường
+    // Số thư mời đã gửi thành công. Tối đa 1 thư mời + 1 thư nhắc (cách nhau ≥ 7
+    // ngày): gửi thêm nữa cho người không mở thư chỉ tổ bị bấm "Báo cáo spam".
+    welcomeEmailSendCount: { type: Number, default: 0 },
+    // Lô import (mỗi file một mã). Circuit Breaker dừng riêng lô sinh nhiều hard
+    // bounce mà không ảnh hưởng các lô sạch — xem services/mail/governor.js.
+    importBatchId: { type: String, index: true },
+
+    // Lần cuối dùng hệ thống (đăng nhập, hoặc gọi API khi đã đăng nhập — cập nhật
+    // tối đa mỗi giờ một lần). Thư gợi ý (làn P2) chỉ gửi cho người còn hoạt động
+    // trong 14–30 ngày gần nhất: gửi cho người đã bỏ đi là cách nhanh nhất để bị
+    // bấm "Báo cáo spam".
+    lastActiveAt: { type: Date, index: true },
+    // Lần cuối nhận thư gợi ý việc làm. Cron xếp người lâu chưa nhận lên trước,
+    // nên khi trần P2 không đủ cho tất cả, mỗi tuần một nhóm khác được nhận.
+    lastSuggestionEmailAt: { type: Date },
 
     isEmailSubscribed: {
       type: Boolean,

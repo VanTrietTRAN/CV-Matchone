@@ -1,6 +1,18 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+/**
+ * Ghi mốc "còn hoạt động" — thư gợi ý (làn P2) chỉ gửi cho người dùng có mốc này
+ * trong 14–30 ngày gần nhất. Cookie đăng nhập sống 7 ngày nên chỉ ghi lúc login
+ * là không đủ; ghi ở đây, nhưng tối đa mỗi giờ một lần và không chờ kết quả.
+ */
+const ACTIVE_TOUCH_MS = 60 * 60 * 1000;
+const touchLastActive = (user) => {
+    const last = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
+    if (Date.now() - last < ACTIVE_TOUCH_MS) return;
+    User.updateOne({ _id: user._id }, { $set: { lastActiveAt: new Date() } }).catch(() => {});
+};
+
 const protect = async (req, res, next) => {
     let token;
 
@@ -26,6 +38,7 @@ const protect = async (req, res, next) => {
             return res.status(401).json({ message: 'Tài khoản không tồn tại' });
         }
 
+        touchLastActive(req.user);
         return next();
     } catch (error) {
         return res.status(401).json({ message: 'Không đủ quyền truy cập, token không hợp lệ' });
@@ -70,4 +83,4 @@ const authorize = (...roles) => {
     };
 };
 
-module.exports = { protect, optionalAuth, authorize };
+module.exports = { protect, optionalAuth, authorize, touchLastActive };

@@ -2,6 +2,7 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { frontendOrigin } = require('../utils/frontendUrl');
+const { touchLastActive } = require('../middleware/authMiddleware');
 
 // ─── Helper: tạo token và gắn vào HTTPOnly Cookie ─────────────────────────────
 // Thuộc tính cookie phiên đăng nhập, dùng chung cho cả lúc SET và lúc XOÁ.
@@ -56,6 +57,8 @@ const sendTokenCookie = (user, statusCode, res, extraJson = {}) => {
         ...buildCookieOptions(),
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
     });
+    // Mốc hoạt động — điều kiện nhận thư gợi ý (làn P2)
+    touchLastActive(user);
 
     return res.status(statusCode).json({
         _id: user._id,
@@ -327,6 +330,7 @@ const googleCallback = async (req, res) => {
         };
         if (process.env.COOKIE_DOMAIN) cookieOptions.domain = process.env.COOKIE_DOMAIN;
         res.cookie('token', token, cookieOptions);
+        touchLastActive(user);
 
         // Redirect về client với thông tin role để frontend biết cần redirect đâu
         const redirectTarget = user.role === 'employer' ? '/employer/dashboard' : '/candidate/dashboard';
@@ -448,6 +452,7 @@ const facebookCallback = async (req, res) => {
         };
         if (process.env.COOKIE_DOMAIN) cookieOptions.domain = process.env.COOKIE_DOMAIN;
         res.cookie('token', token, cookieOptions);
+        touchLastActive(user);
 
         const redirectTarget = user.role === 'employer' ? '/employer/dashboard' : '/candidate/dashboard';
         res.redirect(`${clientOrigin}${redirectTarget}?oauth=success`);

@@ -58,8 +58,54 @@ const ensureCandidateNotif = async (candidate, cv, job, companyName, score, keyw
   });
 };
 
+// ─── Ngân sách thư gợi ý (làn P2) cho một lượt cron ──────────────────────────
+//
+// Cron không gửi thư nữa mà xếp vào outbox; worker gửi dần trong khung giờ và
+// trần của làn P2 (xem services/mail/policy.js). Ở đây chặn hai thứ:
+//   - chỉ xếp thư cho người còn hoạt động (đăng nhập trong 14–30 ngày gần nhất);
+//   - không xếp quá sức gửi của 48 giờ — phần còn lại để lượt sau. Danh sách
+//     duyệt theo lastSuggestionEmailAt tăng dần, nên lượt sau tới nhóm khác.
+const mailOutbox = require("./services/mail/outbox");
+const mailGovernor = require("./services/mail/governor");
+
+const createMailBudget = async () => {
+  const [budget, activeDays] = await Promise.all([
+    mailOutbox.p2Budget(),
+    mailGovernor.activeWindowDays(),
+  ]);
+  return {
+    left: budget,
+    activeSince: new Date(Date.now() - activeDays * 24 * 60 * 60 * 1000),
+    activeDays,
+    queued: 0,
+    skippedInactive: 0,
+    skippedBudget: 0,
+  };
+};
+
+/** Người này có được xếp thư P2 ở lượt này không? Đếm lý do để log cho rõ. */
+const canQueueFor = (mail, user) => {
+  if (!user?.lastActiveAt || new Date(user.lastActiveAt) < mail.activeSince) {
+    mail.skippedInactive += 1;
+    return false;
+  }
+  if (mail.left <= 0) {
+    mail.skippedBudget += 1;
+    return false;
+  }
+  return true;
+};
+
+const noteQueued = (mail, result) => {
+  if (result?.queued) {
+    mail.left -= 1;
+    mail.queued += 1;
+  }
+  return Boolean(result?.queued);
+};
+
 // Returns true if candidate has active alerts (caller should skip CV fallback)
-const runAlertMatching = async (candidate, cv, openJobs) => {
+const runAlertMatching = async (candidate, cv, openJobs, mail) => {
   const alerts = await JobAlert.find({ userId: candidate._id, isActive: true });
   if (!alerts.length) return false;
 
@@ -107,12 +153,17 @@ const runAlertMatching = async (candidate, cv, openJobs) => {
       );
     }
 
-    if (matchedJobs.length > 0) {
+    if (matchedJobs.length > 0 && canQueueFor(mail, candidate)) {
       matchedJobs.sort((a, b) => b.finalScore - a.finalScore);
-      await emailService.sendJobAlertEmail(
-        { email: alert.email || candidate.email, fullName: cv?.fullName },
-        { keyword: alert.keyword, location: alert.location, frequency: alert.frequency },
-        matchedJobs
+      noteQueued(
+        mail,
+        await emailService.queueJobAlertEmail({
+          target: { email: alert.email || candidate.email, fullName: cv?.fullName },
+          alert: { keyword: alert.keyword, location: alert.location, frequency: alert.frequency },
+          jobs: matchedJobs,
+          userId: candidate._id,
+          alertId: alert._id,
+        }),
       );
     }
 
@@ -124,7 +175,7 @@ const runAlertMatching = async (candidate, cv, openJobs) => {
 };
 
 // Fallback when candidate has no JobAlerts
-const runCvMatching = async (candidate, cv, openJobs) => {
+const runCvMatching = async (candidate, cv, openJobs, mail) => {
   if (!cv || !cv.isLookingForJob || !cv.embedding || cv.embedding.length === 0) {
     return;
   }
@@ -189,11 +240,15 @@ const runCvMatching = async (candidate, cv, openJobs) => {
     }
   }
 
-  if (matchedJobs.length > 0) {
+  if (matchedJobs.length > 0 && canQueueFor(mail, candidate)) {
     matchedJobs.sort((a, b) => b.previewScore - a.previewScore);
-    await emailService.sendJobMatchEmail(
-      { email: candidate.email, fullName: cv.fullName },
-      matchedJobs
+    noteQueued(
+      mail,
+      await emailService.queueJobMatchEmail({
+        user: { email: candidate.email, fullName: cv.fullName },
+        userId: candidate._id,
+        jobs: matchedJobs,
+      }),
     );
   }
 };
@@ -280,11 +335,12 @@ const runEmployerDigest = async () => {
   }
 
   const now = new Date();
+  const mail = await createMailBudget();
   let sentCount = 0;
   let skippedByFrequency = 0;
   for (const [employerId, allApplicants] of byEmployer) {
     const employer = await User.findById(employerId).select(
-      "email status isDeleted isEmailSubscribed minMatchScore jobMatchFrequency employerDigestLimit lastDigestEmailAt"
+      "email status isDeleted isEmailSubscribed minMatchScore jobMatchFrequency employerDigestLimit lastDigestEmailAt lastActiveAt"
     );
     // Tôn trọng đúng các điều kiện như email ứng viên: còn hoạt động, chưa xoá,
     // và chưa tắt nhận email
@@ -304,6 +360,7 @@ const runEmployerDigest = async () => {
       .filter((a) => a.score >= ownThreshold && new Date(a.appliedAtRaw) >= windowStart)
       .sort((a, b) => b.score - a.score);
     if (!applicants.length) continue;
+    if (!canQueueFor(mail, employer)) continue;
 
     // 0 nghĩa là không giới hạn
     const limit = Number(employer.employerDigestLimit) || 0;
@@ -311,26 +368,30 @@ const runEmployerDigest = async () => {
 
     const profile = await CompanyProfile.findOne({ userId: employerId }).select("companyName");
 
-    const result = await emailService.sendEmployerDigestEmail({
+    // Xếp vào outbox P2. Mốc lastDigestEmailAt (cho tần suất "hằng tuần") do
+    // worker ghi lúc thư thật sự đi — xem services/mail/outboxWorker.js.
+    const result = await emailService.queueEmployerDigestEmail({
       employer: { email: employer.email, companyName: profile?.companyName || "" },
       applicants: finalList,
       threshold: ownThreshold,
+      userId: employer._id,
     });
-    if (result?.sent) {
-      sentCount += 1;
-      // Mốc để tần suất "hằng tuần" đếm được kỳ kế tiếp
-      await User.updateOne({ _id: employer._id }, { $set: { lastDigestEmailAt: now } });
-    }
+    if (noteQueued(mail, result)) sentCount += 1;
   }
 
   console.log(
-    `[Cron/Employer] Xong: ${sentCount}/${byEmployer.size} doanh nghiệp nhận thư, ` +
+    `[Cron/Employer] Xong: xếp ${sentCount}/${byEmployer.size} thư tổng hợp vào hàng đợi, ` +
       `${applications.length} hồ sơ đạt ngưỡng ${threshold}%` +
       (skippedByFrequency ? `, ${skippedByFrequency} bỏ qua theo tần suất đã chọn` : '') +
+      (mail.skippedInactive ? `, ${mail.skippedInactive} không hoạt động ${mail.activeDays} ngày` : '') +
+      (mail.skippedBudget ? `, ${mail.skippedBudget} để lượt sau (hết ngân sách P2)` : '') +
       '.'
   );
   return {
     employersNotified: sentCount,
+    emailsQueued: mail.queued,
+    skippedInactive: mail.skippedInactive,
+    skippedBudget: mail.skippedBudget,
     employersMatched: byEmployer.size,
     skippedByFrequency,
     applicationsConsidered: applications.length,
@@ -386,14 +447,18 @@ const runJobExpiryReminder = async () => {
     });
   }
 
+  const mail = await createMailBudget();
   let sentCount = 0;
   for (const [employerId, list] of byEmployer) {
     const employer = await User.findById(employerId).select(
-      "email status isDeleted jobExpiryReminder",
+      "email status isDeleted jobExpiryReminder lastActiveAt",
     );
     if (!employer || employer.status !== "active" || employer.isDeleted) continue;
     // Mặc định bật; chỉ bỏ qua khi doanh nghiệp tắt tường minh
     if (employer.jobExpiryReminder === false) continue;
+    // Không đánh dấu đã nhắc: người bỏ qua vì không hoạt động / hết ngân sách
+    // vẫn được xét lại ở lượt sau.
+    if (!canQueueFor(mail, employer)) continue;
 
     // Số hồ sơ đã nhận, để doanh nghiệp cân nhắc có đáng gia hạn không
     for (const item of list) {
@@ -401,15 +466,16 @@ const runJobExpiryReminder = async () => {
     }
 
     const profile = await CompanyProfile.findOne({ userId: employerId }).select("companyName");
-    const result = await emailService.sendJobExpiringEmail({
+    const result = await emailService.queueJobExpiringEmail({
       employer: { email: employer.email, companyName: profile?.companyName || "" },
       jobs: list,
       days,
+      userId: employer._id,
     });
 
-    if (result?.sent) {
+    if (noteQueued(mail, result)) {
       sentCount += 1;
-      // Đánh dấu đã nhắc để không gửi lại mỗi ngày cho cùng một tin
+      // Đánh dấu đã nhắc ngay lúc xếp hàng để lượt sau không xếp trùng
       await Job.updateMany(
         { _id: { $in: list.map((j) => j._id) } },
         { $set: { lastExpiryReminderAt: new Date() } },
@@ -418,7 +484,10 @@ const runJobExpiryReminder = async () => {
   }
 
   console.log(
-    `[Cron/Expiry] Xong: ${sentCount}/${byEmployer.size} doanh nghiệp nhận thư, ${jobs.length} tin sắp hết hạn.`,
+    `[Cron/Expiry] Xong: xếp ${sentCount}/${byEmployer.size} thư nhắc hạn vào hàng đợi, ${jobs.length} tin sắp hết hạn` +
+      (mail.skippedInactive ? `, ${mail.skippedInactive} doanh nghiệp không hoạt động ${mail.activeDays} ngày` : '') +
+      (mail.skippedBudget ? `, ${mail.skippedBudget} để lượt sau` : '') +
+      '.',
   );
   return { employersNotified: sentCount, jobsFlagged: jobs.length, warningDays: days };
 };
@@ -430,7 +499,6 @@ const runMatchingProcess = async () => {
   );
   
   let candidatesProcessed = 0;
-  let emailsSent = 0; // matching logs will count email sends or approximate them
 
   try {
     const openJobs = await Job.find({ status: "open" }).populate(
@@ -453,13 +521,19 @@ const runMatchingProcess = async () => {
     //   - emailVerified === false: chưa bấm xác thực nên login còn chặn, gửi thư
     //     gợi ý việc làm tới đó là gửi vào một địa chỉ chưa ai xác nhận là thật.
     // Đều dùng $ne để tài khoản cũ (trường undefined) vẫn nhận thư như trước.
+    //
+    // Cohort rotation: người lâu chưa nhận thư gợi ý xếp trước. Ngân sách P2 của
+    // lượt này hết thì những người sau vẫn có thông báo trong ứng dụng, chỉ thư
+    // để lượt sau — và lượt sau họ đứng đầu danh sách.
     const candidates = await User.find({
       role: "candidate",
       isEmailSubscribed: { $ne: false },
       status: { $ne: "banned" },
       isDeleted: { $ne: true },
       emailVerified: { $ne: false },
-    });
+    }).sort({ lastSuggestionEmailAt: 1, _id: 1 });
+
+    const mail = await createMailBudget();
 
     for (const candidate of candidates) {
       let cv = await CvProfile.findOne({
@@ -473,17 +547,25 @@ const runMatchingProcess = async () => {
       }
 
       // Check matching
-      const handledByAlerts = await runAlertMatching(candidate, cv, openJobs);
+      const handledByAlerts = await runAlertMatching(candidate, cv, openJobs, mail);
       if (!handledByAlerts) {
-        await runCvMatching(candidate, cv, openJobs);
+        await runCvMatching(candidate, cv, openJobs, mail);
       }
       candidatesProcessed++;
     }
 
-    console.log(`[Cron/Trigger] Đã xử lý xong: ${candidatesProcessed} ứng viên.`);
+    console.log(
+      `[Cron/Trigger] Đã xử lý xong: ${candidatesProcessed} ứng viên, xếp ${mail.queued} thư gợi ý vào hàng đợi` +
+        (mail.skippedInactive ? `, ${mail.skippedInactive} bỏ qua vì không hoạt động ${mail.activeDays} ngày` : '') +
+        (mail.skippedBudget ? `, ${mail.skippedBudget} để lượt sau (hết ngân sách P2)` : '') +
+        '.'
+    );
     return {
       openJobsCount: openJobs.length,
       candidatesProcessed,
+      emailsQueued: mail.queued,
+      skippedInactive: mail.skippedInactive,
+      skippedBudget: mail.skippedBudget,
     };
   } catch (error) {
     console.error("[Cron/Trigger] Lỗi khi chạy tác vụ matching:", error.message);

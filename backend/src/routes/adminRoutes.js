@@ -82,4 +82,13 @@ router.get('/system/email-settings', getEmailSettings);
 router.put('/system/email-settings', updateEmailSettings);
 router.post('/trigger-matching', triggerMatchingJob);
 
+// ─── Đường gửi mail: 3 làn, warm-up, Circuit Breaker ─────────────────────────
+const emailHealth = require('../controllers/emailHealthController');
+router.get('/system/email-health', emailHealth.getEmailHealth);
+router.post('/system/email-health/reset-breaker', emailHealth.resetBreaker);
+router.put('/system/email-health/warmup', emailHealth.setWarmupStage);
+router.post('/system/email-health/batches/:batchId/resume', emailHealth.resumeBatch);
+router.get('/system/email-health/suppression', emailHealth.listSuppression);
+router.delete('/system/email-health/suppression/:email', emailHealth.removeSuppression);
+
 module.exports = router;

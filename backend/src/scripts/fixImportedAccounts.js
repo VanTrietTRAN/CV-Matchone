@@ -51,7 +51,7 @@ async function main() {
   if (total > 5) console.log(`   ... và ${total - 5} tài khoản nữa`);
 
   const { DAILY_CAP } = require('../services/welcomeEmailWorker');
-  console.log(`\nWorker gửi tối đa ${DAILY_CAP} thư/ngày (giới hạn của gói Brevo).`);
+  console.log(`\nLàn thư mời (P1) gửi tối đa ${DAILY_CAP} thư/ngày khi đã qua warm-up (ít hơn trong 3 tuần đầu).`);
   console.log(`Ước tính cần ${Math.ceil(total / DAILY_CAP)} ngày để gửi hết.`);
 
   if (!APPLY) {

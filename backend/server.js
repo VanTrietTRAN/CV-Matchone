@@ -44,6 +44,15 @@ const uploadLimiter = rateLimit({
   message: { message: 'Too many uploads, please try again later.' },
 });
 
+// ─── Webhook Brevo & huỷ nhận thư một chạm ───────────────────────────────────
+// Đặt TRƯỚC CORS: hai đường này được gọi từ máy chủ Brevo/Gmail và từ chính
+// trang xác nhận do backend trả về — không origin nào trong số đó nằm trong
+// allowlist CORS, và CORS chặn là breaker mất tín hiệu, người dùng không huỷ được.
+const emailWebhook = require("./src/controllers/emailWebhookController");
+app.post("/webhooks/brevo", express.json({ limit: "1mb" }), emailWebhook.brevoWebhook);
+app.get("/api/email/unsubscribe", emailWebhook.unsubscribePage);
+app.post("/api/email/unsubscribe", express.urlencoded({ extended: false }), emailWebhook.unsubscribe);
+
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 // Allowlist: hỗ trợ nhiều origin cách nhau bởi dấu phẩy qua biến môi trường
 const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:3000")
@@ -205,6 +214,10 @@ const server = app.listen(PORT, () => {
   // Worker gửi email chào mừng cho tài khoản do admin import
   const { initWelcomeEmailWorker } = require("./src/services/welcomeEmailWorker");
   initWelcomeEmailWorker();
+
+  // Worker gửi thư gợi ý/tổng hợp (làn P2) từ outbox theo nhịp của governor
+  const { initOutboxWorker } = require("./src/services/mail/outboxWorker");
+  initOutboxWorker();
 });
 
 // ─── Graceful Shutdown ────────────────────────────────────────────────────────

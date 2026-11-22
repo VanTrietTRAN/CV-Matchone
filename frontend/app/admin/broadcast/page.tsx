@@ -23,6 +23,8 @@ type BroadcastItem = {
     totalTargets: number
     sentCount: number
     failCount: number
+    emailQueued?: number
+    emailSkipped?: number
   }
   createdAdminId?: {
     fullName: string
@@ -194,7 +196,7 @@ export default function BroadcastPage() {
                 className="border-slate-700 data-[state=checked]:bg-blue-600"
               />
               <label htmlFor="sendEmail" className="text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-1.5">
-                <Mail className="w-4 h-4 text-brand-400" /> Gửi Email trực tiếp (Resend)
+                <Mail className="w-4 h-4 text-brand-400" /> Gửi Email (hàng đợi P2: người hoạt động gần đây, 09:00–17:00)
               </label>
             </div>
           </div>
@@ -294,6 +296,13 @@ export default function BroadcastPage() {
                             <span className="text-slate-500"> / {item.stats?.totalTargets || 0}</span>
                             {item.stats?.failCount > 0 && (
                               <span className="text-red-400 text-[11px] block">({item.stats.failCount} lỗi)</span>
+                            )}
+                            {/* Email đi qua hàng đợi P2: chỉ người hoạt động gần đây, không quá sức gửi 48h */}
+                            {item.sendEmail && item.stats?.emailQueued !== undefined && (
+                              <span className="text-slate-500 text-[11px] block">
+                                Email: xếp {item.stats.emailQueued}
+                                {item.stats.emailSkipped ? `, bỏ qua ${item.stats.emailSkipped}` : ''}
+                              </span>
                             )}
                           </td>
 

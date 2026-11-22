@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { translateCronToVietnamese, isTooFrequentCron } from '@/lib/cron-translator'
+import EmailHealthPanel from '@/components/admin/EmailHealthPanel'
 
 type SystemInfo = {
   server: {
@@ -51,6 +52,7 @@ type EmailConfig = {
   user: string
   keyPrefix: string
   sender: string
+  securitySender?: string
   replyTo?: string
   problems: string[]
   warnings: string[]
@@ -299,6 +301,9 @@ export default function AdminSystemPage() {
                   <InfoRow label="SMTP login" value={info.email.user || '(chưa đặt)'} />
                   <InfoRow label="SMTP key" value={info.email.keyPrefix || '(chưa đặt)'} />
                   <InfoRow label="Địa chỉ gửi" value={info.email.sender} />
+                  {info.email.securitySender && info.email.securitySender !== info.email.sender && (
+                    <InfoRow label="Gửi thư bảo mật (P0)" value={info.email.securitySender} />
+                  )}
                   <InfoRow label="Nhận trả lời" value={info.email.replyTo || '(chưa đặt)'} />
 
                   {info.email.problems.map((p) => (
@@ -474,6 +479,9 @@ export default function AdminSystemPage() {
         ) : (
           <p className="text-slate-500">Không tải được thông tin hệ thống.</p>
         )}
+
+        {/* 3 làn ưu tiên, warm-up và Circuit Breaker của đường gửi mail */}
+        <EmailHealthPanel />
       </div>
     </AdminLayout>
   )

@@ -3,71 +3,41 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const CompanyProfile = require('../models/CompanyProfile');
 const emailService = require('./emailService');
+const governor = require('./mail/governor');
+const policy = require('./mail/policy');
 const { generatePassword } = require('../utils/passwordGenerator');
 const { schoolEmailOf, SCHOOL_EMAIL_DOMAIN } = require('../utils/schoolEmail');
 
 /**
- * Gửi email chào mừng cho tài khoản sinh viên do admin import.
+ * Gửi thư mời (kèm mật khẩu tạm) cho tài khoản do admin import — làn P1.
  *
  * Vì sao cần worker riêng thay vì gửi thẳng trong request import:
  *
  *   Lần import thật đầu tiên có 297 sinh viên. Email gửi đồng bộ trong vòng lặp,
  *   mỗi dòng mất ~6 giây, tổng cộng khoảng 30 phút — trong khi proxy trước
- *   backend ngắt kết nối sau vài phút. Admin thấy trang treo rồi báo lỗi, không
- *   biết đã tạo được bao nhiêu tài khoản; server thì vẫn lặng lẽ chạy tiếp.
+ *   backend ngắt kết nối sau vài phút.
  *
- * Nay import trả về ngay sau khi tạo tài khoản, còn việc gửi thư giao cho đây.
+ * Vì sao không còn "15 thư mỗi 20 giây, tối đa 300/ngày":
+ *
+ *   Chạy kịch trần 300 thư/ngày nhiều ngày liền bằng danh sách lạnh là nguyên
+ *   nhân thư rơi vào Spam — kéo theo cả thư đổi mật khẩu. Nay worker chỉ là
+ *   người nhặt việc; nhịp gửi do governor quyết: tối đa 100 lượt/ngày (thấp hơn
+ *   trong 3 tuần warm-up), 20 thư/giờ, giãn 60–90 giây ngẫu nhiên, nghỉ Chủ nhật,
+ *   và dừng hẳn khi Circuit Breaker ngắt. Xem services/mail/policy.js.
  *
  * Mật khẩu tạm sinh NGAY LÚC GỬI chứ không lưu sẵn: database không bao giờ chứa
- * mật khẩu dạng rõ, và mỗi lần thử lại là một mật khẩu mới nên không có chuyện
- * gửi đi một mật khẩu đã lộ ở lần thất bại trước.
+ * mật khẩu dạng rõ, và mỗi lần thử lại là một mật khẩu mới.
  */
 
-// Gói Brevo Free giới hạn 300 email/ngày. Gửi dồn dập vừa đụng trần vừa dễ bị
-// đánh giá là spam, nên đi theo nhịp: mỗi lượt một nhúm nhỏ, cách nhau 20 giây.
-const BATCH_SIZE = 15;
 const MAX_ATTEMPTS = 3;
-const SCHEDULE = '*/20 * * * * *'; // mỗi 20 giây
+const SCHEDULE = '*/20 * * * * *'; // mỗi 20 giây nhìn hàng đợi một lần
+const PICK = 3; // số hồ sơ nhặt mỗi lượt; thường chỉ gửi được 1 vì nhịp 60–90 giây
 
-// Trần gửi mỗi ngày cho riêng loại thư này, đặt bằng đúng hạn mức của gói Brevo
-// Free (300 email/ngày) theo yêu cầu — tức dùng hết quota cho thư chào mừng.
-//
-// Đánh đổi: hôm nào hàng đợi chạm 300 thì mã xác thực đăng ký, mã đặt lại mật
-// khẩu và hai email tổng hợp đều không gửi được nữa cho tới nửa đêm. Muốn chừa
-// lại một phần thì đặt biến WELCOME_EMAIL_DAILY_CAP nhỏ hơn (ví dụ 250).
-//
-// Đặt cao hơn 300 không có tác dụng: Brevo từ chối ngay, và mỗi lần bị từ chối
-// vẫn tính là một lần thử của tài khoản đó nên chỉ tổ đốt lượt thử.
-const BREVO_FREE_DAILY_LIMIT = 300;
-const DAILY_CAP = Math.min(
-  Number(process.env.WELCOME_EMAIL_DAILY_CAP) || BREVO_FREE_DAILY_LIMIT,
-  BREVO_FREE_DAILY_LIMIT,
-);
+/** Trần đầy đủ của làn P1 khi warm-up xong (100 với gói 300/ngày). */
+const DAILY_CAP = policy.limits().p1;
 
 const SKIP_REASON =
   'Không gửi: sinh viên đã tự đặt mật khẩu trước khi tới lượt — gửi mật khẩu tạm mới sẽ ghi đè mật khẩu đó.';
-
-const startOfToday = () => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  return start;
-};
-
-/**
- * Số lượt gửi đã dùng kể từ 0h hôm nay.
- *
- * Brevo tính hạn mức theo NGƯỜI NHẬN chứ không theo lá thư: một lá gửi cùng lúc
- * tới gmail và email trường là 2 lượt. Đếm theo lá thì hàng đợi tưởng còn quota,
- * gửi tiếp, rồi bị Brevo chặn giữa chừng.
- */
-const sentTodayCount = async () => {
-  const start = startOfToday();
-  const [personal, school] = await Promise.all([
-    User.countDocuments({ welcomeEmailSentAt: { $gte: start } }),
-    User.countDocuments({ schoolEmailSentAt: { $gte: start } }),
-  ]);
-  return personal + school;
-};
 
 /**
  * Hàng đợi này phục vụ cả hai loại tài khoản do admin import: sinh viên (ứng
@@ -94,24 +64,14 @@ const recipientsFor = (user) => {
   return {
     target,
     to: [toPersonal && personal, toSchool && school].filter(Boolean),
-    personal: toPersonal,
-    school: toSchool,
+    personal: toPersonal ? personal : null,
+    school: toSchool ? school : null,
   };
 };
 
-/**
- * Lỗi này là do hệ thống hay do riêng người nhận?
- *
- * Hết quota, mất kết nối, sai thông tin đăng nhập đều sẽ lặp lại y hệt với mọi
- * tài khoản còn trong hàng đợi. Đếm chúng vào lượt thử của từng người là sai —
- * chỉ tổ đẩy cả hàng đợi sang trạng thái failed vì một nguyên nhân duy nhất.
- */
-const SHARED_FAILURE = /quota|limit exceeded|rate limit|535|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|Chưa cấu hình|chưa phải SMTP|giá trị mẫu|too many/i;
-const isSharedFailure = (reason) => SHARED_FAILURE.test(String(reason || ''));
-
 /** Chỉ ghi log mỗi nguyên nhân một lần, tránh đầy log khi hàng đợi lớn. */
 let lastLoggedProblem = null;
-const logConfigProblemOnce = (text) => {
+const logPauseOnce = (text) => {
   if (lastLoggedProblem === text) return;
   lastLoggedProblem = text;
   console.warn(`[WelcomeEmail] Tạm dừng hàng đợi: ${text}`);
@@ -147,21 +107,19 @@ const processBatch = async () => {
   let skipped = 0;
 
   try {
-    // Chưa cấu hình được SMTP thì KHÔNG đụng vào hàng đợi. Nếu cứ chạy, mọi tài
-    // khoản đều hỏng vì cùng một lý do, và sau 3 lượt là cả nghìn tài khoản bị
-    // đánh dấu failed dù bản thân chúng không có gì sai — admin phải bấm gửi lại
-    // toàn bộ. Lỗi cấu hình phải sửa ở cấu hình, không tính vào lượt thử của ai.
+    // Chưa cấu hình được SMTP thì KHÔNG đụng vào hàng đợi: mọi tài khoản sẽ hỏng
+    // vì cùng một lý do, và sau 3 lượt là cả nghìn tài khoản bị đánh dấu failed.
     const cfg = emailService.getEmailConfig();
     if (!cfg.configured) {
-      logConfigProblemOnce(cfg.problems.join(' '));
+      logPauseOnce(cfg.problems.join(' '));
       return { sent: 0, failed: 0, notConfigured: true, problems: cfg.problems };
     }
 
-    let remaining = DAILY_CAP - (await sentTodayCount());
-    if (remaining <= 0) {
-      return { sent: 0, failed: 0, capReached: true, dailyCap: DAILY_CAP };
-    }
+    // Chưa tới nhịp / hết suất / breaker ngắt / ngày nghỉ: khỏi truy vấn hàng đợi
+    const gate = await governor.peek(policy.LANES.P1);
+    if (!gate.ok) return { sent: 0, failed: 0, waiting: gate.reason };
 
+    const paused = await governor.pausedBatchIds();
     const pending = await User.find({
       welcomeEmailStatus: 'pending',
       welcomeEmailAttempts: { $lt: MAX_ATTEMPTS },
@@ -169,19 +127,18 @@ const processBatch = async () => {
       // Admin khoá tài khoản ngay sau khi import (import nhầm danh sách chẳng
       // hạn) thì thư mời kèm mật khẩu tạm không được gửi đi nữa.
       status: { $ne: 'banned' },
+      ...(paused.length ? { importBatchId: { $nin: paused } } : {}),
     })
       .sort({ importedAt: 1 }) // ai được tạo trước thì nhận thư trước
-      .limit(Math.min(BATCH_SIZE, remaining));
+      .limit(PICK);
 
     if (!pending.length) return { sent: 0, failed: 0 };
 
     let stop = null;
 
     for (const user of pending) {
-      // Sinh viên đã tự đặt mật khẩu (đổi ở lần đăng nhập đầu, hoặc qua Quên mật
-      // khẩu) thì tuyệt đối không gửi mật khẩu tạm mới — làm vậy là ghi đè mật
-      // khẩu họ đang dùng. Chuyện này xảy ra được với thư gửi bù tới email trường,
-      // vì người đó đã nhận thư ở gmail và có thể đã đăng nhập từ trước.
+      // Đã tự đặt mật khẩu thì tuyệt đối không gửi mật khẩu tạm mới — làm vậy là
+      // ghi đè mật khẩu họ đang dùng.
       if (user.mustChangePassword !== true) {
         await User.updateOne(
           { _id: user._id },
@@ -206,27 +163,14 @@ const processBatch = async () => {
         continue;
       }
 
-      // Thư gửi cả hai địa chỉ tốn 2 lượt. Không đủ thì để dành sang hôm sau
-      // thay vì gửi thiếu một địa chỉ.
-      if (recipients.to.length > remaining) {
-        stop = { capReached: true, dailyCap: DAILY_CAP };
-        break;
-      }
-
       try {
         const password = generatePassword();
         const hash = await bcrypt.hash(password, await bcrypt.genSalt(10));
-        // Tên và địa chỉ công ty nằm ở CompanyProfile, không ở User — thư mời
-        // doanh nghiệp xưng hô bằng tên công ty nên phải đọc thêm hồ sơ này.
         const company = isEmployerAccount(user)
           ? await CompanyProfile.findOne({ userId: user._id }).select('companyName phone address')
           : null;
 
-        // Gửi TRƯỚC, ghi mật khẩu SAU. Bản cũ làm ngược lại: hễ gửi hỏng — mà hết
-        // quota là chuyện hằng ngày — thì mật khẩu đã bị thay còn thư mới chưa tới.
-        // Với thư gửi bù, đó là người vừa nhận mật khẩu ở gmail bỗng không đăng
-        // nhập được nữa. Nếu gửi xong mà ghi hỏng, tài khoản vẫn 'pending' và lượt
-        // sau gửi lại một mật khẩu mới dùng được — tự lành, chỉ thừa một thư.
+        // Gửi TRƯỚC, ghi mật khẩu SAU: gửi hỏng thì mật khẩu cũ vẫn còn nguyên.
         const result = isEmployerAccount(user)
           ? await emailService.sendCompanyAccountCreatedEmail({ user, company, password })
           : await emailService.sendAccountCreatedEmail({
@@ -238,9 +182,10 @@ const processBatch = async () => {
 
         if (result?.sent) {
           const now = new Date();
+          const got = new Set(result.recipients || recipients.to);
           const stamps = {
-            ...(recipients.personal ? { welcomeEmailSentAt: now } : {}),
-            ...(recipients.school ? { schoolEmailSentAt: now } : {}),
+            ...(recipients.personal && got.has(recipients.personal) ? { welcomeEmailSentAt: now } : {}),
+            ...(recipients.school && got.has(recipients.school) ? { schoolEmailSentAt: now } : {}),
           };
 
           // Điều kiện mustChangePassword: true chặn trường hợp sinh viên đổi mật
@@ -249,6 +194,7 @@ const processBatch = async () => {
             { _id: user._id, mustChangePassword: true },
             {
               $set: { password: hash, welcomeEmailStatus: 'sent', ...stamps },
+              $inc: { welcomeEmailSendCount: 1 },
               $unset: { welcomeEmailError: '' },
             },
           );
@@ -258,27 +204,40 @@ const processBatch = async () => {
           } else {
             await User.updateOne(
               { _id: user._id },
-              { $set: { welcomeEmailStatus: 'skipped', welcomeEmailError: SKIP_REASON, ...stamps } },
+              {
+                $set: { welcomeEmailStatus: 'skipped', welcomeEmailError: SKIP_REASON, ...stamps },
+                $inc: { welcomeEmailSendCount: 1 },
+              },
             );
             skipped += 1;
           }
-          remaining -= recipients.to.length;
-        } else {
-          const reason = result?.error || 'Không rõ nguyên nhân';
-
-          // Lỗi dùng chung cho mọi người nhận (hết quota ngày của Brevo, mất kết
-          // nối, sai thông tin đăng nhập) không phải lỗi của tài khoản này. Dừng
-          // cả lượt và để nguyên lượt thử — lượt sau hoặc hôm sau chạy lại.
-          if (isSharedFailure(reason)) {
-            logConfigProblemOnce(reason);
-            await User.updateOne({ _id: user._id }, { $set: { welcomeEmailError: reason } });
-            stop = { halted: true, reason };
-            break;
-          }
-
-          await recordFailure(user, reason);
-          failed += 1;
+          // Mỗi lượt chỉ một thư: nhịp giãn cách do governor giữ
+          break;
         }
+
+        if (result?.deferred || result?.shared) {
+          // Không phải lỗi của tài khoản này (chưa tới nhịp, hết suất, breaker
+          // ngắt, SMTP chưa cấu hình) — để nguyên lượt thử, lượt sau chạy lại.
+          logPauseOnce(result.error);
+          stop = { waiting: result.error };
+          break;
+        }
+
+        if (result?.suppressed) {
+          // Địa chỉ đã hard bounce / báo spam / huỷ nhận: thử lại cũng vô ích
+          await User.updateOne(
+            { _id: user._id },
+            { $set: { welcomeEmailStatus: 'failed', welcomeEmailAttempts: MAX_ATTEMPTS, welcomeEmailError: result.error } },
+          );
+          failed += 1;
+          continue;
+        }
+
+        const reason = result?.error || 'Không rõ nguyên nhân';
+        await recordFailure(user, reason);
+        failed += 1;
+        // SMTP vừa từ chối: dừng lượt này, để breaker đếm lỗi trước khi thử tiếp
+        break;
       } catch (e) {
         failed += 1;
         try {
@@ -302,23 +261,28 @@ const processBatch = async () => {
 const getQueueStats = async (filter = {}) => {
   // `filter` khoanh vùng theo vai trò (vd { role: 'employer' }) để trang import
   // doanh nghiệp không hiện lẫn số liệu của hàng đợi sinh viên. Hạn mức gửi
-  // trong ngày thì vẫn là con số chung — cả hai loại thư tiêu cùng một quota.
-  const [pending, sent, failed, skipped, schoolSent, sentToday, pendingByTarget] = await Promise.all([
+  // trong ngày thì vẫn là con số chung — cả hai loại thư tiêu cùng làn P1.
+  const [pending, sent, failed, skipped, schoolSent, pendingByTarget, health] = await Promise.all([
     User.countDocuments({ ...filter, welcomeEmailStatus: 'pending' }),
     User.countDocuments({ ...filter, welcomeEmailStatus: 'sent' }),
     User.countDocuments({ ...filter, welcomeEmailStatus: 'failed' }),
     User.countDocuments({ ...filter, welcomeEmailStatus: 'skipped' }),
     User.countDocuments({ ...filter, schoolEmailSentAt: { $exists: true } }),
-    sentTodayCount(),
     User.aggregate([
       { $match: { ...filter, welcomeEmailStatus: 'pending' } },
       { $group: { _id: '$welcomeEmailTo', n: { $sum: 1 } } },
     ]),
+    governor.getHealth(),
   ]);
 
   // Số lượt Brevo cần để gửi hết: thư gửi cả hai địa chỉ tính 2
   const pendingRecipients = pendingByTarget.reduce((sum, g) => sum + g.n * (g._id === 'both' ? 2 : 1), 0);
-  const remainingToday = Math.max(0, DAILY_CAP - sentToday);
+  const lane = health.quota.lanes.find((l) => l.lane === policy.LANES.P1);
+  const dailyCap = lane.cap;
+  const sentToday = lane.sent || 0;
+  const remainingToday = Math.max(0, dailyCap - sentToday);
+  // Ước tính theo trần của bậc warm-up hiện tại (bỏ qua giảm tốc tạm thời)
+  const stageCap = Math.max(1, Math.round(policy.limits().p1 * policy.WARMUP[health.warmup.stage].p1));
 
   return {
     pending,
@@ -329,22 +293,28 @@ const getQueueStats = async (filter = {}) => {
     schoolDomain: SCHOOL_EMAIL_DOMAIN,
     pendingRecipients,
     sentToday,
-    dailyCap: DAILY_CAP,
+    dailyCap,
     remainingToday,
-    batchSize: BATCH_SIZE,
-    intervalSeconds: 20,
-    // Số ngày phải chờ thêm ngoài hôm nay (0 = xong trong hôm nay)
+    hourlyCap: policy.PACING[policy.LANES.P1].perHour,
+    gapSeconds: [policy.PACING[policy.LANES.P1].gapMinMs / 1000, policy.PACING[policy.LANES.P1].gapMaxMs / 1000],
+    // Giữ tên cũ cho giao diện cũ
+    batchSize: policy.PACING[policy.LANES.P1].perHour,
+    intervalSeconds: policy.PACING[policy.LANES.P1].gapMinMs / 1000,
     estimatedDaysLeft:
-      pendingRecipients > remainingToday
-        ? Math.ceil((pendingRecipients - remainingToday) / DAILY_CAP)
-        : 0,
+      pendingRecipients > remainingToday ? Math.ceil((pendingRecipients - remainingToday) / stageCap) : 0,
+    breaker: health.breaker,
+    cooldownToday: health.quota.cooldownToday,
+    warmup: health.warmup,
+    pausedBatches: health.pausedBatches,
   };
 };
 
-/** Đưa các tài khoản thất bại về lại hàng đợi. */
+/** Đưa các tài khoản thất bại về lại hàng đợi (trừ địa chỉ đã bị chặn). */
 const retryFailed = async (filter = {}) => {
+  const EmailSuppression = require('../models/EmailSuppression');
+  const blocked = await EmailSuppression.find({}).select('email').lean();
   const r = await User.updateMany(
-    { ...filter, welcomeEmailStatus: 'failed' },
+    { ...filter, welcomeEmailStatus: 'failed', email: { $nin: blocked.map((b) => b.email) } },
     { $set: { welcomeEmailStatus: 'pending', welcomeEmailAttempts: 0, welcomeEmailError: null } },
   );
   return r.modifiedCount;
@@ -352,7 +322,7 @@ const retryFailed = async (filter = {}) => {
 
 const initWelcomeEmailWorker = () => {
   if (task) return;
-  console.log(`[WelcomeEmail] Khởi động worker gửi email chào mừng (${BATCH_SIZE} thư / 20 giây).`);
+  console.log('[WelcomeEmail] Khởi động worker thư mời (làn P1, nhịp do governor quyết).');
   task = cron.schedule(SCHEDULE, async () => {
     try {
       await processBatch();
@@ -368,7 +338,6 @@ module.exports = {
   getQueueStats,
   retryFailed,
   recipientsFor,
-  BATCH_SIZE,
   MAX_ATTEMPTS,
   DAILY_CAP,
 };

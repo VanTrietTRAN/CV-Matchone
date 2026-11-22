@@ -35,6 +35,10 @@ const systemBroadcastSchema = new mongoose.Schema(
       totalTargets: { type: Number, default: 0 },
       sentCount: { type: Number, default: 0 },
       failCount: { type: Number, default: 0 },
+      // Thư email xếp vào hàng đợi P2 / bỏ qua (không hoạt động gần đây, bị
+      // chặn, hoặc vượt sức gửi trong 48h) — xem services/broadcastWorker.js
+      emailQueued: { type: Number, default: 0 },
+      emailSkipped: { type: Number, default: 0 },
     },
     createdAdminId: {
       type: mongoose.Schema.Types.ObjectId,

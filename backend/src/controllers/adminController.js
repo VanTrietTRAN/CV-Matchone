@@ -713,7 +713,9 @@ const triggerMatchingJob = async (req, res) => {
     const { runMatchingProcess } = require('../cronJob');
     const stats = await runMatchingProcess();
     res.json({
-      message: 'Kích hoạt tác vụ quét và gửi email thành công!',
+      message:
+        `Đã quét ${stats.candidatesProcessed || 0} ứng viên, xếp ${stats.emailsQueued || 0} thư gợi ý vào hàng đợi. ` +
+        'Thư gửi dần trong khung 09:00–17:00 theo trần làn P2.',
       data: stats,
     });
   } catch (error) {

@@ -19,6 +19,12 @@ export type WelcomeQueue = {
   remainingToday: number
   estimatedDaysLeft: number
   batchSize: number
+  hourlyCap?: number
+  gapSeconds?: [number, number]
+  breaker?: { state: 'CLOSED' | 'THROTTLED' | 'OPEN' | 'HALF_OPEN'; lastTripReason?: string; resumeAt?: string }
+  cooldownToday?: boolean
+  warmup?: { stage: number; label: string }
+  pausedBatches?: { batchId: string; reason?: string }[]
   failedUsers: { email: string; fullName?: string; studentId?: string; welcomeEmailError?: string }[]
 }
 
@@ -147,10 +153,37 @@ export default function WelcomeQueuePanel({
 
       {queue.pending > 0 && (
         <p className="mt-3 text-xs text-slate-400">
-          Hệ thống gửi {queue.batchSize} thư mỗi 20 giây, tối đa {queue.dailyCap} lượt gửi/ngày —
-          đúng bằng hạn mức gói Brevo Free, và dùng chung cho cả thư sinh viên lẫn thư doanh nghiệp.
+          Thư mời đi theo làn riêng (P1): tối đa {queue.hourlyCap ?? queue.batchSize} thư/giờ
+          {queue.gapSeconds && `, mỗi thư cách nhau ${queue.gapSeconds[0]}–${queue.gapSeconds[1]} giây`}, hôm nay tối
+          đa {queue.dailyCap} lượt, dùng chung cho thư sinh viên lẫn thư doanh nghiệp. Thư đổi mật khẩu có suất riêng
+          nên không bị hàng đợi này chiếm chỗ.
+          {queue.warmup && queue.warmup.stage < 4 && ` Đang warm-up (${queue.warmup.label}) nên trần ngày thấp hơn bình thường.`}
           {queue.estimatedDaysLeft > 0 &&
             ` Ước tính cần thêm ${queue.estimatedDaysLeft} ngày để gửi hết.`}
+        </p>
+      )}
+
+      {queue.pending > 0 && queue.breaker && queue.breaker.state !== 'CLOSED' && (
+        <p className="mt-3 rounded-lg bg-warning-surface/20 p-3 text-xs text-amber-300">
+          {queue.breaker.state === 'OPEN'
+            ? 'Circuit Breaker đang NGẮT thư mời'
+            : queue.breaker.state === 'THROTTLED'
+              ? 'Circuit Breaker đang GIẢM TỐC (50%, 1 thư/2 phút)'
+              : 'Đang gửi thăm dò sau sự cố'}
+          {queue.breaker.lastTripReason && ` — ${queue.breaker.lastTripReason}`}
+          {queue.breaker.resumeAt && `, tới ${new Date(queue.breaker.resumeAt).toLocaleString('vi-VN')}`}. Xem
+          chi tiết ở trang Hệ thống.
+        </p>
+      )}
+
+      {queue.pending > 0 && queue.cooldownToday && (
+        <p className="mt-3 text-xs text-slate-400">Hôm nay là ngày nghỉ của thư mời — hàng đợi chạy tiếp vào ngày mai.</p>
+      )}
+
+      {(queue.pausedBatches?.length ?? 0) > 0 && (
+        <p className="mt-3 rounded-lg border border-danger/30 bg-danger-surface/20 p-3 text-xs text-red-300">
+          {queue.pausedBatches!.length} lô import bị dừng vì sinh nhiều hard bounce (
+          {queue.pausedBatches!.map((b) => b.batchId).join(', ')}). Rà lại file gốc rồi mở lại ở trang Hệ thống.
         </p>
       )}
 
@@ -160,10 +193,9 @@ export default function WelcomeQueuePanel({
         </p>
       )}
 
-      {queue.remainingToday <= 20 && queue.sentToday > 0 && (
-        <p className="mt-3 rounded-lg bg-warning-surface/20 p-3 text-xs text-amber-300">
-          Hôm nay còn {queue.remainingToday} lượt gửi. Chạm trần thì mã xác thực đăng ký và mã đặt
-          lại mật khẩu cũng không gửi được cho tới nửa đêm.
+      {queue.remainingToday === 0 && queue.pending > 0 && !queue.cooldownToday && (
+        <p className="mt-3 text-xs text-slate-400">
+          Làn thư mời đã dùng hết suất hôm nay — phần còn lại tự gửi tiếp vào ngày mai.
         </p>
       )}
 
