@@ -434,3 +434,11 @@
 .importer-dark .border-border {
   border-color: var(--color-slate-700);
 }
+/* Nút variant="outline" dùng nền bg-card (trắng): chữ đã đổi sang slate-100 ở
+   trên nên nền cũng phải tối theo, không thì thành chữ trắng trên nền trắng. */
+.importer-dark .bg-card {
+  background-color: var(--color-slate-900);
+}
+.importer-dark .bg-card:hover {
+  background-color: var(--color-slate-800);
+}
