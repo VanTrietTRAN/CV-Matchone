@@ -38,7 +38,8 @@ type ApiJob = {
   createdAt: string
   expiresAt?: string
   previewScore?: number | null
-  employerId?: { email?: string } | string
+  employerId?: { _id?: string } | string
+  companyName?: string
 }
 
 type ApiApplication = {
@@ -50,9 +51,8 @@ type ApiApplication = {
 }
 
 function employerLabel(job: ApiJob): string {
-  const e = job.employerId
-  if (e && typeof e === 'object' && 'email' in e && e.email) return e.email
-  return 'Nhà tuyển dụng'
+  // Tên công ty do backend gắn sẵn — KHÔNG hiển thị email đăng nhập của nhà tuyển dụng
+  return job.companyName || 'Nhà tuyển dụng'
 }
 
 export default function CandidateDashboardPage() {

@@ -95,5 +95,7 @@ export async function apiLogout(): Promise<void> {
   } finally {
     const { clearAuth } = await import('@/lib/auth-storage')
     clearAuth()
+    const { resetUnreadCount } = await import('@/hooks/use-unread-count')
+    resetUnreadCount()
   }
 }

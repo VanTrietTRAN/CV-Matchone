@@ -132,8 +132,13 @@ export default function CandidateNotificationsPage() {
   const readCount = notifications.length - unreadCount
   const groups = groupByJob(displayed)
 
-  /** Một dòng thông báo (dùng cho cả thẻ đơn lẫn item trong nhóm). */
-  const NotifRow = ({ notif, nested }: { notif: Notification; nested?: boolean }) => (
+  /**
+   * Một dòng thông báo (dùng cho cả thẻ đơn lẫn item trong nhóm).
+   * Là hàm render thường, không phải component: khai báo component bên trong
+   * thân component cha thì mỗi lần render React coi là loại mới, gỡ và dựng lại
+   * cả cây con (mất focus, chạy lại hiệu ứng).
+   */
+  const renderNotifRow = (notif: Notification, nested?: boolean) => (
     <div className={cn(nested && 'mt-3 border-t border-border pt-3')}>
       <p className={cn('text-sm leading-snug font-semibold', notif.isRead && 'text-foreground/75')}>
         {notif.title}
@@ -290,7 +295,7 @@ export default function CandidateNotificationsPage() {
                       </span>
 
                       <div className="min-w-0 flex-1">
-                        <NotifRow notif={latest} />
+                        {renderNotifRow(latest)}
                         {latest.jobId && (
                           <Button asChild size="xs" variant="outline" className="mt-2">
                             <Link href={`/candidate/jobs/${latest.jobId._id}`}>
@@ -360,7 +365,7 @@ export default function CandidateNotificationsPage() {
 
                       <div className="mt-1">
                         {visibleItems.map((n, idx) => (
-                          <NotifRow key={n._id} notif={n} nested={idx > 0} />
+                          <React.Fragment key={n._id}>{renderNotifRow(n, idx > 0)}</React.Fragment>
                         ))}
                       </div>
                     </div>

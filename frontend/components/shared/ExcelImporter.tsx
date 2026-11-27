@@ -60,6 +60,7 @@ export default function ExcelImporter({
   labels,
   onDone,
   children,
+  tone = 'light',
 }: {
   /** Đường dẫn API nhận file, ví dụ /api/admin/import/users */
   endpoint: string
@@ -70,6 +71,11 @@ export default function ExcelImporter({
   onDone?: () => void
   /** Tuỳ chọn hiển thị phía trên nút gửi, ví dụ công tắc gửi email trường */
   children?: React.ReactNode
+  /**
+   * 'dark' cho trang admin nền tối: màu chữ phụ của theme sáng (muted-foreground)
+   * trên nền slate-950 chỉ đạt ~4.2:1, dưới chuẩn đọc 4.5:1.
+   */
+  tone?: 'light' | 'dark'
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -140,7 +146,7 @@ export default function ExcelImporter({
   const shown = result || preview
 
   return (
-    <div className="space-y-5">
+    <div className={cn('space-y-5', tone === 'dark' && 'importer-dark')}>
       <div className="flex flex-wrap items-center gap-3">
         <Button asChild variant="outline" className="gap-2">
           <a href={`${getApiBase()}${templateUrl}`} download>
@@ -178,14 +184,20 @@ export default function ExcelImporter({
             <Upload className="size-4" />
             {file ? 'Chọn file khác' : 'Chọn file'}
           </Button>
-          <Button type="button" className="gap-2" onClick={() => send(false)} disabled={busy || !file}>
+          {/* Nền brand-500 + chữ trắng chỉ đạt 2.8:1 — dùng tông đậm hơn */}
+          <Button
+            type="button"
+            className="gap-2 bg-emerald-700 text-white hover:bg-emerald-800"
+            onClick={() => send(false)}
+            disabled={busy || !file}
+          >
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
             Xem trước
           </Button>
           {preview && preview.created.length + (preview.requeued?.length ?? 0) > 0 && (
             <Button
               type="button"
-              className="gap-2 bg-brand-600 hover:bg-brand-700"
+              className="gap-2 bg-emerald-700 text-white hover:bg-emerald-800"
               onClick={() => send(true)}
               disabled={busy}
             >

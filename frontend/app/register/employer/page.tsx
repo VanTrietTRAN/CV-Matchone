@@ -120,19 +120,29 @@ export default function EmployerSignupPage() {
     taxId: '',
   })
 
-  const [captchaText, setCaptchaText] = useState('')
+  // Mã xác nhận do SERVER sinh và kiểm tra (GET /api/auth/captcha). Bản cũ sinh
+  // bằng Math.random() ngay trên trình duyệt và chỉ so ở client — gọi thẳng API
+  // đăng ký là bỏ qua được hoàn toàn.
+  const [captchaImage, setCaptchaImage] = useState('')
+  const [captchaToken, setCaptchaToken] = useState('')
   const [captchaInput, setCaptchaInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const generateCaptcha = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
-    let text = ''
-    for (let i = 0; i < 6; i++) {
-      text += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    setCaptchaText(text)
+  const generateCaptcha = async () => {
     setCaptchaInput('')
+    try {
+      const res = await apiFetch<{ token: string; image: string }>('/api/auth/captcha', {
+        method: 'GET',
+        allowUnauthenticated: true,
+      })
+      setCaptchaToken(res.token)
+      setCaptchaImage(res.image)
+    } catch {
+      setCaptchaToken('')
+      setCaptchaImage('')
+      toast.error('Không tải được mã xác nhận. Bấm nút làm mới để thử lại.')
+    }
   }
 
   useEffect(() => {
@@ -195,10 +205,9 @@ export default function EmployerSignupPage() {
       newErrors.phone = 'Số điện thoại không hợp lệ (ví dụ: 0912345678).'
     }
 
-    if (!captchaInput) {
+    // Chỉ kiểm tra đã nhập — đúng/sai do server quyết định
+    if (!captchaInput.trim()) {
       newErrors.captcha = 'Vui lòng nhập mã xác nhận.'
-    } else if (captchaInput.toLowerCase() !== captchaText.toLowerCase()) {
-      newErrors.captcha = 'Mã xác nhận chưa đúng.'
     }
 
     setErrors(newErrors)
@@ -231,8 +240,11 @@ export default function EmployerSignupPage() {
           about: formData.about,
           phone: formData.phone,
           taxId: formData.taxId,
+          captchaToken,
+          captcha: captchaInput.trim(),
         }),
         skipAuth: true,
+        allowUnauthenticated: true,
       })
 
       // Xem chú thích ở trang đăng ký ứng viên: cần xác thực email trước khi dùng
@@ -472,9 +484,20 @@ export default function EmployerSignupPage() {
                     className="flex-1"
                     aria-invalid={!!errors.captcha}
                   />
-                  <span className="grid h-10 shrink-0 place-items-center rounded-md border border-border bg-muted px-4 font-mono text-base font-bold tracking-[0.2em] text-foreground/80 italic line-through select-none">
-                    {captchaText}
-                  </span>
+                  {captchaImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={captchaImage}
+                      alt="Mã xác nhận"
+                      width={150}
+                      height={50}
+                      className="h-10 w-[120px] shrink-0 rounded-md border border-border object-cover select-none"
+                    />
+                  ) : (
+                    <span className="grid h-10 w-[120px] shrink-0 place-items-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+                      Đang tải…
+                    </span>
+                  )}
                   <Button
                     type="button"
                     variant="outline"

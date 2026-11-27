@@ -62,6 +62,7 @@ export default function AdminImportUsersPage() {
 
           <div className="rounded-xl bg-slate-950 p-5">
             <ExcelImporter
+              tone="dark"
               endpoint="/api/admin/import/users"
               templateUrl="/api/admin/import/template/users"
               extraFields={{ sendSchoolEmail: String(sendSchoolEmail) }}

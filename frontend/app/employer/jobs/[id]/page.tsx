@@ -172,7 +172,11 @@ export default function EmployerJobDetailPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormState | null>(null)
   const [stats, setStats] = useState<JobStats | null>(null)
+  // Trạng thái tải số liệu tách riêng: dùng `!stats` làm cờ loading thì API lỗi
+  // là 4 ô số liệu nằm skeleton mãi mãi.
+  const [statsLoading, setStatsLoading] = useState(true)
   const [closeOpen, setCloseOpen] = useState(false)
+  const [closing, setClosing] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [denied, setDenied] = useState(false)
@@ -214,9 +218,11 @@ export default function EmployerJobDetailPage() {
   // tính vào đây, nên số liệu phản ánh người ngoài quan tâm tới mức nào.
   useEffect(() => {
     if (!jobId) return
+    setStatsLoading(true)
     apiFetch<{ data: JobStats }>(`/api/jobs/${jobId}/stats`)
       .then((r) => setStats(r.data))
       .catch(() => setStats(null))
+      .finally(() => setStatsLoading(false))
   }, [jobId])
 
   const set = (k: keyof FormState, v: string) => {
@@ -277,6 +283,7 @@ export default function EmployerJobDetailPage() {
   }
 
   const handleClose = async () => {
+    setClosing(true)
     try {
       await apiFetch(`/api/jobs/${jobId}/close`, { method: 'PATCH' })
       toast.success('Đã đóng tin tuyển dụng')
@@ -284,6 +291,8 @@ export default function EmployerJobDetailPage() {
       load()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Không đóng được tin')
+    } finally {
+      setClosing(false)
     }
   }
 
@@ -451,7 +460,7 @@ export default function EmployerJobDetailPage() {
             icon={Eye}
             tone="warning"
             hint={`${stats?.views.uniqueTotal ?? 0} người xem khác nhau`}
-            loading={!stats}
+            loading={statsLoading}
           />
           <StatCard
             label="Lượt xem từ người dùng"
@@ -459,7 +468,7 @@ export default function EmployerJobDetailPage() {
             icon={UserCheck}
             tone="brand"
             hint={`${stats?.views.uniqueUser ?? 0} tài khoản đã đăng nhập`}
-            loading={!stats}
+            loading={statsLoading}
           />
           <StatCard
             label="Lượt xem từ khách vãng lai"
@@ -467,7 +476,7 @@ export default function EmployerJobDetailPage() {
             icon={Users}
             tone="neutral"
             hint={`${stats?.views.uniqueGuest ?? 0} khách khác nhau`}
-            loading={!stats}
+            loading={statsLoading}
           />
           <StatCard
             label="Hồ sơ ứng tuyển"
@@ -479,7 +488,7 @@ export default function EmployerJobDetailPage() {
                 ? `${stats.applications.byStatus.pending} hồ sơ chờ duyệt`
                 : 'Từ tin tuyển dụng này'
             }
-            loading={!stats}
+            loading={statsLoading}
           />
         </section>
 
@@ -733,6 +742,7 @@ export default function EmployerJobDetailPage() {
           }
           actionLabel="Xoá vĩnh viễn"
           destructive
+          loading={deleting}
           onConfirm={handleDelete}
         />
 
@@ -743,6 +753,7 @@ export default function EmployerJobDetailPage() {
           description="Tin sẽ không còn hiển thị với ứng viên. Hồ sơ đã nhận vẫn được giữ nguyên."
           actionLabel="Đóng tin"
           destructive
+          loading={closing}
           onConfirm={handleClose}
         />
       </PageContainer>

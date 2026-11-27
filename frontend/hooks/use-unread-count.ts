@@ -59,6 +59,19 @@ export function useUnreadCount(enabled = true) {
   return enabled ? value : 0
 }
 
+/**
+ * Xoá số đếm khi đăng xuất. Biến `count` sống ở cấp module nên tồn tại suốt
+ * phiên SPA — không reset thì tài khoản đăng nhập kế tiếp thấy số của người trước.
+ */
+export function resetUnreadCount() {
+  count = 0
+  if (timer !== null) {
+    clearInterval(timer)
+    timer = null
+  }
+  listeners.forEach((listener) => listener(0))
+}
+
 /** Gọi sau khi đánh dấu đã đọc / xoá thông báo để đồng bộ ngay lập tức */
 export function refreshUnreadCount() {
   if (listeners.size > 0) fetchCount()

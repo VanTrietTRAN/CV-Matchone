@@ -17,6 +17,7 @@ export type Status =
   | 'active'
   | 'paused'
   | 'closed'
+  | 'archived'
   | 'expired'
   | 'draft'
 
@@ -43,6 +44,8 @@ const statusConfig: Record<Status, { tone: Tone; label: string }> = {
   active: { tone: 'brand', label: 'Đang hoạt động' },
   paused: { tone: 'warning', label: 'Tạm dừng' },
   closed: { tone: 'neutral', label: 'Đã đóng' },
+  // Trạng thái 'archived' của tin tuyển dụng — thiếu thì badge hiện chữ thô "archived"
+  archived: { tone: 'neutral', label: 'Lưu trữ' },
   expired: { tone: 'neutral', label: 'Hết hạn' },
   draft: { tone: 'neutral', label: 'Bản nháp' },
 }

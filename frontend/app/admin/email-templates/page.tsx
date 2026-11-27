@@ -40,15 +40,19 @@ export default function EmailTemplatesPage() {
   const [activeKey, setActiveKey] = useState<string>('jobMatch')
   const [preview, setPreview] = useState<{ subject: string; html: string } | null>(null)
   const [previewing, setPreviewing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const res = await apiFetch<{ data: Payload }>('/api/admin/system/email-templates')
       setData(res.data)
       setDraft(JSON.parse(JSON.stringify(res.data.templates)))
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Không tải được mẫu email')
+      const msg = e instanceof Error ? e.message : 'Không tải được mẫu email'
+      setLoadError(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -103,6 +107,20 @@ export default function EmailTemplatesPage() {
     if (!data) return
     setDraft((prev) => ({ ...prev, [group]: { ...data.defaults[group] } }))
     toast.info('Đã đưa về nội dung mặc định. Bấm Lưu để áp dụng.')
+  }
+
+  // API lỗi: hiện lỗi và nút thử lại — trước đây kẹt mãi ở "Đang tải mẫu email..."
+  if (!loading && !data) {
+    return (
+      <AdminLayout>
+        <div className="space-y-3 p-8">
+          <p className="text-sm text-red-300">{loadError || 'Không tải được mẫu email.'}</p>
+          <Button variant="outline" onClick={load} className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700">
+            Thử lại
+          </Button>
+        </div>
+      </AdminLayout>
+    )
   }
 
   if (loading || !data) {

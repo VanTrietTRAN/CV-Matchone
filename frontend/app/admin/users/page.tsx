@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import AdminLayout from '@/layouts/AdminLayout'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
@@ -34,27 +34,43 @@ export default function AdminUsersPage() {
   const [pages, setPages] = useState(1)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
+  // Gõ "abcdef" trước đây bắn 6 request liền nhau, và response về sau có thể
+  // đè lên kết quả mới hơn. Chờ người dùng dừng gõ 300ms rồi mới tìm, và huỷ
+  // request cũ còn đang chạy.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
   const [roleFilter, setRoleFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(page), limit: '15' })
-      if (search) params.set('search', search)
+      if (debouncedSearch) params.set('search', debouncedSearch)
       if (roleFilter) params.set('role', roleFilter)
       if (statusFilter) params.set('status', statusFilter)
-      const res = await apiFetch<{ data: User[]; total: number; pages: number }>(`/api/admin/users?${params}`)
+      const res = await apiFetch<{ data: User[]; total: number; pages: number }>(`/api/admin/users?${params}`, {
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) return
       setUsers(res.data)
       setTotal(res.total)
       setPages(res.pages)
     } catch {
+      if (controller.signal.aborted) return
       toast.error('Không tải được danh sách tài khoản')
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
-  }, [page, search, roleFilter, statusFilter])
+  }, [page, debouncedSearch, roleFilter, statusFilter])
 
   useEffect(() => { load() }, [load])
 

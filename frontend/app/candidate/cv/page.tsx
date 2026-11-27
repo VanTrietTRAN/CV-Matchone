@@ -153,26 +153,72 @@ export default function CVPage() {
     loadCv()
   }, [])
 
-  // Tự động poll cập nhật trạng thái bóc tách AI mỗi 5 giây khi có CV đang queued / processing
+  // MỘT vòng polling duy nhất (5 giây) khi có CV đang queued / processing.
+  //
+  // Bản cũ chạy hai vòng song song: vòng này và pollCvProcessing (4 giây) sau khi
+  // tải lên; vòng kia không dừng khi rời trang (chạy tiếp tới 3 phút) và khi AI
+  // xong thì ghi đè form vô điều kiện — kể cả khi người dùng đã chuyển sang sửa
+  // CV khác hoặc đang gõ dở.
+  const hasPending = cvList.some(
+    (c) => c.processingStatus === 'queued' || c.processingStatus === 'processing'
+  )
+  // Giá trị mới nhất cho callback trong setInterval (tránh closure cũ)
+  const cvIdRef = useRef<string | null>(null)
+  const formDataRef = useRef(formData)
   useEffect(() => {
-    const hasPending = cvList.some(
-      (c) => c.processingStatus === 'queued' || c.processingStatus === 'processing'
-    )
-    if (!hasPending) return
+    cvIdRef.current = cvId
+    formDataRef.current = formData
+  }, [cvId, formData])
+  // CV vừa tải lên đang chờ AI, kèm ảnh chụp form lúc tải lên để biết người dùng đã sửa gì chưa
+  const awaitingRef = useRef<{ id: string; snapshot: string; deadline: number } | null>(null)
 
-    const interval = setInterval(async () => {
+  useEffect(() => {
+    if (!hasPending) return
+    let cancelled = false
+
+    const tick = async () => {
       try {
         const cvRes = await apiFetch<{ data: any[] }>('/api/cv')
+        if (cancelled) return
         const all = cvRes.data || []
         const mapped = all.map((cv: any) => cvFromApi(cv, userEmail))
         setCvList(mapped)
+
+        const awaiting = awaitingRef.current
+        if (!awaiting) return
+        const raw = all.find((cv: any) => cv._id === awaiting.id)
+        const status = raw?.processingStatus
+        if (raw) setProcessingStatus(status)
+
+        if (status === 'ready') {
+          awaitingRef.current = null
+          const parsed = cvFromApi(raw, userEmail)
+          const stillViewing = cvIdRef.current === awaiting.id
+          const untouched = JSON.stringify(formDataRef.current) === awaiting.snapshot
+          if (stillViewing && untouched) {
+            setFormData(parsed)
+            toast.success('AI đã bóc tách xong nội dung CV.')
+          } else {
+            toast.success('AI đã bóc tách xong CV vừa tải lên. Mở CV đó để xem kết quả.')
+          }
+        } else if (status === 'failed') {
+          awaitingRef.current = null
+          toast.error(`AI không bóc tách được CV: ${raw?.processingError || 'lỗi không rõ'}`)
+        } else if (Date.now() > awaiting.deadline) {
+          awaitingRef.current = null
+          toast.warning('CV vẫn đang được xử lý ở nền. Bạn có thể tải lại trang sau ít phút để xem kết quả.')
+        }
       } catch (err) {
         console.error('Lỗi khi cập nhật trạng thái CV:', err)
       }
-    }, 5000)
+    }
 
-    return () => clearInterval(interval)
-  }, [cvList, userEmail])
+    const interval = setInterval(tick, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [hasPending, userEmail])
 
   const handleRetryAi = async (id: string) => {
     try {
@@ -321,57 +367,18 @@ export default function CVPage() {
       // "trích xuất thành công" ngay lúc này, trong khi hồ sơ mới chỉ đang xếp
       // hàng — người dùng thấy toàn ô trống và tưởng tính năng hỏng.
       toast.info('Đã tải CV lên. Đang bóc tách nội dung bằng AI, vui lòng đợi...')
-      await pollCvProcessing(uploadedId)
+      setProcessingStatus(initial.processingStatus || 'queued')
+      // Worker quét hàng đợi mỗi 30 giây và thử lại tối đa 3 lần — chờ tối đa 3 phút
+      awaitingRef.current = {
+        id: uploadedId,
+        snapshot: JSON.stringify(initial),
+        deadline: Date.now() + 3 * 60 * 1000,
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Upload thất bại')
     } finally {
       setUploading(false)
     }
-  }
-
-  /**
-   * Chờ worker nền bóc tách xong file PDF vừa tải lên.
-   * Worker quét hàng đợi mỗi 30 giây và thử lại tối đa 3 lần, nên cho chờ 3 phút.
-   */
-  const pollCvProcessing = async (id: string) => {
-    const DEADLINE = Date.now() + 3 * 60 * 1000
-    const INTERVAL = 4000
-
-    while (Date.now() < DEADLINE) {
-      await new Promise((r) => setTimeout(r, INTERVAL))
-
-      let cv: any
-      try {
-        const res = await apiFetch<{ data: any }>(`/api/cv/${id}`)
-        cv = res.data
-      } catch {
-        continue // lỗi mạng tạm thời — thử lại ở vòng sau
-      }
-      if (!cv) continue
-
-      setProcessingStatus(cv.processingStatus)
-
-      if (cv.processingStatus === 'ready') {
-        const parsed = cvFromApi(cv, userEmail || formData.email)
-        setFormData(parsed)
-        setCvList((prev) => prev.map((c) => (c._id === id ? parsed : c)))
-        toast.success(
-          cv.embedding?.length
-            ? 'AI đã bóc tách xong nội dung CV và tạo vector so khớp.'
-            : 'Đã bóc tách xong nội dung CV.',
-        )
-        return
-      }
-
-      if (cv.processingStatus === 'failed') {
-        toast.error(`AI không bóc tách được CV: ${cv.processingError || 'lỗi không rõ'}`)
-        return
-      }
-    }
-
-    toast.warning(
-      'CV vẫn đang được xử lý ở nền. Bạn có thể tải lại trang sau ít phút để xem kết quả.',
-    )
   }
 
   const currentTheme = themeOptions.find((item) => item.key === theme) || themeOptions[1]

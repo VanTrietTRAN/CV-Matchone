@@ -110,7 +110,6 @@ function MiniBarChart({
   color: string
   title: string
 }) {
-  const max = Math.max(1, ...series.map((s) => s.count))
   const total = series.reduce((sum, s) => sum + s.count, 0)
 
   // Khoảng dài thì gom bớt cột để mỗi cột còn nhìn được
@@ -123,6 +122,8 @@ function MiniBarChart({
           else acc[acc.length - 1].count += cur.count
           return acc
         }, [])
+  // Tính đỉnh SAU khi gom cột: tính trước thì cột gộp 2 ngày cao tới 200% khung
+  const max = Math.max(1, ...points.map((p) => p.count))
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
@@ -265,7 +266,8 @@ export default function AdminAnalyticsPage() {
   const t = overview?.totals
   const p = overview?.period
 
-  const SortHead = ({ label, k }: { label: string; k: typeof sortBy }) => (
+  // Hàm render thường thay vì component khai báo trong thân component (bị dựng lại mỗi lần render)
+  const sortHead = (label: string, k: typeof sortBy) => (
     <button
       onClick={() => toggleSort(k)}
       className={`inline-flex items-center gap-1 transition-colors hover:text-white ${
@@ -520,16 +522,16 @@ export default function AdminAnalyticsPage() {
                   <th className="px-5 py-3 font-medium">Ngành</th>
                   <th className="px-5 py-3 font-medium">Trạng thái</th>
                   <th className="px-5 py-3 text-right font-medium">
-                    <SortHead label="Tin đăng" k="jobs" />
+                    {sortHead("Tin đăng", "jobs")}
                   </th>
                   <th className="px-5 py-3 text-right font-medium">
-                    <SortHead label="Đang mở" k="openJobs" />
+                    {sortHead("Đang mở", "openJobs")}
                   </th>
                   <th className="px-5 py-3 text-right font-medium">
-                    <SortHead label="Hồ sơ nhận" k="applications" />
+                    {sortHead("Hồ sơ nhận", "applications")}
                   </th>
                   <th className="px-5 py-3 text-right font-medium">
-                    <SortHead label="Ngày tạo" k="createdAt" />
+                    {sortHead("Ngày tạo", "createdAt")}
                   </th>
                 </tr>
               </thead>

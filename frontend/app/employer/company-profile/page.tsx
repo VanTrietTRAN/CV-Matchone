@@ -18,6 +18,7 @@ import {
 import { Plus, Loader2, Building2, CheckCircle } from 'lucide-react'
 import SkillTag from '@/components/SkillTag'
 import CompanyImagePicker, { COVER_SIZE, LOGO_SIZE } from '@/components/employer/CompanyImagePicker'
+import { safeUrl } from '@/lib/format'
 import { apiFetch } from '@/lib/api'
 import { COMPANY_SECTOR_LABEL } from '@/lib/job-categories'
 import { toast } from 'sonner'
@@ -58,6 +59,9 @@ const sizeLabels: Record<string, string> = {
 export default function CompanyProfilePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<CompanyFormData>(defaultFormData)
+  // Bản đã lưu gần nhất — bấm "Huỷ" khôi phục về đây. Trước đây Huỷ chỉ tắt chế
+  // độ sửa, các thay đổi chưa lưu vẫn hiện như thể đã lưu.
+  const [saved, setSaved] = useState<CompanyFormData>(defaultFormData)
   const [newBenefit, setNewBenefit] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -67,7 +71,7 @@ export default function CompanyProfilePage() {
       try {
         const res = await apiFetch<{ data: CompanyFormData }>('/api/users/me/company-profile')
         const d = res.data
-        setFormData({
+        const loaded: CompanyFormData = {
           companyName: d.companyName || '',
           about: d.about || '',
           industry: d.industry || 'other',
@@ -78,7 +82,9 @@ export default function CompanyProfilePage() {
           benefits: d.benefits || [],
           coverImage: d.coverImage || '',
           logo: d.logo || '',
-        })
+        }
+        setFormData(loaded)
+        setSaved(loaded)
       } catch {
         toast.error('Không tải được hồ sơ công ty, hiển thị mặc định')
       } finally {
@@ -99,6 +105,7 @@ export default function CompanyProfilePage() {
         }),
       })
       toast.success('Đã lưu hồ sơ công ty thành công!')
+      setSaved(formData)
       setIsEditing(false)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Lưu thất bại')
@@ -141,7 +148,15 @@ export default function CompanyProfilePage() {
           actions={
             isEditing ? (
               <>
-                <Button variant="outline" onClick={() => setIsEditing(false)} disabled={saving}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFormData(saved)
+                    setNewBenefit('')
+                    setIsEditing(false)
+                  }}
+                  disabled={saving}
+                >
                   Huỷ
                 </Button>
                 <Button onClick={handleSave} disabled={saving}>
@@ -304,10 +319,12 @@ export default function CompanyProfilePage() {
                     placeholder="https://company.com"
                     onChange={(e) => setFormData((p) => ({ ...p, website: e.target.value }))}
                   />
-                ) : formData.website ? (
-                  <a href={formData.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                ) : safeUrl(formData.website) ? (
+                  <a href={safeUrl(formData.website)!} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                     {formData.website}
                   </a>
+                ) : formData.website ? (
+                  <p className="text-foreground/70">{formData.website}</p>
                 ) : (
                   <p className="text-foreground/70">(Chưa cập nhật)</p>
                 )}

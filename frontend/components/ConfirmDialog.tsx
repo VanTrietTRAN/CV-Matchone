@@ -51,7 +51,13 @@ export default function ConfirmDialog({
             {cancelLabel}
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            onClick={(e) => {
+              // Radix tự đóng hộp thoại ngay khi bấm — tác vụ async còn đang chạy
+              // thì spinner "Đang xử lý..." không kịp hiện. Giữ hộp thoại mở; nơi
+              // gọi tự đóng khi tác vụ xong (mọi chỗ gọi đều đã làm vậy).
+              e.preventDefault()
+              onConfirm()
+            }}
             disabled={loading}
             className={cn(destructive && 'bg-destructive text-white hover:brightness-95')}
           >

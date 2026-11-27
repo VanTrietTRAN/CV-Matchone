@@ -77,6 +77,7 @@ export function ReviewCompanyButton({
   const openModal = async () => {
     setOpen(true)
     setLoading(true)
+    setStatus(null)
     try {
       const res = await apiFetch<MyStatus>(`/api/reviews/company/${companyUserId}/me`)
       setStatus(res)
@@ -157,6 +158,16 @@ export function ReviewCompanyButton({
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div>
+          ) : !status ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Không tải được trạng thái đánh giá. Vui lòng thử lại sau.
+            </p>
+          ) : !status.myReview && !status.canReview ? (
+            // Trước đây form vẫn mở dù không đủ điều kiện — gửi đi mới nhận lỗi 403
+            <p className="py-6 text-center text-sm leading-relaxed text-muted-foreground">
+              Bạn chỉ có thể đánh giá công ty sau khi hồ sơ ứng tuyển của bạn được công ty
+              xem xét, mời phỏng vấn hoặc nhận.
+            </p>
           ) : (
             <div className="space-y-4">
               <div className="flex flex-col items-center gap-2 py-2">
@@ -238,8 +249,11 @@ export function CompanyReviews({
     const load = async () => {
       setLoading(true)
       try {
+        // Trang tin tuyển dụng mở cho khách: chưa đăng nhập không phải lý do để
+        // đá người xem sang /login
         const res = await apiFetch<{ data: Review[]; summary: Summary }>(
-          `/api/reviews/company/${companyUserId}`
+          `/api/reviews/company/${companyUserId}`,
+          { allowUnauthenticated: true }
         )
         if (!active) return
         setReviews(res.data || [])

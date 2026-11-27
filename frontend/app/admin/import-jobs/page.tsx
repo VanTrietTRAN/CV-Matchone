@@ -66,7 +66,7 @@ export default function AdminImportJobsPage() {
             </div>
           )}
 
-          <p className="mt-4 text-xs text-slate-500">
+          <p className="mt-4 text-xs text-slate-400">
             <Building2 className="mr-1 inline size-3.5" />
             Cần thêm doanh nghiệp mới?{' '}
             <Link href="/admin/import-employers" className="text-brand-400 hover:underline">
@@ -127,6 +127,7 @@ export default function AdminImportJobsPage() {
 
               <div className="rounded-xl bg-slate-950 p-5">
                 <ExcelImporter
+              tone="dark"
                   endpoint="/api/admin/import/jobs"
                   templateUrl="/api/admin/import/template/jobs"
                   extraFields={{ employerId: employer._id }}

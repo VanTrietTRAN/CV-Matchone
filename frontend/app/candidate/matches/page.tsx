@@ -25,6 +25,7 @@ import TaxonomyFilter, {
   type TaxonomyValue,
 } from '@/components/filters/TaxonomyFilter'
 import { toast } from 'sonner'
+import { matchesLocation } from '@/lib/format'
 
 type ApiJob = {
   _id: string
@@ -41,9 +42,11 @@ type ApiJob = {
   status: string
   createdAt: string
   expiresAt?: string
-  employerId?: { email?: string } | string
+  employerId?: { _id?: string } | string
+  companyName?: string
   previewScore: number | null // null = CV chưa có embedding
   isPro?: boolean
+  jobType?: string
 }
 
 type SortKey = 'match' | 'newest' | 'deadline'
@@ -55,9 +58,8 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 ]
 
 function getEmployerName(job: ApiJob): string {
-  const e = job.employerId
-  if (e && typeof e === 'object' && 'email' in e && e.email) return e.email
-  return 'Nhà tuyển dụng'
+  // Tên công ty do backend gắn sẵn — KHÔNG hiển thị email đăng nhập của nhà tuyển dụng
+  return job.companyName || 'Nhà tuyển dụng'
 }
 
 function MatchesContent() {
@@ -133,7 +135,7 @@ function MatchesContent() {
     }
 
     if (locationFilter) {
-      result = result.filter((j) => j.location === locationFilter)
+      result = result.filter((j) => matchesLocation(j, locationFilter))
     }
 
     if (taxonomy.industry) {
@@ -164,6 +166,17 @@ function MatchesContent() {
 
     return result
   }, [jobs, searchText, locationFilter, taxonomy, sort])
+
+  // Huy hiệu #1/#2/#3 theo ĐIỂM PHÙ HỢP cao nhất. Danh sách đặt tin PRO lên đầu
+  // (quyền lợi gói PRO), nên lấy thứ tự hiển thị làm hạng là gắn "#1" cho tin PRO
+  // chỉ khớp 20%. Hạng tính riêng, không phụ thuộc vị trí trong danh sách.
+  const rankById = useMemo(() => {
+    const scored = filteredJobs
+      .filter((j) => j.previewScore !== null && j.previewScore !== undefined)
+      .sort((a, b) => (b.previewScore as number) - (a.previewScore as number))
+      .slice(0, 3)
+    return new Map(scored.map((j, i) => [j._id, i + 1]))
+  }, [filteredJobs])
 
   const hasFilter = Boolean(searchText || locationFilter) || hasTaxonomyFilter(taxonomy)
   const clearFilters = () => {
@@ -307,7 +320,7 @@ function MatchesContent() {
             </div>
           ) : (
             <div className="grid gap-4 xl:grid-cols-2">
-              {filteredJobs.map((job, index) => (
+              {filteredJobs.map((job) => (
                 <JobCard
                   key={job._id}
                   id={job._id}
@@ -324,7 +337,7 @@ function MatchesContent() {
                   expiresAt={job.expiresAt}
                   applied={appliedIds.has(job._id)}
                   isPro={job.isPro}
-                  rank={sort === 'match' && job.previewScore !== null && index < 3 ? index + 1 : undefined}
+                  rank={sort === 'match' ? rankById.get(job._id) : undefined}
                   onApply={() => setApplyModal({ jobId: job._id, jobTitle: job.title })}
                 />
               ))}

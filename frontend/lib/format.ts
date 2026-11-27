@@ -177,3 +177,49 @@ export const WORK_TYPE_LABEL: Record<string, string> = {
   hybrid: 'Linh hoạt',
   onsite: 'Tại văn phòng',
 }
+
+/** Bỏ dấu tiếng Việt, thường hoá, gộp khoảng trắng — để so khớp địa danh. */
+function foldVi(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/gi, 'd')
+    .toLowerCase()
+    .replace(/\b(tp\.?|thanh pho|tinh)\s*/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+/**
+ * Tin có khớp bộ lọc địa điểm không.
+ *
+ * So bằng === trước đây làm "Hà Nội" không ra tin "Cầu Giấy, Hà Nội", còn
+ * "Làm từ xa" (ô chọn ở trang chủ) là hình thức làm việc chứ không phải địa danh
+ * nên không bao giờ khớp. Nay so chuỗi con đã bỏ dấu, và "Làm từ xa" khớp tin remote.
+ */
+export function matchesLocation(
+  job: { location?: string | null; jobType?: string | null },
+  filter: string,
+): boolean {
+  if (!filter) return true
+  const f = foldVi(filter)
+  if (f === 'lam tu xa' || f === 'remote') return job.jobType === 'remote'
+  return foldVi(job.location || '').includes(f)
+}
+
+/**
+ * URL an toàn để đặt vào href: chỉ http/https. Dữ liệu cũ trong DB có thể còn
+ * "javascript:..." từ trước khi backend chặn — React 19 chỉ chặn lúc chạy và
+ * báo lỗi, nên lọc ngay ở đây và không render link nếu không hợp lệ.
+ */
+export function safeUrl(value?: string | null): string | null {
+  if (!value) return null
+  const v = value.trim()
+  const candidate = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`
+  try {
+    const u = new URL(candidate)
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.toString() : null
+  } catch {
+    return null
+  }
+}

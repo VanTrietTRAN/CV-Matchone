@@ -87,7 +87,11 @@ export default function EmployerCandidatesPage() {
         const res = await apiFetch<{ data: JobRow[] }>('/api/jobs/employer/my-jobs')
         const myJobs = res.data || []
         setJobs(myJobs)
-        if (myJobs.length > 0) setSelectedJobId(myJobs[0]._id)
+        // Link từ trang tin / email có ?jobId=... thì mở đúng tin đó, không phải tin đầu tiên.
+        // Đọc từ window.location trong effect để khỏi cần bọc Suspense cho useSearchParams.
+        const wanted = new URLSearchParams(window.location.search).get('jobId')
+        const target = myJobs.find((j) => j._id === wanted) || myJobs[0]
+        if (target) setSelectedJobId(target._id)
       } catch {
         toast.error('Không tải được danh sách tin tuyển dụng')
       } finally {

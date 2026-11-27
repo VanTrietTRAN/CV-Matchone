@@ -422,3 +422,15 @@
 @utility animate-fade-up {
   animation: sr-fade-up 0.32s ease-out both;
 }
+
+/* ExcelImporter đặt trên nền tối của trang admin (tone="dark"): đổi màu chữ phụ
+   và viền sang thang slate để đạt độ tương phản tối thiểu 4.5:1. */
+.importer-dark .text-muted-foreground {
+  color: var(--color-slate-400);
+}
+.importer-dark .text-foreground {
+  color: var(--color-slate-100);
+}
+.importer-dark .border-border {
+  border-color: var(--color-slate-700);
+}

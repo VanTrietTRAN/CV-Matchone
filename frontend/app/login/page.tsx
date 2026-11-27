@@ -33,9 +33,15 @@ function LoginContent() {
         oauth_disabled: 'Đăng nhập mạng xã hội chưa được kích hoạt trên server này.',
         auth_failed: 'Đăng nhập thất bại. Vui lòng thử lại.',
         email_required: 'Tài khoản mạng xã hội không có email. Hãy dùng email/mật khẩu.',
+        oauth_state: 'Phiên đăng nhập mạng xã hội đã hết hạn hoặc không hợp lệ. Vui lòng thử lại.',
+        email_unverified: 'Email của tài khoản mạng xã hội chưa được xác minh nên không liên kết được.',
+        oauth_admin_link: 'Tài khoản quản trị chỉ đăng nhập bằng email và mật khẩu.',
+        account_locked: 'Tài khoản đã bị khoá hoặc không còn hoạt động.',
       }
+      // searchParams.get() đã tự giải mã — decodeURIComponent thêm lần nữa ném
+      // URIError với chuỗi chứa "%" lẻ và làm sập cả trang đăng nhập.
       const msg = errMap[error] || searchParams.get('message') || 'Đăng nhập mạng xã hội thất bại.'
-      toast.error(decodeURIComponent(msg))
+      toast.error(msg.slice(0, 200))
       router.replace('/login')
       return
     }

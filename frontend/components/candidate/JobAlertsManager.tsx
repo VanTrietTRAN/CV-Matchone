@@ -136,13 +136,11 @@ export default function JobAlertsManager() {
 
   const handleSubmit = async () => {
     if (!form.keyword.trim()) return toast.error('Vui lòng nhập từ khoá tìm kiếm')
-    if (!form.email.trim()) return toast.error('Vui lòng nhập email nhận thông báo')
     if (!form.agreedToTerms) return toast.error('Bạn cần đồng ý điều khoản để tiếp tục')
 
     // Chuẩn hoá: 'all' -> '' để backend hiểu là không lọc
     const payload = {
       keyword: form.keyword.trim(),
-      email: form.email.trim(),
       location: form.location === 'all' ? '' : form.location,
       minSalary: form.minSalary,
       experience: form.experience === 'all' ? '' : form.experience,
@@ -317,14 +315,14 @@ export default function JobAlertsManager() {
 
             <div>
               <label className="block text-sm font-semibold text-foreground mb-1.5">
-                Email nhận thông báo <span className="text-danger">*</span>
+                Email nhận thông báo
               </label>
-              <Input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="Nhập email của bạn"
-              />
+              {/* Luôn là email tài khoản đã xác thực — server không nhận địa chỉ khác,
+                  để hệ thống không bị dùng gửi thư tới người lạ. */}
+              <Input type="email" value={getStoredUser()?.email || form.email} readOnly disabled />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Thông báo gửi tới email tài khoản của bạn.
+              </p>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">

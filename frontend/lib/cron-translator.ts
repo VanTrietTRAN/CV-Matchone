@@ -12,6 +12,9 @@ export function translateCronToVietnamese(expression: string): string {
   }
 
   const [min, hour, dayOfMonth, month, dayOfWeek] = parts
+  // Phút cụ thể ("30") thì hiển thị 07:30 thay vì 07:00 — bản cũ bỏ qua phần phút
+  const mm = /^\d{1,2}$/.test(min) ? min.padStart(2, '0') : '00'
+  const at = (h: string) => `${h.padStart(2, '0')}:${mm}`
 
   // Every minute
   if (min === '*' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
@@ -31,10 +34,7 @@ export function translateCronToVietnamese(expression: string): string {
 
   // Daily specific hours e.g. 0 7,17 * * *
   if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-    const hoursFormatted = hour
-      .split(',')
-      .map((h) => `${h.padStart(2, '0')}:00`)
-      .join(' và ')
+    const hoursFormatted = hour.split(',').map(at).join(' và ')
     return `Chạy vào lúc ${hoursFormatted} hàng ngày`
   }
 
@@ -51,7 +51,7 @@ export function translateCronToVietnamese(expression: string): string {
       '7': 'Chủ Nhật',
     }
     const dayName = daysMap[dayOfWeek] || `Ngày thứ ${dayOfWeek}`
-    const hourFormatted = hour.padStart(2, '0') + ':00'
+    const hourFormatted = at(hour)
     return `Chạy vào ${hourFormatted} ${dayName} hàng tuần`
   }
 

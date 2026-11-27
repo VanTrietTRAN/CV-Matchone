@@ -23,7 +23,8 @@ type ApiJob = {
   _id: string
   title: string
   location?: string
-  employerId?: { _id?: string; email?: string } | string
+  employerId?: { _id?: string } | string
+  companyName?: string
 }
 
 type Application = {
@@ -53,9 +54,8 @@ function getJobId(app: Application): string {
 }
 
 function getEmployerEmail(app: Application): string {
-  const e = getJob(app)?.employerId
-  if (e && typeof e === 'object' && 'email' in e) return e.email || 'Nhà tuyển dụng'
-  return 'Nhà tuyển dụng'
+  // Tên công ty do backend gắn sẵn — không hiển thị email đăng nhập của nhà tuyển dụng
+  return getJob(app)?.companyName || 'Nhà tuyển dụng'
 }
 
 function getEmployerId(app: Application): string {
@@ -228,7 +228,8 @@ export default function ApplicationsPage() {
                             matchTone(app.matchingScore ?? null),
                           )}
                         >
-                          {app.matchingScore ? `${app.matchingScore}%` : 'Chưa chấm'}
+                          {/* 0% là một điểm hợp lệ, không phải "chưa chấm" */}
+                          {app.matchingScore != null ? `${app.matchingScore}%` : 'Chưa chấm'}
                         </span>
                       </td>
 

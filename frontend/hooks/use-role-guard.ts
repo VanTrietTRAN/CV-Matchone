@@ -51,7 +51,9 @@ type GuardState =
  *  1. localStorage — chặn tức thì, không kịp nháy nội dung sai.
  *  2. /api/auth/me — nguồn sự thật (đọc HTTPOnly cookie), sửa lại localStorage nếu lệch.
  *
- * Admin đi được mọi khu vực để còn hỗ trợ vận hành.
+ * Admin vào được khu nhà tuyển dụng (API của khu đó cho phép admin) nhưng KHÔNG
+ * vào khu ứng viên: API ứng viên chỉ nhận role candidate nên admin vào đó chỉ
+ * gặp toàn lỗi 403.
  */
 export function useRoleGuard(required: Role): GuardState {
   const router = useRouter()
@@ -60,7 +62,7 @@ export function useRoleGuard(required: Role): GuardState {
   useEffect(() => {
     let cancelled = false
 
-    const allow = (role: Role) => role === required || role === 'admin'
+    const allow = (role: Role) => role === required || (role === 'admin' && required === 'employer')
 
     const stored = getStoredUser()
     if (stored && !allow(stored.role)) {

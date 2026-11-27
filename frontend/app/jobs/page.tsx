@@ -27,6 +27,7 @@ import TaxonomyFilter, {
 } from '@/components/filters/TaxonomyFilter'
 import { useSession } from '@/hooks/use-session'
 import { toast } from 'sonner'
+import { matchesLocation } from '@/lib/format'
 
 type ApiJob = {
   _id: string
@@ -43,8 +44,10 @@ type ApiJob = {
   status: string
   createdAt: string
   expiresAt?: string
-  employerId?: { email?: string } | string
+  employerId?: { _id?: string } | string
+  companyName?: string
   isPro?: boolean
+  jobType?: string
 }
 
 type SortKey = 'newest' | 'deadline'
@@ -55,9 +58,8 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 ]
 
 function getEmployerName(job: ApiJob): string {
-  const e = job.employerId
-  if (e && typeof e === 'object' && 'email' in e && e.email) return e.email
-  return 'Nhà tuyển dụng'
+  // Tên công ty do backend gắn sẵn — KHÔNG hiển thị email đăng nhập của nhà tuyển dụng
+  return job.companyName || 'Nhà tuyển dụng'
 }
 
 function JobsContent() {
@@ -159,7 +161,7 @@ function JobsContent() {
   )
 
   const visibleJobs = useMemo(() => {
-    const result = locationFilter ? jobs.filter((j) => j.location === locationFilter) : [...jobs]
+    const result = locationFilter ? jobs.filter((j) => matchesLocation(j, locationFilter)) : [...jobs]
 
     // Tin của doanh nghiệp PRO luôn đứng trước, đổi kiểu sắp xếp chỉ đổi thứ tự
     // bên trong từng nhóm — server cũng trả về theo đúng quy tắc này.

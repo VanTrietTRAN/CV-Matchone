@@ -31,7 +31,7 @@ import { apiFetch } from '@/lib/api'
 import { categoryLabel, positionLabel, COMPANY_SECTOR_LABEL } from '@/lib/job-categories'
 import { toast } from 'sonner'
 import { CompanyReviews } from '@/components/reviews/CompanyReview'
-import { formatDate, formatRelativeTime, daysUntil, initials } from '@/lib/format'
+import { formatDate, formatRelativeTime, daysUntil, initials, safeUrl } from '@/lib/format'
 import { useSession } from '@/hooks/use-session'
 
 type Job = {
@@ -50,7 +50,8 @@ type Job = {
   expiresAt: string
   createdAt: string
   updatedAt: string
-  employerId: { _id: string; email: string }
+  employerId: { _id: string }
+  companyName?: string
   previewScore?: number | null
   isPro?: boolean
 }
@@ -250,7 +251,7 @@ export default function JobDetailView({ jobId, basePath, browseHref }: JobDetail
   }
 
   const companyName =
-    company?.companyName || job.employerId?.email?.split('@')[0] || 'Nhà tuyển dụng'
+    company?.companyName || job.companyName || 'Nhà tuyển dụng'
   const remaining = daysUntil(job.expiresAt)
   const benefits = job.benefits?.length ? job.benefits : company?.benefits || []
   const isEmployerViewer = user?.role === 'employer' || user?.role === 'admin'
@@ -506,14 +507,14 @@ export default function JobDetailView({ jobId, basePath, browseHref }: JobDetail
                     </div>
                   </div>
                 )}
-                {company?.website && (
+                {company?.website && safeUrl(company.website) && (
                   <div className="flex items-start gap-2.5">
                     <Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
                       <dt className="text-xs text-muted-foreground">Website</dt>
                       <dd>
                         <a
-                          href={company.website}
+                          href={safeUrl(company.website)!}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="link-brand block truncate"

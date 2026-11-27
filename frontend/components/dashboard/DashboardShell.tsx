@@ -59,7 +59,8 @@ export default function DashboardShell({
 
   const notificationsHref = NOTIFICATIONS_HREF[variant]
   const isDark = tone === 'dark'
-  const unread = useUnreadCount(Boolean(notificationsHref))
+  // Chỉ đếm thông báo khi đã xác nhận đúng người — trước đó bắn API là 401 thừa
+  const unread = useUnreadCount(Boolean(notificationsHref) && guard.status === 'allowed')
 
   useEffect(() => {
     setOpen(false)
@@ -70,8 +71,10 @@ export default function DashboardShell({
     router.push(variant === 'employer' ? '/login?role=employer' : '/login')
   }
 
-  // Sai vai trò thì không vẽ gì trong lúc đợi chuyển hướng, tránh nháy nội dung của khu vực khác
-  if (guard.status === 'denied') {
+  // Chưa xác nhận xong phiên (checking) hoặc sai vai trò (denied): không vẽ nội
+  // dung khu vực. Trước đây 'checking' vẫn render cả trang — trang con bắn API
+  // bảo vệ (vd /api/admin/stats) và nháy giao diện admin trước khi biết là ai.
+  if (guard.status !== 'allowed') {
     return (
       <div
         className={cn(

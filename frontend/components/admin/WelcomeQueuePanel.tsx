@@ -58,7 +58,9 @@ export default function WelcomeQueuePanel({
   // lần render, để nó vào mảng phụ thuộc thì mỗi lần nhận số liệu lại dựng lại
   // interval rồi gọi tiếp — vòng lặp render không có điểm dừng.
   const onQueueRef = useRef(onQueue)
-  onQueueRef.current = onQueue
+  useEffect(() => {
+    onQueueRef.current = onQueue
+  }, [onQueue])
 
   const load = useCallback(async () => {
     try {
