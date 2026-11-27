@@ -186,6 +186,9 @@ const deleteFile = async (fileKey) => {
  */
 const getSignedDownloadUrl = async (fileKey) => {
   if (!fileKey || !isR2Configured()) return null;
+  // File lưu trong MongoDB từ trước khi bật R2 không có trên R2 — ký link R2
+  // cho nó là trả về 404 NoSuchKey. Trả null để controller stream từ MongoDB.
+  if (await CvFile.exists({ key: fileKey })) return null;
   return getSignedUrl(
     r2Client(),
     new GetObjectCommand({ Bucket: envValue("R2_BUCKET_NAME"), Key: fileKey }),

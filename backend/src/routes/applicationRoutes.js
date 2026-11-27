@@ -1,5 +1,9 @@
 const express = require("express");
 const router = express.Router();
+const { validateObjectIdParam } = require('../middleware/validateObjectId');
+router.param('id', validateObjectIdParam);
+router.param('companyUserId', validateObjectIdParam);
+router.param('jobId', validateObjectIdParam);
 const { protect, authorize } = require("../middleware/authMiddleware");
 const {
   applyToJob,

@@ -80,6 +80,29 @@ app.use(
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser()); // Đọc HTTPOnly cookie từ request
 
+// Express 5 để req.body = undefined khi request không có body. Các handler đều
+// destructure thẳng req.body nên POST rỗng là crash 500 "Cannot destructure".
+app.use((req, res, next) => {
+  if (req.body === undefined) req.body = {};
+  next();
+});
+
+// Lỗi 500 ở production không trả error.message ra ngoài: nó lộ CastError, tên
+// collection, đường dẫn nội bộ... Nhiều controller vẫn tự trả `error.message`,
+// nên chặn tập trung ở đây thay vì sửa từng chỗ. Log đầy đủ vẫn còn ở server.
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV !== "production") return next();
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode >= 500 && body && typeof body === "object" && "message" in body) {
+      console.error(`[500] ${req.method} ${req.originalUrl}: ${body.message}`);
+      return json({ message: "Lỗi hệ thống, vui lòng thử lại sau." });
+    }
+    return json(body);
+  };
+  next();
+});
+
 const helmet = require('helmet');
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP header to allow Next.js cross-origin assets if needed
@@ -89,51 +112,21 @@ app.use(helmet({
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
-// Railway và uptime monitor gọi endpoint này để kiểm tra service có sống không
-app.get("/health", async (req, res) => {
+// Railway và uptime monitor gọi endpoint này để kiểm tra service có sống không.
+//
+// Công khai nên chỉ trả tối thiểu. Trước đây trả cả cấu hình SMTP (login che một
+// phần, tiền tố khoá), cấu hình R2, và ?email=1 / ?ai=1 cho phép KHÁCH mở kết nối
+// ra SMTP/AI. Bản chi tiết nay ở GET /api/admin/system/health (chỉ admin).
+app.get("/health", (req, res) => {
   const mongoose = require("mongoose");
   const dbState = mongoose.connection.readyState;
   // 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
   const dbStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown';
   const isHealthy = dbState === 1;
-
-  // Không gọi AI ở healthcheck mặc định vì Railway ping liên tục.
-  // Thêm ?ai=1 khi cần biết backend có với tới AI service không — cấu hình sai
-  // (ví dụ AI_SERVICE_URL = "http://:8000") khiến mọi điểm phù hợp bằng 0 mà
-  // không báo lỗi ở bất kỳ đâu.
-  let ai;
-  if (req.query.ai) {
-    const { checkAiHealth } = require("./src/services/aiService");
-    ai = await checkAiHealth();
-  } else {
-    const { getAiConfig } = require("./src/services/aiService");
-    const cfg = getAiConfig();
-    ai = { configured: cfg.configured, ...(cfg.error ? { error: cfg.error } : {}) };
-  }
-
-  // Kho lưu trữ file CV: thiếu biến R2_* thì import CV vẫn chạy nhưng file nằm
-  // trong MongoDB — cần nhìn thấy được để không tưởng là đang dùng R2.
-  const { getStorageConfig } = require("./src/services/storageService");
-
-  // Cấu hình gửi mail. ?email=1 bắt tay thật với SMTP (mất ~1-2 giây) nên không
-  // chạy ở healthcheck mặc định mà Railway ping liên tục.
-  const emailService = require("./src/services/emailService");
-  const email = req.query.email
-    ? { ...emailService.getEmailConfig(), ...(await emailService.verifyEmailConnection()) }
-    : emailService.getEmailConfig();
-
   res.status(isHealthy ? 200 : 503).json({
     status: isHealthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
     database: dbStatus,
-    ai,
-    storage: getStorageConfig(),
-    email,
-    memory: {
-      heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-      heapTotalMB: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-    },
   });
 });
 
@@ -185,9 +178,20 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ message: messages[err.code] || `Lỗi tải file: ${err.message}` });
   }
 
-  // fileFilter của uploadMiddleware ném Error thường khi file không phải PDF
-  if (/PDF/i.test(err.message || "")) {
+  // fileFilter của uploadMiddleware / sheetUploadMiddleware gắn err.status = 400
+  if (err.status === 400 || /PDF/i.test(err.message || "")) {
     return res.status(400).json({ message: err.message });
+  }
+
+  // JSON hỏng → 400 chứ không phải 500
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ message: "Dữ liệu gửi lên không phải JSON hợp lệ." });
+  }
+  if (err.type === "entity.too.large") {
+    return res.status(413).json({ message: "Dữ liệu gửi lên quá lớn." });
+  }
+  if (err.name === "CastError") {
+    return res.status(400).json({ message: "Mã định danh không hợp lệ." });
   }
 
   if (/^CORS blocked/.test(err.message || "")) {

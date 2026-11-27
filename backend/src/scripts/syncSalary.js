@@ -47,7 +47,10 @@ function planFor(job) {
     const parsed = parseSalaryRange(job.salary);
     min = parsed.min;
     max = parsed.max;
-    currency = currency || parsed.currency;
+    // Ký hiệu tiền trong chuỗi ("$500 - $800", "176.000 yên") thắng giá trị
+    // `currency` mặc định "VND" của tin: trước đây bị quy thành 500–800 NGHÌN đồng.
+    if (parsed.currency && parsed.currency !== 'VND') currency = parsed.currency;
+    else currency = currency || parsed.currency;
   }
   currency = currency || 'VND';
 

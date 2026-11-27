@@ -8,7 +8,9 @@ const fileFilter = (req, file, cb) => {
   if (file.mimetype === "application/pdf") {
     cb(null, true);
   } else {
-    cb(new Error("Chỉ chấp nhận định dạng file PDF!"), false);
+    const err = new Error("Chỉ chấp nhận định dạng file PDF!");
+    err.status = 400;
+    cb(err, false);
   }
 };
 

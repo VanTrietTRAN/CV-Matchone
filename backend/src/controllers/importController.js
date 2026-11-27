@@ -220,6 +220,13 @@ const importUsers = async (req, res) => {
 
       // ── Tài khoản đã có: đối chiếu để quyết định gửi bù hay bỏ qua ──
       if (existing) {
+        // Email đang thuộc tài khoản doanh nghiệp/admin: tuyệt đối không gắn MSSV
+        // và hàng đợi thư mời sinh viên lên đó (trước đây ghi đè thẳng).
+        if (existing.role !== 'candidate') {
+          const roleLabel = existing.role === 'admin' ? 'quản trị viên' : 'doanh nghiệp';
+          failed.push({ row: row.__row, email, reason: `Email này đang là tài khoản ${roleLabel}` });
+          continue;
+        }
         if (!sendSchoolEmail) {
           skipped.push({ row: row.__row, email, reason: 'Email đã có tài khoản' });
           continue;
@@ -567,14 +574,19 @@ const importEmployers = async (req, res) => {
         });
 
         // Hồ sơ công ty phải có ngay: tên công ty hiện trên mọi tin tuyển dụng và
-        // trong chính thư mời gửi đi. Không có hồ sơ thì tin đăng hộ hiện tên là
-        // phần đầu địa chỉ email.
-        await CompanyProfile.create({
-          userId: user._id,
-          companyName,
-          phone: row.phone || '',
-          address: row.address || '',
-        });
+        // trong chính thư mời gửi đi. Tạo hồ sơ hỏng thì xoá luôn tài khoản vừa
+        // tạo — không để lại User mồ côi đang chờ gửi thư mời.
+        try {
+          await CompanyProfile.create({
+            userId: user._id,
+            companyName,
+            phone: row.phone || '',
+            address: row.address || '',
+          });
+        } catch (e) {
+          await User.deleteOne({ _id: user._id });
+          throw e;
+        }
 
         created.push({ row: row.__row, email, fullName: companyName, sendTo: 'personal' });
       } catch (e) {

@@ -19,9 +19,13 @@ module.exports = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const okMime = ACCEPTED.includes(file.mimetype);
+    // Đuôi file là BẮT BUỘC (MIME do trình duyệt tự khai, dễ giả). Trước đây chỉ
+    // cần một trong hai nên file .txt text/plain cũng lọt vào luồng import.
     const okExt = /\.(xlsx|xls|csv)$/i.test(file.originalname || "");
-    if (okMime || okExt) return cb(null, true);
-    cb(new Error("Chỉ chấp nhận file Excel (.xlsx, .xls) hoặc .csv"));
+    const okMime = ACCEPTED.includes(file.mimetype) || file.mimetype === "application/octet-stream";
+    if (okExt && okMime) return cb(null, true);
+    const err = new Error("Chỉ chấp nhận file Excel (.xlsx, .xls) hoặc .csv");
+    err.status = 400;
+    cb(err);
   },
 });

@@ -34,8 +34,13 @@ const protect = async (req, res, next) => {
 
         req.user = await User.findById(decoded.id).select('-password');
 
-        if (!req.user) {
+        if (!req.user || req.user.isDeleted === true) {
             return res.status(401).json({ message: 'Tài khoản không tồn tại' });
+        }
+        // Khoá tài khoản phải có hiệu lực NGAY, kể cả với JWT đã cấp trước đó
+        // (cookie sống 7 ngày). 401 để frontend dọn phiên và đưa về trang đăng nhập.
+        if (req.user.status === 'banned') {
+            return res.status(401).json({ message: 'Tài khoản đã bị khoá.', banned: true });
         }
 
         touchLastActive(req.user);
@@ -65,7 +70,8 @@ const optionalAuth = async (req, res, next) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const user = await User.findById(decoded.id).select('-password');
-        if (user) req.user = user;
+        // Tài khoản khoá / đã xoá coi như khách vãng lai
+        if (user && user.status !== 'banned' && user.isDeleted !== true) req.user = user;
     } catch {
         // Token hỏng/hết hạn: cứ coi như khách vãng lai
     }

@@ -1,4 +1,7 @@
 const User = require('../models/User');
+
+/** Escape chuỗi người dùng nhập trước khi đưa vào $regex. */
+const escapeRegex = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const Job = require('../models/Job');
 const Application = require('../models/Application');
 const CvProfile = require('../models/CvProfile');
@@ -75,7 +78,11 @@ const getUsers = async (req, res) => {
     const filter = { isDeleted: { $ne: true } };
     if (role) filter.role = role;
     if (status) filter.status = status;
-    if (search) filter.email = { $regex: search, $options: 'i' };
+    // Escape ký tự đặc biệt: "[" từng làm regex hỏng và crash 500; chuỗi kiểu
+    // "(a+)+$" còn là ReDoS. Chỉ nhận chuỗi (không nhận object toán tử).
+    if (typeof search === 'string' && search.trim()) {
+      filter.email = { $regex: escapeRegex(search.trim().slice(0, 100)), $options: 'i' };
+    }
 
     const total = await User.countDocuments(filter);
     const users = await User.find(filter)
@@ -246,10 +253,11 @@ const getAuditLogs = async (req, res) => {
     const filter = {};
     if (action) filter.action = action;
 
-    if (search) {
-      const adminUsers = await User.find({ email: { $regex: search, $options: 'i' } }).select('_id');
+    if (typeof search === 'string' && search.trim()) {
+      const safe = escapeRegex(search.trim().slice(0, 100));
+      const adminUsers = await User.find({ email: { $regex: safe, $options: 'i' } }).select('_id');
       const adminIds = adminUsers.map((u) => u._id);
-      filter.$or = [{ adminId: { $in: adminIds } }, { ipAddress: { $regex: search, $options: 'i' } }];
+      filter.$or = [{ adminId: { $in: adminIds } }, { ipAddress: { $regex: safe, $options: 'i' } }];
     }
 
     const total = await AuditLog.countDocuments(filter);
@@ -468,6 +476,14 @@ const getSystemInfo = async (req, res) => {
         // không nhận được thư.
         email: require('../services/emailService').getEmailConfig(),
         storage: require('../services/storageService').getStorageConfig(),
+        // Chi tiết AI trước đây ở /health công khai — nay chỉ admin xem được.
+        // ?ai=1 gọi thật sang AI service.
+        ai: req.query.ai
+          ? await require('../services/aiService').checkAiHealth()
+          : (() => {
+              const cfg = require('../services/aiService').getAiConfig();
+              return { configured: cfg.configured, ...(cfg.error ? { error: cfg.error } : {}) };
+            })(),
         notifications: {
           total: totalNotifications,
           softDeleted: softDeletedNotifications,
@@ -742,41 +758,36 @@ const getEmailSettings = async (req, res) => {
   }
 };
 
+const SCHEDULE_TYPES = ['demo', 'hourly', 'daily', 'weekly', 'custom'];
+
 const updateEmailSettings = async (req, res) => {
   try {
     const { isEnabled, scheduleType, cronExpression } = req.body;
-    
-    // Validate custom cron expression format if scheduleType is custom
-    if (scheduleType === 'custom') {
-      if (!cronExpression || cronExpression.trim().split(/\s+/).length < 5) {
-        return res.status(400).json({ message: 'Biểu thức Cron tùy chỉnh không hợp lệ (cần ít nhất 5 trường).' });
-      }
+    const { checkCronExpression } = require('../utils/cronGuard');
 
-      const minPart = cronExpression.trim().split(/\s+/)[0];
-      const hourPart = cronExpression.trim().split(/\s+/)[1];
-      
-      // Block high frequency execution under 15 minutes for custom cron
-      const isEveryMin = minPart === '*' && hourPart === '*';
-      let isStepTooFrequent = false;
-      if (minPart.startsWith('*/') && hourPart === '*') {
-        const step = parseInt(minPart.replace('*/', ''), 10);
-        if (!isNaN(step) && step < 15) isStepTooFrequent = true;
-      }
-
-      if (isEveryMin || isStepTooFrequent) {
-        return res.status(400).json({
-          message: 'Tần suất quá cao! Vui lòng chọn khoảng thời gian tối thiểu 15 phút hoặc chọn các phương án có sẵn.',
-        });
-      }
+    if (!SCHEDULE_TYPES.includes(scheduleType)) {
+      return res.status(400).json({ message: 'Loại lịch không hợp lệ.' });
+    }
+    // Lịch "mỗi phút" chỉ để trình diễn — trên production là đốt sạch quota gửi
+    if (scheduleType === 'demo' && process.env.NODE_ENV === 'production') {
+      return res.status(400).json({ message: 'Lịch "Mỗi phút (Demo)" không dùng được trên môi trường production.' });
     }
 
     // Set standard cron expressions for pre-defined types
-    let computedCron = cronExpression;
+    let computedCron = typeof cronExpression === 'string' ? cronExpression.trim() : '';
     if (scheduleType === 'demo') computedCron = '* * * * *';
     else if (scheduleType === 'hourly') computedCron = '0 * * * *';
     else if (scheduleType === 'daily') computedCron = '0 12 * * *';
     // Mặc định của hệ thống: 15h thứ Sáu hằng tuần (0 = Chủ nhật)
     else if (scheduleType === 'weekly') computedCron = '0 15 * * 5';
+
+    if (scheduleType === 'custom') {
+      // node-cron phải đọc được, và hai lần chạy cách nhau tối thiểu 15 phút.
+      // Bản cũ chỉ đếm số trường nên "0-59 * * * *" (mỗi phút) và "abc def ghi
+      // jkl mno" đều được lưu.
+      const check = checkCronExpression(computedCron, { minGap: 15 });
+      if (!check.ok) return res.status(400).json({ message: check.message });
+    }
 
     const settingsRecord = await SystemSetting.findOneAndUpdate(
       { key: 'email_matching_settings' },

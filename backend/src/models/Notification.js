@@ -10,7 +10,9 @@ const notificationSchema = new mongoose.Schema({
 
   type: {
     type: String,
-    enum: ['new_application', 'application_status_update', 'job_match'],
+    // 'system': thông báo toàn hệ thống từ admin (broadcast). Thiếu giá trị này
+    // thì insertMany của broadcast bỏ qua lặng lẽ mọi bản ghi.
+    enum: ['new_application', 'application_status_update', 'job_match', 'system'],
     required: true,
   },
 

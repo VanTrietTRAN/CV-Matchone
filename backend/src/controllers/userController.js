@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const { findPrimaryOrLatestCv } = require('../utils/primaryCv');
+const { safeHttpUrl, isSafeImage } = require('../utils/safeUrl');
 const CvProfile = require('../models/CvProfile');
 const Application = require('../models/Application');
 
@@ -32,7 +34,7 @@ const updateMySettings = async (req, res) => {
     }
 
     if (typeof isLookingForJob === 'boolean') {
-      const cv = await CvProfile.findOne({ userId }).sort({ createdAt: -1 });
+      const cv = await findPrimaryOrLatestCv(userId);
       if (cv) {
         cv.isLookingForJob = isLookingForJob;
         await cv.save();
@@ -49,7 +51,8 @@ const updateMySettings = async (req, res) => {
 const getMyProfile = async (req, res) => {
   try {
     const userId = req.user._id;
-    const cv = await CvProfile.findOne({ userId }).sort({ createdAt: -1 });
+    // CV chính (isPrimary) trước — thống nhất với trang gợi ý việc làm và nộp đơn
+    const cv = await findPrimaryOrLatestCv(userId);
     res.json({
       data: {
         user: {
@@ -100,10 +103,18 @@ const getCompanyProfile = async (req, res) => {
   try {
     const CompanyProfile = require('../models/CompanyProfile');
     const userId = req.user._id;
-    let profile = await CompanyProfile.findOne({ userId });
-
-    if (!profile) {
-      profile = await CompanyProfile.create({ userId, companyName: req.user.email.split('@')[0] });
+    // Tạo-nếu-chưa-có bằng MỘT lệnh upsert: findOne rồi create thì vài request
+    // đồng thời lần đầu (nhiều tab, React StrictMode) cùng tạo và nổ E11000.
+    let profile;
+    try {
+      profile = await CompanyProfile.findOneAndUpdate(
+        { userId },
+        { $setOnInsert: { userId, companyName: req.user.email.split('@')[0] } },
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+      );
+    } catch (e) {
+      if (e.code !== 11000) throw e;
+      profile = await CompanyProfile.findOne({ userId });
     }
 
     res.json({ data: profile });
@@ -127,14 +138,35 @@ const updateCompanyProfile = async (req, res) => {
       if (typeof req.body[f] !== 'undefined') updateData[f] = req.body[f];
     });
 
+    // website chỉ nhận http/https — "javascript:alert(1)" từng được lưu nguyên
+    // văn rồi gắn vào <a href> trên trang việc làm công khai.
+    if (updateData.website !== undefined) {
+      const safe = safeHttpUrl(updateData.website);
+      if (safe === null) {
+        return res.status(400).json({ message: 'Website phải là địa chỉ http:// hoặc https:// hợp lệ.' });
+      }
+      updateData.website = safe;
+    }
+    // Ảnh chỉ nhận JPEG/PNG/WebP — SVG chứa được mã script
+    for (const f of ['logo', 'coverImage']) {
+      if (updateData[f] !== undefined && !isSafeImage(updateData[f])) {
+        return res.status(400).json({ message: 'Logo và ảnh bìa phải là ảnh JPEG, PNG hoặc WebP.' });
+      }
+    }
+
+    // runValidators: findOneAndUpdate mặc định KHÔNG kiểm tra enum, nên
+    // industry="NOT_A_VALID_INDUSTRY" trước đây được lưu thẳng.
     const profile = await CompanyProfile.findOneAndUpdate(
       { userId },
       { $set: updateData },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true }
     );
 
     res.json({ message: 'Cập nhật hồ sơ công ty thành công', data: profile });
   } catch (error) {
+    if (error.name === 'ValidationError' || error.name === 'CastError') {
+      return res.status(400).json({ message: 'Dữ liệu hồ sơ công ty không hợp lệ.' });
+    }
     res.status(500).json({ message: error.message });
   }
 };

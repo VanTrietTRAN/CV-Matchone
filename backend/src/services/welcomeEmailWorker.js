@@ -262,6 +262,9 @@ const getQueueStats = async (filter = {}) => {
   // `filter` khoanh vùng theo vai trò (vd { role: 'employer' }) để trang import
   // doanh nghiệp không hiện lẫn số liệu của hàng đợi sinh viên. Hạn mức gửi
   // trong ngày thì vẫn là con số chung — cả hai loại thư tiêu cùng làn P1.
+  // Cùng bộ lọc với processBatch: tài khoản khoá / đã xoá không bao giờ được
+  // gửi, đếm chúng vào "đang chờ" là hàng đợi không bao giờ về 0.
+  filter = { ...filter, isDeleted: { $ne: true }, status: { $ne: 'banned' } };
   const [pending, sent, failed, skipped, schoolSent, pendingByTarget, health] = await Promise.all([
     User.countDocuments({ ...filter, welcomeEmailStatus: 'pending' }),
     User.countDocuments({ ...filter, welcomeEmailStatus: 'sent' }),
@@ -314,7 +317,13 @@ const retryFailed = async (filter = {}) => {
   const EmailSuppression = require('../models/EmailSuppression');
   const blocked = await EmailSuppression.find({}).select('email').lean();
   const r = await User.updateMany(
-    { ...filter, welcomeEmailStatus: 'failed', email: { $nin: blocked.map((b) => b.email) } },
+    {
+      ...filter,
+      welcomeEmailStatus: 'failed',
+      isDeleted: { $ne: true },
+      status: { $ne: 'banned' },
+      email: { $nin: blocked.map((b) => b.email) },
+    },
     { $set: { welcomeEmailStatus: 'pending', welcomeEmailAttempts: 0, welcomeEmailError: null } },
   );
   return r.modifiedCount;

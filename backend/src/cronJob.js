@@ -10,6 +10,7 @@ const SystemSetting = require("./models/SystemSetting");
 const aiService = require("./services/aiService");
 const emailService = require("./services/emailService");
 const { matchJobToAlert, isAlertDue } = require("./utils/alertMatching");
+const { findPrimaryOrLatestCv } = require("./utils/primaryCv");
 
 // Múi giờ phải khai báo tường minh. Không có option này, node-cron dùng giờ hệ
 // thống của container — Railway chạy UTC, nên "0 12 * * *" mà ta hiểu là 12h trưa
@@ -153,9 +154,10 @@ const runAlertMatching = async (candidate, cv, openJobs, mail) => {
       );
     }
 
+    let delivered = matchedJobs.length === 0;
     if (matchedJobs.length > 0 && canQueueFor(mail, candidate)) {
       matchedJobs.sort((a, b) => b.finalScore - a.finalScore);
-      noteQueued(
+      delivered = noteQueued(
         mail,
         await emailService.queueJobAlertEmail({
           target: { email: alert.email || candidate.email, fullName: cv?.fullName },
@@ -167,8 +169,12 @@ const runAlertMatching = async (candidate, cv, openJobs, mail) => {
       );
     }
 
-    alert.lastNotifiedAt = new Date();
-    await alert.save();
+    // Chỉ dời mốc khi đã xếp được thư (hoặc không có gì để gửi). Trước đây mốc
+    // luôn dời, nên kỳ nào gửi hỏng là các tin khớp của kỳ đó mất vĩnh viễn.
+    if (delivered) {
+      alert.lastNotifiedAt = new Date();
+      await alert.save();
+    }
   }
 
   return true;
@@ -193,6 +199,15 @@ const runCvMatching = async (candidate, cv, openJobs, mail) => {
     const percent = await calcAiPercent(cv, job);
     if (percent == null || percent < minMatchScore) continue;
 
+    // Tin đã báo cho ứng viên ở kỳ trước thì không đưa vào thư nữa — trước đây
+    // mỗi kỳ cron gửi lại đúng những tin cũ.
+    const candidateNotifExists = await Notification.findOne({
+      userId: candidate._id,
+      type: "job_match",
+      jobId: job._id,
+    });
+    if (candidateNotifExists) continue;
+
     const companyName = await resolveCompanyName(job);
     matchedJobs.push({
       id: job._id,
@@ -202,22 +217,15 @@ const runCvMatching = async (candidate, cv, openJobs, mail) => {
       previewScore: percent,
     });
 
-    const candidateNotifExists = await Notification.findOne({
+    await Notification.create({
       userId: candidate._id,
       type: "job_match",
+      title: `Cơ hội việc làm mới phù hợp: ${job.title}`,
+      body: `Hệ thống AI phát hiện bạn phù hợp ${percent}% với vị trí này tại ${companyName} (dựa trên CV: ${cv.fullName}).`,
+      matchingScore: percent,
       jobId: job._id,
+      cvProfileId: cv._id,
     });
-    if (!candidateNotifExists) {
-      await Notification.create({
-        userId: candidate._id,
-        type: "job_match",
-        title: `Cơ hội việc làm mới phù hợp: ${job.title}`,
-        body: `Hệ thống AI phát hiện bạn phù hợp ${percent}% với vị trí này tại ${companyName} (dựa trên CV: ${cv.fullName}).`,
-        matchingScore: percent,
-        jobId: job._id,
-        cvProfileId: cv._id,
-      });
-    }
 
     const employerId = job.employerId?._id || job.employerId;
     const employerNotifExists = await Notification.findOne({
@@ -297,7 +305,9 @@ const runEmployerDigest = async () => {
 
   // Lấy theo ngưỡng mặc định trước, rồi lọc lại theo ngưỡng riêng của từng doanh
   // nghiệp ở dưới. Doanh nghiệp đặt ngưỡng thấp hơn mặc định vẫn nhận đủ hồ sơ.
-  const LOWEST_THRESHOLD = 50;
+  // Không đặt sàn cứng: doanh nghiệp đặt ngưỡng 30% vẫn phải thấy hồ sơ 40%.
+  // Mỗi doanh nghiệp lọc lại theo ngưỡng riêng ở dưới.
+  const LOWEST_THRESHOLD = 0;
   const applications = await Application.find({
     appliedAt: { $gte: since },
     matchingScore: { $gte: Math.min(threshold, LOWEST_THRESHOLD) },
@@ -492,7 +502,23 @@ const runJobExpiryReminder = async () => {
   return { employersNotified: sentCount, jobsFlagged: jobs.length, warningDays: days };
 };
 
-const runMatchingProcess = async () => {
+// Một lượt quét chạy cùng lúc là đủ: bấm "Chạy ngay" khi cron cũng đang chạy
+// trước đây là hai lượt song song, xếp trùng thư cho cùng ứng viên.
+const running = { matching: false, digest: false, expiry: false };
+const exclusive = (key, fn) => async (...args) => {
+  if (running[key]) {
+    console.warn(`[Cron] Bỏ qua: lượt ${key} trước vẫn đang chạy.`);
+    return { skipped: true, reason: 'Lượt trước vẫn đang chạy.' };
+  }
+  running[key] = true;
+  try {
+    return await fn(...args);
+  } finally {
+    running[key] = false;
+  }
+};
+
+const runMatchingProcessImpl = async () => {
   console.log(
     "[Cron/Trigger] Đang chạy tác vụ quét việc làm matching lúc:",
     new Date().toLocaleString()
@@ -501,7 +527,14 @@ const runMatchingProcess = async () => {
   let candidatesProcessed = 0;
 
   try {
-    const openJobs = await Job.find({ status: "open" }).populate(
+    // Chỉ tin còn hiển thị: chưa xoá mềm, chưa hết hạn, chưa tắt gửi email
+    const now = new Date();
+    const openJobs = await Job.find({
+      status: "open",
+      isDeleted: { $ne: true },
+      isEmailEnabled: { $ne: false },
+      $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+    }).populate(
       "employerId",
       "email"
     );
@@ -536,15 +569,7 @@ const runMatchingProcess = async () => {
     const mail = await createMailBudget();
 
     for (const candidate of candidates) {
-      let cv = await CvProfile.findOne({
-        userId: candidate._id,
-        isPrimary: true,
-      });
-      if (!cv) {
-        cv = await CvProfile.findOne({ userId: candidate._id }).sort({
-          createdAt: -1,
-        });
-      }
+      const cv = await findPrimaryOrLatestCv(candidate._id);
 
       // Check matching
       const handledByAlerts = await runAlertMatching(candidate, cv, openJobs, mail);
@@ -572,6 +597,10 @@ const runMatchingProcess = async () => {
     throw error;
   }
 };
+
+const runMatchingProcess = exclusive('matching', runMatchingProcessImpl);
+const runEmployerDigestOnce = exclusive('digest', runEmployerDigest);
+const runJobExpiryReminderOnce = exclusive('expiry', runJobExpiryReminder);
 
 let activeCronTask = null;
 let employerCronTask = null;
@@ -602,12 +631,11 @@ const startCronJobs = async () => {
       activeCronTask = null;
     }
 
-    // 2. If disabled, do not schedule new task
+    // 2. Tắt lịch gợi ý ứng viên KHÔNG được tắt lây hai lịch của doanh nghiệp —
+    //    bản cũ `return` sớm ở đây nên tổng hợp hồ sơ 15h và nhắc hạn 9h cũng mất.
     if (!isEnabled) {
       console.log('[Cron] Tác vụ quét matching gửi email tự động đang TẮT theo cấu hình hệ thống.');
-      return;
-    }
-
+    } else {
     // 3. Schedule cron task
     //
     // Múi giờ phải khai báo tường minh. Không có option này, node-cron dùng giờ
@@ -628,6 +656,7 @@ const startCronJobs = async () => {
         // already logged
       }
     }, { timezone: CRON_TIMEZONE });
+    }
 
     // ─── Tổng hợp hồ sơ gửi doanh nghiệp ─────────────────────────────────────
     // Lịch riêng, cố định 15h, không dùng chung cấu hình với email ứng viên vì
@@ -647,7 +676,7 @@ const startCronJobs = async () => {
       );
       employerCronTask = cron.schedule(employerCron, async () => {
         try {
-          await runEmployerDigest();
+          await runEmployerDigestOnce();
         } catch (err) {
           console.error('[Cron/Employer] Lỗi:', err.message);
         }
@@ -671,7 +700,7 @@ const startCronJobs = async () => {
       );
       expiryCronTask = cron.schedule(expiryCron, async () => {
         try {
-          await runJobExpiryReminder();
+          await runJobExpiryReminderOnce();
         } catch (err) {
           console.error('[Cron/Expiry] Lỗi:', err.message);
         }
@@ -687,7 +716,7 @@ const startCronJobs = async () => {
 module.exports = {
   startCronJobs,
   runMatchingProcess,
-  runEmployerDigest,
-  runJobExpiryReminder,
+  runEmployerDigest: runEmployerDigestOnce,
+  runJobExpiryReminder: runJobExpiryReminderOnce,
   reloadCronJobs: startCronJobs,
 };

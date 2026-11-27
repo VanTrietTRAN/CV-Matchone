@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+// Ngày tháng trong kinh nghiệm/học vấn đến từ LLM hoặc người dùng gõ tay:
+// "Present", "Hiện tại", "05/2020"... Cast thẳng sang Date là ValidationError và
+// cả CV bị đánh dấu lỗi bóc tách. Giá trị không đọc được thì coi như trống.
+const toDateOrNull = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+};
+
 const cvProfileSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -27,8 +37,8 @@ const cvProfileSchema = new mongoose.Schema({
         company: String,
         position: String,
         description: String,
-        startDate: Date,
-        endDate: Date
+        startDate: { type: Date, set: toDateOrNull },
+        endDate: { type: Date, set: toDateOrNull }
     }],
 
     education: [{
@@ -36,8 +46,8 @@ const cvProfileSchema = new mongoose.Schema({
         major: String,      // Chuyên ngành
         degree: String,     // Bậc học: Đại học / Cao đẳng / Thạc sĩ...
         gpa: String,
-        startDate: Date,
-        endDate: Date
+        startDate: { type: Date, set: toDateOrNull },
+        endDate: { type: Date, set: toDateOrNull }
     }],
 
     // Ngôn ngữ: { name: 'Tiếng Anh', level: 'IELTS 7.0' }
@@ -76,5 +86,14 @@ const cvProfileSchema = new mongoose.Schema({
     },
     lastAiAttemptAt: { type: Date }
 }, { timestamps: true });
+
+// Vector embedding (768 số thực) chỉ dùng nội bộ để chấm điểm — không trả ra
+// client: mỗi CV nặng thêm ~15KB JSON vô ích ở mọi endpoint.
+cvProfileSchema.set('toJSON', {
+    transform: (doc, ret) => {
+        delete ret.embedding;
+        return ret;
+    },
+});
 
 module.exports = mongoose.model('CvProfile', cvProfileSchema);

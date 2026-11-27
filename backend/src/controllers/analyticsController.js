@@ -3,30 +3,39 @@ const Job = require('../models/Job');
 const Application = require('../models/Application');
 const CvProfile = require('../models/CvProfile');
 
+// Mọi mốc ngày tính theo giờ Việt Nam. Bản cũ trộn setHours (giờ máy chủ) với
+// toISOString (UTC) và $dateToString (UTC): lọc ngày 20/11 lại ra số liệu 19/11.
+const TZ = 'Asia/Ho_Chi_Minh';
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 'YYYY-MM-DD' của một thời điểm, theo giờ Việt Nam. */
+const vnDateKey = (d) => new Date(d.getTime() + VN_OFFSET_MS).toISOString().slice(0, 10);
+
+/** Thời điểm 00:00 giờ Việt Nam của ngày chứa `d` (hoặc của chuỗi 'YYYY-MM-DD'). */
+const vnStartOfDay = (input) => {
+  const key = typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input) ? input : vnDateKey(new Date(input));
+  return new Date(Date.parse(`${key}T00:00:00Z`) - VN_OFFSET_MS);
+};
+
 /**
  * Đọc khoảng thời gian từ query. Mặc định 30 ngày gần nhất.
  * `to` được đẩy tới cuối ngày để bộ lọc bao trọn ngày người dùng chọn.
  */
 const parseRange = (query) => {
   const now = new Date();
+  const valid = (v) => typeof v === 'string' && !Number.isNaN(new Date(v).getTime());
+
+  let to = valid(query.to) ? vnStartOfDay(query.to) : vnStartOfDay(now);
   let from;
-  let to = new Date(now);
-
-  if (query.from) {
-    const d = new Date(query.from);
-    if (!Number.isNaN(d.getTime())) from = d;
-  }
-  if (query.to) {
-    const d = new Date(query.to);
-    if (!Number.isNaN(d.getTime())) to = d;
-  }
-  if (!from) {
+  if (valid(query.from)) {
+    from = vnStartOfDay(query.from);
+  } else {
     const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);
-    from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    from = new Date(to.getTime() - (days - 1) * DAY_MS);
   }
-
-  from.setHours(0, 0, 0, 0);
-  to.setHours(23, 59, 59, 999);
+  to = new Date(to.getTime() + DAY_MS - 1); // cuối ngày `to`
+  if (from > to) from = vnStartOfDay(to);
   return { from, to };
 };
 
@@ -37,23 +46,22 @@ const parseRange = (query) => {
 const fillDailySeries = (rows, from, to) => {
   const map = new Map(rows.map((r) => [r._id, r.count]));
   const out = [];
-  const cursor = new Date(from);
-  cursor.setHours(0, 0, 0, 0);
-  const end = new Date(to);
+  let cursor = vnStartOfDay(from).getTime();
+  const end = to.getTime();
 
   // Chặn trần 400 điểm để khoảng ngày quá rộng không làm phình response
   let guard = 0;
   while (cursor <= end && guard < 400) {
-    const key = cursor.toISOString().slice(0, 10);
+    const key = vnDateKey(new Date(cursor));
     out.push({ date: key, count: map.get(key) || 0 });
-    cursor.setDate(cursor.getDate() + 1);
+    cursor += DAY_MS;
     guard += 1;
   }
   return out;
 };
 
 const dayBucket = (field) => ({
-  $dateToString: { format: '%Y-%m-%d', date: '$' + field },
+  $dateToString: { format: '%Y-%m-%d', date: '$' + field, timezone: TZ },
 });
 
 /**
@@ -85,18 +93,19 @@ const getAnalyticsOverview = async (req, res) => {
       jobsSeries,
       appsSeries,
     ] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ role: 'candidate' }),
-      User.countDocuments({ role: 'employer' }),
-      User.countDocuments({ status: 'banned' }),
+      // Tài khoản đã xoá mềm không tính vào quy mô hệ thống
+      User.countDocuments(alive),
+      User.countDocuments({ ...alive, role: 'candidate' }),
+      User.countDocuments({ ...alive, role: 'employer' }),
+      User.countDocuments({ ...alive, status: 'banned' }),
       Job.countDocuments(alive),
       Job.countDocuments({ ...alive, status: 'open' }),
       Application.countDocuments(),
       CvProfile.countDocuments(),
 
-      User.countDocuments({ createdAt: inRange }),
-      User.countDocuments({ role: 'candidate', createdAt: inRange }),
-      User.countDocuments({ role: 'employer', createdAt: inRange }),
+      User.countDocuments({ ...alive, createdAt: inRange }),
+      User.countDocuments({ ...alive, role: 'candidate', createdAt: inRange }),
+      User.countDocuments({ ...alive, role: 'employer', createdAt: inRange }),
       Job.countDocuments({ ...alive, createdAt: inRange }),
       Application.countDocuments({ appliedAt: inRange }),
 
@@ -104,7 +113,7 @@ const getAnalyticsOverview = async (req, res) => {
       Job.distinct('employerId', { ...alive, createdAt: inRange }),
 
       User.aggregate([
-        { $match: { createdAt: inRange } },
+        { $match: { ...alive, createdAt: inRange } },
         { $group: { _id: dayBucket('createdAt'), count: { $sum: 1 } } },
       ]),
       Job.aggregate([
@@ -166,7 +175,7 @@ const getEmployerUsage = async (req, res) => {
       : 'jobs';
     const sortDir = req.query.sortDir === 'asc' ? 1 : -1;
 
-    const userMatch = { role: 'employer' };
+    const userMatch = { role: 'employer', isDeleted: { $ne: true } };
     if (req.query.status === 'active' || req.query.status === 'banned') {
       userMatch.status = req.query.status;
     }

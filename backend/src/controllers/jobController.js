@@ -6,6 +6,12 @@ const CvProfile = require("../models/CvProfile");
 const aiService = require("../services/aiService");
 const { normalizeText } = require("../utils/normalizeText");
 const { parseMoney, normalizeCurrency, formatSalary } = require("../utils/salary");
+const { findPrimaryOrLatestCv } = require("../utils/primaryCv");
+const { attachCompanyNames } = require("../utils/companyNames");
+
+/** Chủ tin hoặc admin — route cho phép cả hai, controller phải khớp. */
+const canManageJob = (job, user) =>
+  user.role === "admin" || String(job.employerId?._id || job.employerId) === String(user._id);
 
 /**
  * Chuẩn hoá bộ lương trước khi lưu. Số tiền gửi lên dạng chuỗi ("178.000") được
@@ -14,12 +20,16 @@ const { parseMoney, normalizeCurrency, formatSalary } = require("../utils/salary
  */
 const roundMoney = (v) => (typeof v === "number" ? Math.round(v) : v);
 
-const syncSalaryFields = (target) => {
+const syncSalaryFields = (target, { salaryTextGiven = true } = {}) => {
   target.salaryMin = roundMoney(parseMoney(target.salaryMin));
   target.salaryMax = roundMoney(parseMoney(target.salaryMax));
   target.currency = normalizeCurrency(target.currency) || "VND";
   if ((target.salaryMin || 0) > 0 || (target.salaryMax || 0) > 0) {
     target.salary = formatSalary(target.salaryMin, target.salaryMax, target.currency);
+  } else if (!salaryTextGiven) {
+    // Xoá cả hai mức lương mà không gửi chuỗi mới: chuỗi cũ ("15 - 25 triệu")
+    // không còn đúng nữa — trước đây vẫn hiện nguyên trên thẻ tin.
+    target.salary = "";
   }
 };
 
@@ -55,7 +65,9 @@ const matchJobWithAllCandidates = async (job) => {
 
     const candidates = await User.find({
       role: "candidate",
-      isEmailSubscribed: true,
+      isEmailSubscribed: { $ne: false },
+      status: { $ne: "banned" },
+      isDeleted: { $ne: true },
     });
 
     for (const candidate of candidates) {
@@ -66,7 +78,7 @@ const matchJobWithAllCandidates = async (job) => {
       });
       if (hasApplied) continue;
 
-      const cv = await CvProfileModel.findOne({ userId: candidate._id }).sort({ createdAt: -1 });
+      const cv = await findPrimaryOrLatestCv(candidate._id);
       if (!cv || !cv.isLookingForJob || !cv.embedding || cv.embedding.length === 0) continue;
 
       const minMatchScore = candidate.minMatchScore || 70;
@@ -127,15 +139,24 @@ const matchJobWithAllCandidates = async (job) => {
  */
 const escapeRegex = (v) => String(v).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const str = (v) => (typeof v === "string" ? v : "");
+
 const buildJobFilter = (query = {}) => {
   const filter = {};
 
-  if (query.industry) filter.industry = query.industry;
-  if (query.specialization) filter.specialization = query.specialization;
-  if (query.location) filter.location = query.location;
-  if (query.workType) filter.jobType = query.workType;
+  // Chỉ nhận chuỗi: ?industry[$ne]=x là toán tử MongoDB
+  if (str(query.industry)) filter.industry = str(query.industry);
+  if (str(query.specialization)) filter.specialization = str(query.specialization);
+  if (str(query.workType)) filter.jobType = str(query.workType);
+  const location = str(query.location).trim();
+  if (location) {
+    // "Làm từ xa" là hình thức làm việc, không phải địa danh
+    if (/^(làm từ xa|remote)$/i.test(location)) filter.jobType = "remote";
+    // Khớp chuỗi con: "Hà Nội" phải ra cả tin "Cầu Giấy, Hà Nội"
+    else filter.location = { $regex: escapeRegex(location), $options: "i" };
+  }
 
-  const q = escapeRegex(query.q || query.search || '');
+  const q = escapeRegex(str(query.q) || str(query.search));
   if (q) {
     filter.$or = [
       { title: { $regex: q, $options: 'i' } },
@@ -171,11 +192,13 @@ const byNewest = (a, b) => new Date(b.createdAt) - new Date(a.createdAt);
 const getAllOpenJobs = async (req, res) => {
   try {
     const jobs = await Job.find({ status: "open", isDeleted: { $ne: true }, ...buildJobFilter(req.query) })
-      .populate("employerId", "email role isPro")
+      .populate("employerId", "role isPro")
       .select("-embedding")
       .sort({ createdAt: -1 });
 
-    res.json({ data: sortProFirst(withProFlag(jobs), byNewest) });
+    const list = withProFlag(jobs);
+    await attachCompanyNames(list);
+    res.json({ data: sortProFirst(list, byNewest) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -213,21 +236,27 @@ const getJobById = async (req, res) => {
   try {
     const CompanyProfile = require('../models/CompanyProfile');
     const job = await Job.findById(req.params.id)
-      .populate("employerId", "email role isPro")
+      .populate("employerId", "role isPro isDeleted")
       .select("-embedding");
-    if (!job) {
+    // Tin đã xoá mềm, hoặc nhà tuyển dụng đã bị xoá (populate trả null) — trước
+    // đây đọc job.employerId._id trên null và crash 500.
+    if (!job || job.isDeleted || !job.employerId || job.employerId.isDeleted) {
       return res.status(404).json({ message: "Không tìm thấy tin tuyển dụng" });
     }
 
-    const companyProfile = await CompanyProfile.findOne({ userId: job.employerId._id || job.employerId });
+    const employerId = job.employerId._id;
+    const companyProfile = await CompanyProfile.findOne({ userId: employerId });
 
     const otherJobs = await Job.find({
-      employerId: job.employerId._id || job.employerId,
+      employerId,
       status: 'open',
+      isDeleted: { $ne: true },
       _id: { $ne: job._id }
     }).select('title location salary expiresAt createdAt').limit(5);
 
-    res.json({ data: withProFlag([job])[0], companyProfile: companyProfile || null, otherJobs });
+    const data = withProFlag([job])[0];
+    await attachCompanyNames([data]);
+    res.json({ data, companyProfile: companyProfile || null, otherJobs });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -275,6 +304,9 @@ const createJob = async (req, res) => {
 
     res.status(201).json({ message: "Tạo tin tuyển dụng thành công", data: createdJob });
   } catch (error) {
+    if (error.name === "ValidationError" || error.name === "CastError") {
+      return res.status(400).json({ message: "Dữ liệu tin tuyển dụng không hợp lệ hoặc thiếu trường bắt buộc." });
+    }
     res.status(500).json({ message: error.message });
   }
 };
@@ -286,12 +318,13 @@ const createJobFromOld = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy tin gốc để sao chép" });
     }
 
-    if (oldJob.employerId.toString() !== req.user._id.toString()) {
+    if (!canManageJob(oldJob, req.user)) {
       return res.status(403).json({ message: "Không có quyền sao chép tin tuyển dụng này" });
     }
 
     const copy = {
-      employerId: req.user._id,
+      // Admin sao chép tin thì tin mới vẫn thuộc doanh nghiệp của tin gốc
+      employerId: oldJob.employerId,
       title: req.body.title || oldJob.title,
       description: req.body.description || oldJob.description,
       requirements: req.body.requirements || oldJob.requirements,
@@ -333,7 +366,7 @@ const updateJob = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy tin tuyển dụng" });
     }
 
-    if (job.employerId.toString() !== req.user._id.toString()) {
+    if (!canManageJob(job, req.user)) {
       return res.status(403).json({ message: "Không có quyền cập nhật tin tuyển dụng này" });
     }
 
@@ -370,7 +403,7 @@ const updateJob = async (req, res) => {
       }
     });
     if (["salary", "salaryMin", "salaryMax", "currency"].some((f) => req.body[f] !== undefined)) {
-      syncSalaryFields(job);
+      syncSalaryFields(job, { salaryTextGiven: req.body.salary !== undefined });
     }
 
     if (shouldReembed) {
@@ -390,6 +423,9 @@ const updateJob = async (req, res) => {
     const updatedJob = await job.save();
     res.json({ message: "Cập nhật tin tuyển dụng thành công", data: updatedJob });
   } catch (error) {
+    if (error.name === "ValidationError" || error.name === "CastError") {
+      return res.status(400).json({ message: "Dữ liệu tin tuyển dụng không hợp lệ hoặc thiếu trường bắt buộc." });
+    }
     res.status(500).json({ message: error.message });
   }
 };
@@ -438,7 +474,7 @@ const closeJob = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy tin tuyển dụng" });
     }
 
-    if (job.employerId.toString() !== req.user._id.toString()) {
+    if (!canManageJob(job, req.user)) {
       return res.status(403).json({ message: "Không có quyền khóa tin tuyển dụng này" });
     }
 
@@ -454,13 +490,10 @@ const closeJob = async (req, res) => {
 const getJobsWithMatchPreview = async (req, res) => {
   try {
     const jobs = await Job.find({ status: "open", isDeleted: { $ne: true }, ...buildJobFilter(req.query) })
-      .populate("employerId", "email role isPro")
+      .populate("employerId", "role isPro")
       .sort({ createdAt: -1 });
 
-    let cvProfile = await CvProfile.findOne({ userId: req.user._id, isPrimary: true });
-    if (!cvProfile) {
-      cvProfile = await CvProfile.findOne({ userId: req.user._id }).sort({ createdAt: -1 });
-    }
+    const cvProfile = await findPrimaryOrLatestCv(req.user._id);
     const cvEmbedding = cvProfile?.embedding || [];
     const hasEmbedding = cvEmbedding.length > 0;
 
@@ -480,6 +513,7 @@ const getJobsWithMatchPreview = async (req, res) => {
         return { ...job, previewScore };
       })
     );
+    await attachCompanyNames(jobsWithScore);
 
 
     sortProFirst(jobsWithScore, (a, b) => {
@@ -512,10 +546,9 @@ const VIEW_DEDUPE_MS = 30 * 60 * 1000;
  */
 const visitorKeyOf = (req) => {
   if (req.user) return `u:${req.user._id}`;
-  const ip =
-    (req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
-    req.socket?.remoteAddress ||
-    "unknown";
+  // req.ip đã đi qua `trust proxy` (chỉ tin proxy đầu tiên). Đọc thẳng header
+  // X-Forwarded-For thì ai cũng tự đặt được và đẩy lượt xem lên tuỳ ý.
+  const ip = req.ip || req.socket?.remoteAddress || "unknown";
   const ua = req.headers["user-agent"] || "unknown";
   const hash = crypto.createHash("sha256").update(`${ip}|${ua}`).digest("hex");
   return `g:${hash.slice(0, 32)}`;
@@ -542,17 +575,19 @@ const recordJobView = async (req, res) => {
     const isGuest = !req.user;
     const visitorKey = visitorKeyOf(req);
     const now = new Date();
-    const seen = await JobView.findOne({ jobId: job._id, visitorKey });
+    // Giành lượt đếm NGUYÊN TỬ: chỉ một request khớp được điều kiện "lần xem
+    // trước đã quá 30 phút". Bản cũ đọc rồi ghi, 5 request song song đếm 5 lượt.
+    const cutoff = new Date(now.getTime() - VIEW_DEDUPE_MS);
+    const claimed = await JobView.findOneAndUpdate(
+      { jobId: job._id, visitorKey, lastViewedAt: { $lte: cutoff } },
+      { $inc: { views: 1 }, $set: { lastViewedAt: now } },
+    );
 
-    if (seen && now - seen.lastViewedAt < VIEW_DEDUPE_MS) {
-      return res.json({ data: { counted: false, reason: "recent" } });
-    }
-
-    if (seen) {
-      seen.views += 1;
-      seen.lastViewedAt = now;
-      await seen.save();
-    } else {
+    if (!claimed) {
+      const seen = await JobView.exists({ jobId: job._id, visitorKey });
+      if (seen) {
+        return res.json({ data: { counted: false, reason: "recent" } });
+      }
       try {
         await JobView.create({
           jobId: job._id,

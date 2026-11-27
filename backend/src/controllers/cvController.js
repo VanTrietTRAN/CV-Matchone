@@ -4,6 +4,36 @@ const Job = require("../models/Job");
 const Application = require("../models/Application");
 const aiService = require("../services/aiService");
 const { buildCvEmbeddingText, isEmbeddable } = require('../utils/cvEmbeddingText');
+const { isSafeImage } = require('../utils/safeUrl');
+
+/**
+ * Multer giải mã tên file theo latin1, nên "Nguyễn Văn An.pdf" thành mojibake
+ * "Nguyá»…n...". Đổi lại sang UTF-8 khi chuỗi đúng là UTF-8 bị đọc nhầm.
+ */
+const decodeOriginalName = (name) => {
+  if (!name) return '';
+  try {
+    const utf8 = Buffer.from(name, 'latin1').toString('utf8');
+    return utf8.includes('\uFFFD') ? name : utf8;
+  } catch {
+    return name;
+  }
+};
+
+/** Content-Disposition giữ được tên tiếng Việt (RFC 5987) và có bản ASCII dự phòng. */
+const contentDisposition = (baseName) => {
+  const name = `${String(baseName || 'cv').trim() || 'cv'}.pdf`;
+  const ascii = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[^\w.-]+/g, '_');
+  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+};
+
+/** File CV gốc phải thuộc chính chủ hồ sơ: key luôn có dạng cvs/<userId>-<thời điểm>.pdf */
+const ownsFileKey = (profile) =>
+  typeof profile.fileUrl === 'string' && profile.fileUrl.startsWith(`cvs/${profile.userId}-`);
 
 const uploadCv = async (req, res) => {
   try {
@@ -12,6 +42,10 @@ const uploadCv = async (req, res) => {
     }
     if (!req.file.buffer || req.file.buffer.length === 0) {
       return res.status(400).json({ message: "File tải lên rỗng, vui lòng chọn lại." });
+    }
+    // MIME do trình duyệt tự khai — kiểm tra chữ ký file thật (%PDF-)
+    if (req.file.buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
+      return res.status(400).json({ message: "File không phải PDF hợp lệ." });
     }
 
     const { driver } = storageService.getStorageConfig();
@@ -30,7 +64,9 @@ const uploadCv = async (req, res) => {
     
     // Create the CV profile in 'queued' state. The background cron worker will pick it up
     // and populate the parsed AI fields and embedding vectors.
-    const tempName = req.body.fullName || req.file.originalname || "CV Profile";
+    const original = decodeOriginalName(req.file.originalname).replace(/\.pdf$/i, "");
+    const tempName =
+      (typeof req.body.fullName === "string" && req.body.fullName.trim()) || original || "CV Profile";
     const newCv = await CvProfile.create({
       userId: req.user._id,
       fullName: tempName,
@@ -51,11 +87,10 @@ const uploadCv = async (req, res) => {
     // Bản cũ trả câu chung chung "System error preparing profile upload" cho mọi
     // lỗi, kể cả khi nguyên nhân là thiếu cấu hình kho lưu trữ. Nói thẳng ra để
     // người vận hành biết cần sửa gì.
-    console.error("[Upload CV] Thất bại:", error);
-    res.status(500).json({
-      message: `Không tải được CV lên: ${error.message}`,
-      storage: storageService.getStorageConfig(),
-    });
+    // Chi tiết cấu hình kho lưu trữ chỉ ghi log — trước đây trả ra client cả
+    // danh sách biến R2 còn thiếu. Admin xem ở trang Hệ thống.
+    console.error("[Upload CV] Thất bại:", error, storageService.getStorageConfig());
+    res.status(500).json({ message: "Không tải được CV lên. Vui lòng thử lại sau." });
   }
 };
 
@@ -93,6 +128,9 @@ const getCvProfileById = async (req, res) => {
 
 const createCvProfile = async (req, res) => {
   try {
+    if (!isSafeImage(req.body.photo)) {
+      return res.status(400).json({ message: "Ảnh chân dung phải là ảnh JPEG, PNG hoặc WebP." });
+    }
     const existingPrimary = await CvProfile.findOne({ userId: req.user._id, isPrimary: true });
     const payload = {
       userId: req.user._id,
@@ -155,6 +193,12 @@ const updateCvProfile = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền cập nhật hồ sơ này" });
     }
 
+    if (!isSafeImage(req.body.photo)) {
+      return res.status(400).json({ message: "Ảnh chân dung phải là ảnh JPEG, PNG hoặc WebP." });
+    }
+
+    // KHÔNG có fileUrl: trước đây client gửi fileUrl = key file CV của người
+    // khác là tải được (và xoá được) file đó. fileUrl chỉ do uploadCv gán.
     const allowedFields = [
       "fullName",
       "headline",
@@ -172,7 +216,6 @@ const updateCvProfile = async (req, res) => {
       "education",
       "languages",
       "isLookingForJob",
-      "fileUrl",
     ];
 
     allowedFields.forEach((field) => {
@@ -225,8 +268,12 @@ const deleteCvProfile = async (req, res) => {
       return res.status(403).json({ message: "You are not authorized to delete this profile" });
     }
 
-    // Xóa file vật lý trên Cloudflare R2 trước khi xóa trong DB
-    if (profile.fileUrl) {
+    // Xóa file gốc — CHỈ khi file thuộc chính chủ hồ sơ và không hồ sơ nào khác
+    // còn trỏ tới nó (chặn xoá nhầm file của người khác).
+    const fileShared =
+      profile.fileUrl &&
+      (await CvProfile.exists({ _id: { $ne: profile._id }, fileUrl: profile.fileUrl }));
+    if (profile.fileUrl && ownsFileKey(profile) && !fileShared) {
       try {
         console.log(`Deleting CV file on Cloudflare R2: ${profile.fileUrl}`);
         await storageService.deleteFile(profile.fileUrl);
@@ -238,9 +285,10 @@ const deleteCvProfile = async (req, res) => {
     const wasPrimary = profile.isPrimary;
     await profile.deleteOne();
 
-    // Deleting the primary CV promotes the newest remaining one
+    // Xoá CV chính thì nâng CV mới nhất CÒN LẠI CỦA CHÍNH CHỦ hồ sơ — bản cũ
+    // dùng req.user._id, nên admin xoá CV của ứng viên lại nâng CV của admin.
     if (wasPrimary) {
-      const next = await CvProfile.findOne({ userId: req.user._id }).sort({ createdAt: -1 });
+      const next = await CvProfile.findOne({ userId: profile.userId }).sort({ createdAt: -1 });
       if (next) {
         next.isPrimary = true;
         await next.save();
@@ -261,7 +309,11 @@ const downloadCv = async (req, res) => {
     }
 
     if (!profile.fileUrl) {
-      return res.status(400).json({ message: "This profile does not have a PDF file attached" });
+      return res.status(400).json({ message: "Hồ sơ này không có file PDF đính kèm." });
+    }
+    // Hồ sơ cũ có thể đã bị gán fileUrl của người khác trước khi vá lỗi
+    if (!ownsFileKey(profile)) {
+      return res.status(403).json({ message: "Không có quyền tải file CV này." });
     }
 
     const userIdStr = req.user._id.toString();
@@ -276,14 +328,14 @@ const downloadCv = async (req, res) => {
       // Candidates can only download their own CVs
       isAuthorized = userIdStr === candidateIdStr;
     } else if (req.user.role === "employer") {
-      // Employers can only download CVs if the candidate applied to one of their jobs
-      // 1. Get jobs posted by this employer
+      // Nhà tuyển dụng chỉ tải được ĐÚNG CV đã được nộp vào tin của mình —
+      // không phải mọi CV của ứng viên đó (CV nháp, CV nộp chỗ khác).
       const employerJobs = await Job.find({ employerId: req.user._id }).select("_id");
       const jobIds = employerJobs.map(job => job._id);
 
-      // 2. Check if an application exists for this candidate matching those jobs
       const hasApplication = await Application.exists({
         candidateId: profile.userId,
+        cvProfileId: profile._id,
         jobId: { $in: jobIds }
       });
 
@@ -304,10 +356,9 @@ const downloadCv = async (req, res) => {
       if (!buffer) {
         return res.status(404).json({ message: "Không tìm thấy file CV trong kho lưu trữ." });
       }
-      const safeName = `${(profile.fullName || "cv").replace(/[^\w.-]+/g, "_")}.pdf`;
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Length", buffer.length);
-      res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+      res.setHeader("Content-Disposition", contentDisposition(profile.fullName));
       return res.send(buffer);
     }
 
@@ -324,7 +375,7 @@ const downloadCv = async (req, res) => {
     }
   } catch (error) {
     console.error("Lỗi khi tạo link tải CV:", error);
-    res.status(500).json({ message: `Không tạo được link tải CV: ${error.message}` });
+    res.status(500).json({ message: "Không tạo được link tải CV." });
   }
 };
 
@@ -338,13 +389,16 @@ const setPrimaryCV = async (req, res) => {
       return res.status(403).json({ message: "You are not authorized to change this profile" });
     }
 
-    await CvProfile.updateMany(
-      { userId: req.user._id, _id: { $ne: profile._id } },
-      { $set: { isPrimary: false } }
+    // Một lệnh bulkWrite có thứ tự: bấm "đặt làm CV chính" liên tục ở hai CV
+    // không còn để lại hai CV chính hoặc không CV nào.
+    await CvProfile.bulkWrite(
+      [
+        { updateMany: { filter: { userId: profile.userId, _id: { $ne: profile._id } }, update: { $set: { isPrimary: false } } } },
+        { updateOne: { filter: { _id: profile._id }, update: { $set: { isPrimary: true } } } },
+      ],
+      { ordered: true },
     );
-
     profile.isPrimary = true;
-    await profile.save();
 
     res.json({ message: "Set as primary CV successfully", data: profile });
   } catch (error) {

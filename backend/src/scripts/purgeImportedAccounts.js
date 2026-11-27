@@ -38,8 +38,11 @@ async function main() {
   const Application = require('../models/Application');
   const Notification = require('../models/Notification');
   const JobAlert = require('../models/JobAlert');
+  const CvFile = require('../models/CvFile');
 
-  const filter = { importedAt: { $exists: true } };
+  // Chỉ tài khoản SINH VIÊN import. Tài khoản doanh nghiệp import cũng có
+  // importedAt — xoá chúng là để lại hồ sơ công ty và tin tuyển dụng mồ côi.
+  const filter = { importedAt: { $exists: true }, role: 'candidate' };
   const targets = await User.find(filter).lean();
 
   if (!targets.length) {
@@ -62,8 +65,8 @@ async function main() {
   console.log(`   Thông báo     : ${notifs}`);
   console.log(`   Thông báo việc: ${alerts}`);
 
-  const keepCount = await User.countDocuments({ importedAt: { $exists: false } });
-  console.log(`\nGiữ nguyên ${keepCount} tài khoản không phải import (admin, doanh nghiệp, người tự đăng ký).`);
+  const keepCount = await User.countDocuments({ _id: { $nin: ids } });
+  console.log(`\nGiữ nguyên ${keepCount} tài khoản khác (admin, doanh nghiệp kể cả doanh nghiệp import, người tự đăng ký).`);
 
   // Sao lưu trước — thư mục backups nằm trong .gitignore nên không lọt lên repo
   const backupDir = path.join(__dirname, '..', '..', 'backups');
@@ -91,6 +94,8 @@ async function main() {
     Notification.deleteMany({ userId: { $in: ids } }),
     JobAlert.deleteMany({ userId: { $in: ids } }),
     User.deleteMany({ _id: { $in: ids } }),
+    // File CV gốc lưu trong MongoDB của các tài khoản này
+    CvFile.deleteMany({ userId: { $in: ids } }),
   ]);
 
   console.log('\n── Đã xoá ──');

@@ -5,6 +5,15 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
 
 const MAX_RETRIES = 3;
+const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS) || 30000;
+
+/** Bỏ khung markdown ```json ... ``` (chấp nhận cả xuống dòng CRLF của Windows). */
+const stripJsonFence = (text) =>
+  String(text || "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -20,7 +29,11 @@ const isRetryable = (error) => {
   }
 
   // Lỗi tạm thời thực sự (server quá tải / mạng) -> nên thử lại.
+  // 429 không kèm chữ "quota" là bị giới hạn tốc độ tạm thời -> chờ rồi thử lại
   return (
+    msg.includes("429") ||
+    msg.includes("too many requests") ||
+    msg.includes("resource exhausted") ||
     msg.includes("503") ||
     msg.includes("overloaded") ||
     msg.includes("high demand") ||
@@ -87,20 +100,15 @@ YÊU CẦU QUAN TRỌNG (Fallback):
 
   // Thử lần lượt từng model; mỗi model retry vài lần khi gặp lỗi tạm thời.
   for (const modelName of MODEL_CHAIN) {
-    const model = genAI.getGenerativeModel({ model: modelName });
+    // Timeout 30 giây: không có thì Gemini treo là worker bóc tách CV treo theo
+    const model = genAI.getGenerativeModel({ model: modelName }, { timeout: GEMINI_TIMEOUT_MS });
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
 
-        // Clean up potential markdown JSON wrapping
-        let cleanJsonStr = responseText.trim();
-        if (cleanJsonStr.startsWith('```json')) {
-          cleanJsonStr = cleanJsonStr.replace(/^```json\n/, '').replace(/\n```$/, '');
-        } else if (cleanJsonStr.startsWith('```')) {
-          cleanJsonStr = cleanJsonStr.replace(/^```\n/, '').replace(/\n```$/, '');
-        }
+        const cleanJsonStr = stripJsonFence(responseText);
 
         const parsedData = JSON.parse(cleanJsonStr);
         if (attempt > 1 || modelName !== MODEL_CHAIN[0]) {
@@ -135,4 +143,4 @@ YÊU CẦU QUAN TRỌNG (Fallback):
   return null;
 };
 
-module.exports = { extractCvData };
+module.exports = { extractCvData, stripJsonFence, isRetryable };

@@ -15,6 +15,7 @@ const {
     resendVerification,
     resetPassword,
     changePassword,
+    getCaptcha,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -60,6 +61,7 @@ router.post('/resend-verification', passwordResetLimiter, resendVerification);
 router.post('/forgot-password', passwordResetLimiter, forgotPassword);
 router.post('/reset-password', verifyCodeLimiter, resetPassword);
 router.get('/me', protect, getCurrentUser);
+router.get('/captcha', getCaptcha);
 router.put('/change-password', changePasswordLimiter, protect, changePassword);
 
 router.get('/google', googleAuth);

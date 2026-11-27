@@ -1,5 +1,8 @@
 const express = require("express");
 const router = express.Router();
+const { validateObjectIdParam } = require('../middleware/validateObjectId');
+router.param('id', validateObjectIdParam);
+router.param('companyUserId', validateObjectIdParam);
 
 const rateLimit = require("express-rate-limit");
 const { protect } = require("../middleware/authMiddleware");

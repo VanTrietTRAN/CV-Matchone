@@ -32,8 +32,6 @@ google-genai>=1.0.0
 
 # Math (dùng cho cosine similarity trong matching_service)
 numpy==2.4.4
-scikit-learn==1.8.0
-scipy==1.17.1
 
 # Utilities
 python-dotenv>=1.0.0

@@ -278,6 +278,16 @@ const candidatesData = [
 ];
 
 const seed = async () => {
+  // Seed XOÁ TOÀN BỘ database trước khi tạo dữ liệu mẫu. Không bao giờ chạy trên
+  // production, và trên máy khác cũng phải gõ rõ --confirm-drop.
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Từ chối chạy seed khi NODE_ENV=production — lệnh này xoá toàn bộ database.');
+    process.exit(1);
+  }
+  if (!process.argv.includes('--confirm-drop')) {
+    console.error('Seed sẽ XOÁ TOÀN BỘ database. Chạy lại với --confirm-drop nếu chắc chắn.');
+    process.exit(1);
+  }
   try {
     await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     console.log('Connected to MongoDB');

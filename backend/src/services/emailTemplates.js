@@ -169,27 +169,47 @@ const TEMPLATE_LABELS = {
  */
 const normalizeText = (value) => String(sharedNormalize(String(value ?? '')));
 
-const escapeHtml = (value) =>
-  normalizeText(value)
+const escapeRaw = (value) =>
+  String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const escapeHtml = (value) => escapeRaw(normalizeText(value));
+
+/** Giá trị đặt trong thuộc tính href: escape cả dấu nháy để không thoát khỏi thuộc tính. */
+const escapeAttr = (value) => escapeRaw(value);
+
+/** Một đoạn đường dẫn lấy từ dữ liệu (id tin...) — mã hoá như thành phần URL. */
+const seg = (value) => encodeURIComponent(String(value ?? ''));
+
+const PLACEHOLDER = /\{\{\s*(\w+)\s*\}\}/g;
+
+/** Chỉ biến khai báo thật — `{{constructor}}` không được lôi Object.prototype ra. */
+const varOf = (vars, key) => (Object.hasOwn(vars, key) ? vars[key] : '');
 
 /**
- * Thay {{bien}} bằng giá trị, có escape HTML.
- * Biến không có giá trị thì bỏ trống chứ không để nguyên dấu ngoặc.
+ * Thay {{bien}} bằng giá trị và escape HTML CẢ phần chữ cố định của mẫu: lời
+ * văn do admin sửa trên giao diện, gõ "<script>" vào mẫu thì thư phải hiện đúng
+ * chữ đó chứ không thành thẻ HTML. Biến không có giá trị thì bỏ trống.
  */
-const fill = (text, vars = {}) =>
-  String(text ?? '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) =>
-    key in vars ? escapeHtml(vars[key]) : '',
-  );
+const fill = (text, vars = {}) => {
+  const src = String(text ?? '');
+  let out = '';
+  let last = 0;
+  for (const m of src.matchAll(PLACEHOLDER)) {
+    out += escapeHtml(src.slice(last, m.index));
+    out += escapeHtml(varOf(vars, m[1]));
+    last = m.index + m[0].length;
+  }
+  return out + escapeHtml(src.slice(last));
+};
 
 /** Như `fill` nhưng dùng cho tiêu đề thư — không escape vì đây là plain text. */
 const fillPlain = (text, vars = {}) =>
-  String(text ?? '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) =>
-    key in vars ? normalizeText(vars[key]) : '',
-  );
+  String(text ?? '').replace(PLACEHOLDER, (_, key) => normalizeText(varOf(vars, key)));
 
 /** Số tin tối đa trong một thư, và tối đa bao nhiêu tin của cùng một công ty. */
 const EMAIL_MAX_JOBS = 5;
@@ -219,7 +239,7 @@ const pickJobsForEmail = (jobs) => {
 
 const moreJobsLink = (remaining, url) =>
   remaining > 0
-    ? `<p style="text-align:center;margin:8px 0 0;"><a href="${url}" style="color:#2563eb;font-weight:500;">Xem thêm ${remaining} việc làm khác trên website</a></p>`
+    ? `<p style="text-align:center;margin:8px 0 0;"><a href="${escapeAttr(url)}" style="color:#2563eb;font-weight:500;">Xem thêm ${remaining} việc làm khác trên website</a></p>`
     : '';
 
 /** Gộp giá trị admin lưu lên trên mặc định. Trường trống coi như dùng mặc định. */
@@ -268,7 +288,7 @@ const jobCard = ({ title, companyName, location, salary, tagsHtml, scoreLabel, s
       </span>
     </p>
     <div style="margin-top:16px;">
-      <a href="${ctaUrl}" style="background:#2563eb;color:#fff;padding:8px 16px;text-decoration:none;border-radius:6px;font-weight:500;">Xem chi tiết &amp; Ứng tuyển</a>
+      <a href="${escapeAttr(ctaUrl)}" style="background:#2563eb;color:#fff;padding:8px 16px;text-decoration:none;border-radius:6px;font-weight:500;">Xem chi tiết &amp; Ứng tuyển</a>
     </div>
   </div>`;
 
@@ -293,7 +313,7 @@ const renderJobMatch = ({ tpl, user, jobs, frontendUrl }) => {
         score: job.previewScore,
         // Trỏ thẳng vào bài đăng, không phải trang danh sách — người nhận bấm là
         // tới đúng tin đó, không phải tự đi tìm lại.
-        ctaUrl: job.id ? `${frontendUrl}/candidate/jobs/${job.id}` : `${frontendUrl}/candidate/matches`,
+        ctaUrl: job.id ? `${frontendUrl}/candidate/jobs/${seg(job.id)}` : `${frontendUrl}/candidate/matches`,
       }),
     )
     .join('');
@@ -348,7 +368,7 @@ const renderJobAlert = ({ tpl, target, alert, jobs, frontendUrl }) => {
         tagsHtml: tagsHtml ? `<div style="margin:8px 0;">${tagsHtml}</div>` : '',
         scoreLabel: 'Độ phù hợp',
         score: job.finalScore,
-        ctaUrl: `${frontendUrl}/candidate/jobs/${job.id}`,
+        ctaUrl: `${frontendUrl}/candidate/jobs/${seg(job.id)}`,
       });
     })
     .join('');
@@ -453,7 +473,7 @@ const candidateCard = ({ fullName, headline, jobTitle, score, skills, appliedAt,
       </span>
     </p>
     <div style="margin-top:16px;">
-      <a href="${ctaUrl}" style="background:#2563eb;color:#fff;padding:8px 16px;text-decoration:none;border-radius:6px;font-weight:500;">Xem hồ sơ ứng viên</a>
+      <a href="${escapeAttr(ctaUrl)}" style="background:#2563eb;color:#fff;padding:8px 16px;text-decoration:none;border-radius:6px;font-weight:500;">Xem hồ sơ ứng viên</a>
     </div>
   </div>`;
 
@@ -691,7 +711,7 @@ const renderJobExpiring = ({ tpl, employer, jobs, days, frontendUrl }) => {
         : ''
     }
     <div style="margin-top:16px;">
-      <a href="${frontendUrl}/employer/jobs/${j.id}" style="background:#d97706;color:#fff;padding:8px 16px;text-decoration:none;border-radius:6px;font-weight:500;">Gia hạn tin này</a>
+      <a href="${escapeAttr(`${frontendUrl}/employer/jobs/${seg(j.id)}`)}" style="background:#d97706;color:#fff;padding:8px 16px;text-decoration:none;border-radius:6px;font-weight:500;">Gia hạn tin này</a>
     </div>
   </div>`,
     )

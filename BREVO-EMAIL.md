@@ -337,7 +337,7 @@ CLIENT_ORIGIN=https://cvoneclickmatch.com,https://www.cvoneclickmatch.com
 `FRONTEND_URL` là nơi dựng mọi đường dẫn trong thư (đặt lại mật khẩu, xem việc
 làm). Nếu nó còn là `localhost`, thư vẫn gửi đi bình thường nhưng người nhận bấm
 vào link sẽ không mở được gì — hỏng mà không có dấu hiệu nào. Hệ thống nay cảnh
-báo trường hợp này ở `/health` (`email.linkOrigin` và `email.warnings`).
+báo trường hợp này ở trang Quản trị → Hệ thống (`email.linkOrigin` và `email.warnings`).
 
 Rồi **Restart** service. Biến môi trường chỉ được đọc lúc khởi động.
 
@@ -380,11 +380,11 @@ sau. Lịch dày hơn không làm gửi được nhiều hơn — chỉ làm th�
 
 ### Bước 1 — Cấu hình có đọc được không (không gửi gì)
 
-```bash
-curl https://<backend-url>/health
-```
+Đăng nhập admin → **Hệ thống** → khối **Máy chủ gửi mail (SMTP)**. Dữ liệu lấy từ
+`GET /api/admin/system` (chỉ admin). `/health` công khai nay chỉ trả trạng thái
+sống/chết và database — không còn lộ cấu hình SMTP ra ngoài.
 
-Xem trường `email`:
+Trường `email` trong phản hồi:
 
 ```json
 "email": {
@@ -404,13 +404,8 @@ Xem trường `email`:
 
 ### Bước 2 — Bắt tay thật với SMTP (không tốn quota)
 
-```bash
-curl "https://<backend-url>/health?email=1"
-```
-
-Có `"ok": true` là thông tin đăng nhập dùng được.
-
-Hoặc bấm nút **Kiểm tra kết nối SMTP** trong admin → **Hệ thống**.
+Bấm nút **Kiểm tra kết nối SMTP** trong admin → **Hệ thống**
+(`GET /api/admin/system/email-check`). Có `"ok": true` là thông tin đăng nhập dùng được.
 
 ### Bước 3 — Gửi thử một email thật (tốn 1 quota)
 
@@ -564,7 +559,7 @@ chỉ `support@cvoneclickmatch.com` chuyển tiếp về Gmail của bạn.
    chọn Gmail vừa xác nhận.
 4. Từ một Gmail khác, gửi thử tới `support@cvoneclickmatch.com`. Nhận được mới đi tiếp.
 5. Railway → **Variables** → `REPLY_TO=CVMatchOne <support@cvoneclickmatch.com>` →
-   **Restart**. `/health` hết cảnh báo REPLY_TO là xong.
+   **Restart**. Trang Hệ thống hết cảnh báo REPLY_TO là xong.
 
 > **Có ảnh hưởng tới Brevo không?** Không. MX và SPF mới nằm ở tên miền gốc; thư
 > Brevo dùng tên miền trả thư `noreply.cvoneclickmatch.com` với SPF riêng, còn

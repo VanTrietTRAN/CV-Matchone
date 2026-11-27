@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const { validateObjectIdParam } = require('../middleware/validateObjectId');
+router.param('id', validateObjectIdParam);
+router.param('companyUserId', validateObjectIdParam);
 const { protect, authorize } = require('../middleware/authMiddleware');
 const {
   getStats,
@@ -62,13 +65,23 @@ router.patch('/jobs/:id/close', closeJob);
 router.delete('/jobs/:id', deleteJob);
 
 router.get('/system', getSystemInfo);
+// Bản chi tiết của /health (công khai đã rút gọn): DB, email, storage, ?ai=1
+router.get('/system/health', getSystemInfo);
 // ─── Import hàng loạt từ Excel ───────────────────────────────────────────────
 const sheetUpload = require('../middleware/sheetUploadMiddleware');
 const { importUsers, importEmployers, importJobs, downloadTemplate } = require('../controllers/importController');
 router.get('/import/template/:kind', downloadTemplate);
-router.post('/import/users', sheetUpload.single('file'), importUsers);
-router.post('/import/employers', sheetUpload.single('file'), importEmployers);
-router.post('/import/jobs', sheetUpload.single('file'), importJobs);
+const rateLimit = require('express-rate-limit');
+const adminImportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Import quá nhiều lần. Vui lòng thử lại sau 15 phút.' },
+});
+router.post('/import/users', adminImportLimiter, sheetUpload.single('file'), importUsers);
+router.post('/import/employers', adminImportLimiter, sheetUpload.single('file'), importEmployers);
+router.post('/import/jobs', adminImportLimiter, sheetUpload.single('file'), importJobs);
 
 const { getWelcomeEmailQueue, retryWelcomeEmails } = require('../controllers/adminController');
 router.get('/import/welcome-queue', getWelcomeEmailQueue);

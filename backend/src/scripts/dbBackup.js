@@ -13,6 +13,12 @@ const SystemSetting = require('../models/SystemSetting');
 const CompanyProfile = require('../models/CompanyProfile');
 const JobAlert = require('../models/JobAlert');
 const CompanyReview = require('../models/CompanyReview');
+const CvFile = require('../models/CvFile');
+const AuditLog = require('../models/AuditLog');
+const JobView = require('../models/JobView');
+const SystemBroadcast = require('../models/SystemBroadcast');
+const EmailSuppression = require('../models/EmailSuppression');
+const EmailHealthState = require('../models/EmailHealthState');
 
 const modelsMap = {
   users: User,
@@ -24,6 +30,15 @@ const modelsMap = {
   companyprofiles: CompanyProfile,
   jobalerts: JobAlert,
   companyreviews: CompanyReview,
+  // Bản cũ bỏ sót 4 collection dưới — sao lưu "đầy đủ" mà mất file CV gốc,
+  // nhật ký quản trị, lượt xem tin và lịch sử thông báo hệ thống.
+  cvfiles: CvFile,
+  auditlogs: AuditLog,
+  jobviews: JobView,
+  systembroadcasts: SystemBroadcast,
+  // Danh sách chặn email: mất là gửi lại tới địa chỉ đã hard bounce / báo spam
+  email_suppression_list: EmailSuppression,
+  email_health_state: EmailHealthState,
 };
 
 // Helper: Recursively convert BSON-like strings back to Mongoose ObjectId and Date types during restore
@@ -134,7 +149,13 @@ async function main() {
       }
 
       for (const [name, model] of Object.entries(modelsMap)) {
-        const rawDocs = backupData.collections[name] || [];
+        // File sao lưu cũ không có collection này: GIỮ NGUYÊN dữ liệu hiện có.
+        // Trước đây coi như mảng rỗng rồi deleteMany — xoá sạch collection.
+        if (!Array.isArray(backupData.collections[name])) {
+          console.log(`  - Bỏ qua [${name}]: file sao lưu không có collection này, giữ nguyên dữ liệu hiện tại.`);
+          continue;
+        }
+        const rawDocs = backupData.collections[name];
         const processedDocs = recastBsonTypes(rawDocs);
 
         // Clear existing collection and re-insert
@@ -149,6 +170,8 @@ async function main() {
     }
   } catch (err) {
     console.error('❌ Thao tác thất bại:', err);
+    // Mã thoát khác 0 để script/CI biết sao lưu hoặc khôi phục đã hỏng
+    process.exitCode = 1;
   } finally {
     await mongoose.connection.close();
     console.log('[DB Backup] Đã đóng kết nối database.');

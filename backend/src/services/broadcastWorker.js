@@ -106,13 +106,17 @@ const processBroadcastAsync = async (broadcastId) => {
   }
 };
 
-// Giữ nguyên bố cục thư cũ; chỉ khác là nay đi qua hàng đợi P2
+const escapeHtml = (v) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// Tiêu đề và nội dung do admin nhập: escape trước khi ghép vào HTML, rồi mới
+// đổi xuống dòng thành <br/> — trước đây <script> đi nguyên vào thư.
 const renderBroadcastHtml = (broadcast) => `
-  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; rounded: 8px;">
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
     <h2 style="color: #6d28d9;">📢 Thông báo từ Hệ thống CVMatchOne</h2>
-    <p style="font-size: 16px; font-weight: bold; color: #111;">${broadcast.title}</p>
+    <p style="font-size: 16px; font-weight: bold; color: #111;">${escapeHtml(broadcast.title)}</p>
     <div style="background-color: #f5f3ff; padding: 15px; border-left: 4px solid #7c3aed; margin: 20px 0; color: #333; line-height: 1.6;">
-      ${broadcast.message.replace(/\n/g, '<br/>')}
+      ${escapeHtml(broadcast.message).replace(/\r?\n/g, '<br/>')}
     </div>
     <p style="font-size: 13px; color: #666;">Cảm ơn bạn đã đồng hành cùng CVMatchOne!</p>
   </div>
@@ -130,7 +134,7 @@ async function processChunk(users, broadcast, mail) {
       const notifications = users.map((u) => ({
         userId: u._id,
         title: broadcast.title,
-        message: broadcast.message,
+        body: broadcast.message,
         type: 'system',
         isRead: false,
       }));

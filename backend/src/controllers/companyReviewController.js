@@ -35,12 +35,18 @@ const formatReview = (review, currentUserId) => ({
   isMine: currentUserId ? review.candidateId?._id?.toString() === currentUserId.toString() : false,
 });
 
+/** Số sao phải là số nguyên 1–5 — trước đây nhận 3.5, còn "abc" thì crash 500. */
+const isValidRating = (v) => Number.isInteger(v) && v >= 1 && v <= 5;
+const cleanComment = (v) => (typeof v === 'string' ? v.trim().slice(0, 2000) : '');
+
 const createReview = async (req, res) => {
   try {
     const { companyUserId, rating, comment, isAnonymous } = req.body;
-    if (!companyUserId) return res.status(400).json({ message: 'Thiếu companyUserId' });
-    if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ message: 'Vui lòng chọn số sao từ 1 đến 5' });
+    if (!companyUserId || !require('mongoose').isValidObjectId(companyUserId)) {
+      return res.status(400).json({ message: 'Thiếu hoặc sai companyUserId' });
+    }
+    if (!isValidRating(rating)) {
+      return res.status(400).json({ message: 'Vui lòng chọn số sao (số nguyên từ 1 đến 5)' });
     }
     if (companyUserId.toString() === req.user._id.toString()) {
       return res.status(400).json({ message: 'Không thể tự đánh giá công ty của mình' });
@@ -66,11 +72,12 @@ const createReview = async (req, res) => {
       candidateId: req.user._id,
       applicationId: eligibleApp._id,
       rating,
-      comment: comment || '',
+      comment: cleanComment(comment),
       isAnonymous: !!isAnonymous,
     });
 
-    res.status(201).json({ message: 'Đã gửi đánh giá', data: review });
+    await review.populate('candidateId', 'email');
+    res.status(201).json({ message: 'Đã gửi đánh giá', data: formatReview(review, req.user._id) });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({ message: 'Bạn đã đánh giá công ty này rồi' });
@@ -141,6 +148,12 @@ const findOwnReview = async (req, res) => {
     res.status(403).json({ message: 'Không có quyền' });
     return null;
   }
+  // Đánh giá admin đã ẩn thì không sửa/xoá được — trước đây xoá rồi đăng lại
+  // là thành đánh giá mới hiện công khai, lách quyết định kiểm duyệt.
+  if (review.isHidden) {
+    res.status(403).json({ message: 'Đánh giá này đã bị quản trị viên ẩn nên không thể sửa hoặc xoá.' });
+    return null;
+  }
   return review;
 };
 
@@ -151,14 +164,15 @@ const updateReview = async (req, res) => {
 
     const { rating, comment, isAnonymous } = req.body;
     if (rating !== undefined) {
-      if (rating < 1 || rating > 5) return res.status(400).json({ message: 'Số sao phải từ 1 đến 5' });
+      if (!isValidRating(rating)) return res.status(400).json({ message: 'Số sao phải là số nguyên từ 1 đến 5' });
       review.rating = rating;
     }
-    if (comment !== undefined) review.comment = comment;
+    if (comment !== undefined) review.comment = cleanComment(comment);
     if (isAnonymous !== undefined) review.isAnonymous = !!isAnonymous;
 
     await review.save();
-    res.json({ message: 'Đã cập nhật đánh giá', data: review });
+    await review.populate('candidateId', 'email');
+    res.json({ message: 'Đã cập nhật đánh giá', data: formatReview(review, req.user._id) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -183,12 +197,15 @@ const replyToReview = async (req, res) => {
       return res.status(403).json({ message: 'Chỉ công ty được đánh giá mới phản hồi được' });
     }
     const { reply } = req.body;
-    if (!reply || !reply.trim()) return res.status(400).json({ message: 'Nội dung phản hồi trống' });
+    if (typeof reply !== 'string' || !reply.trim()) return res.status(400).json({ message: 'Nội dung phản hồi trống' });
 
-    review.employerReply = reply.trim();
+    review.employerReply = reply.trim().slice(0, 2000);
     review.employerRepliedAt = new Date();
     await review.save();
-    res.json({ message: 'Đã phản hồi đánh giá', data: review });
+    // Trả qua formatReview: document gốc chứa candidateId và applicationId — lộ
+    // danh tính người viết đánh giá ẩn danh cho chính công ty bị đánh giá.
+    await review.populate('candidateId', 'email');
+    res.json({ message: 'Đã phản hồi đánh giá', data: formatReview(review, null) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

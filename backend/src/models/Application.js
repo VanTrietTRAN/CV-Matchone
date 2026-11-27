@@ -32,6 +32,12 @@ const applicationSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
-}, { timestamps: false }); 
+}, { timestamps: false });
+
+// Mỗi ứng viên nộp một lần cho mỗi tin. Kiểm tra "đã nộp chưa" rồi mới tạo là
+// không đủ: 5 request song song đều thấy "chưa" và tạo 5 đơn. Index unique
+// chặn ở tầng database; controller bắt lỗi 11000 và trả 409.
+applicationSchema.index({ jobId: 1, candidateId: 1 }, { unique: true });
+
 
 module.exports = mongoose.model('Application', applicationSchema);

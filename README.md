@@ -72,7 +72,7 @@ Xem chú thích chi tiết trong từng file `.env.example`.
 ### 3. Nạp dữ liệu mẫu (tuỳ chọn)
 
 ```bash
-cd backend && node run_seed.js
+cd backend && node run_seed.js --confirm-drop
 ```
 
 > ⚠️ Script này **xoá toàn bộ database** trước khi tạo lại dữ liệu mẫu. Chỉ chạy trên DB phát triển.
@@ -117,7 +117,7 @@ curl http://localhost:5000/health   # Backend: status ok + database connected
 |---|---|---|
 | `frontend` | `npm run dev` / `npm run build` / `npm start` | Dev · build production · chạy bản build |
 | `backend` | `npm run dev` / `npm start` | Dev (nodemon) · production |
-| `backend` | `node run_seed.js` | Nạp lại dữ liệu mẫu (xoá DB cũ) |
+| `backend` | `node run_seed.js --confirm-drop` | Nạp lại dữ liệu mẫu (xoá DB cũ; từ chối chạy khi NODE_ENV=production) |
 | `backend` | `node src/scripts/smokeTest.js` | Kiểm thử nhanh các endpoint chính |
 | `backend` | `node src/scripts/dbBackup.js` | Xuất backup database ra `backend/backups/` |
 | `backend` | `node src/scripts/backfillCvEmbedding.js` | Tạo lại vector AI cho CV cũ thiếu embedding và chấm lại điểm đơn ứng tuyển. Bỏ `--apply` để xem trước |

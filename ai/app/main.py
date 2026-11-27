@@ -5,9 +5,14 @@ from dotenv import load_dotenv
 # ngay ở cấp module (GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL...).
 load_dotenv()
 
-from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import List, Optional
+import hmac
+import math
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import List
 
 from app.services.embedding_service import generate_embedding
 from app.services.matching_service import calculate_cosine_similarity
@@ -17,6 +22,31 @@ app = FastAPI(
     description="AI embedding & matching service. Powered by Gemini Embedding (gemini-embedding-001, 768 dims). Note: Gemini 3.6 Flash is a generative model, not used for embeddings.",
     version="2.1.0",
 )
+
+
+# ─── Xác thực bằng khoá dùng chung ────────────────────────────────────────────
+# Đặt AI_API_KEY ở cả AI service và backend: mọi request (trừ /health và /) phải
+# kèm header X-AI-API-Key. Không đặt thì service mở như trước — chỉ nên vậy khi
+# AI service không public ra Internet.
+AI_API_KEY = os.environ.get("AI_API_KEY", "").strip()
+PUBLIC_PATHS = {"/", "/health", "/docs", "/openapi.json"}
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    if AI_API_KEY and request.url.path not in PUBLIC_PATHS:
+        given = request.headers.get("x-ai-api-key", "")
+        if not hmac.compare_digest(given.encode(), AI_API_KEY.encode()):
+            return JSONResponse(status_code=401, content={"detail": "Thiếu hoặc sai X-AI-API-Key"})
+    return await call_next(request)
+
+
+# Lỗi 422 mặc định trả lại cả `input` — với vector chứa NaN thì chính bước dựng
+# JSON lỗi lại crash 500. Chỉ trả vị trí và thông báo.
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    errors = [{"loc": list(e.get("loc", [])), "msg": str(e.get("msg", ""))} for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 # ─── Health Check ─────────────────────────────────────────────────────────────
@@ -41,18 +71,47 @@ def read_root():
 
 
 # ─── Request Models ───────────────────────────────────────────────────────────
+MAX_TEXT_CHARS = 10_000
+MAX_VECTOR_DIMS = 4096
+
+
 class TextRequest(BaseModel):
-    text: str
+    # Text rỗng vẫn gọi Gemini (tốn quota, vector vô nghĩa); text 200k ký tự thì
+    # vượt giới hạn của model. Chặn cả hai bằng 422 rõ ràng.
+    text: str = Field(min_length=1, max_length=MAX_TEXT_CHARS)
+
+    @field_validator("text")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("text không được để trống")
+        return v
 
 
 class MatchingRequest(BaseModel):
-    cv_vector: List[float]
-    job_vector: List[float]
+    cv_vector: List[float] = Field(min_length=1, max_length=MAX_VECTOR_DIMS)
+    job_vector: List[float] = Field(min_length=1, max_length=MAX_VECTOR_DIMS)
+
+    @field_validator("cv_vector", "job_vector")
+    @classmethod
+    def finite(cls, v: List[float]) -> List[float]:
+        if not all(math.isfinite(x) for x in v):
+            raise ValueError("vector chứa NaN hoặc Infinity")
+        return v
+
+    @model_validator(mode="after")
+    def same_length(self):
+        if len(self.cv_vector) != len(self.job_vector):
+            raise ValueError("hai vector phải cùng số chiều")
+        return self
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 @app.post("/get-embedding")
-async def get_embedding_endpoint(request: TextRequest):
+def get_embedding_endpoint(request: TextRequest):
+    # `def` (không phải `async def`): generate_embedding gọi Gemini đồng bộ, đặt
+    # trong async def là chặn cả event loop — 20 request chạy tuần tự. FastAPI
+    # chạy hàm `def` trong threadpool nên các request song song không nghẽn nhau.
     """
     Tạo vector embedding từ text.
     
@@ -67,7 +126,7 @@ async def get_embedding_endpoint(request: TextRequest):
 
 
 @app.post("/calculate-matching")
-async def calculate_matching_endpoint(request: MatchingRequest):
+def calculate_matching_endpoint(request: MatchingRequest):
     """Tính cosine similarity giữa vector CV và vector Job Description."""
     score = calculate_cosine_similarity(request.cv_vector, request.job_vector)
     return {"score": score}

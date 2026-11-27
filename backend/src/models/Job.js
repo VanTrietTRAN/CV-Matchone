@@ -58,4 +58,12 @@ const jobSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+// Embedding chỉ dùng nội bộ để chấm điểm — không trả ra client (xem CvProfile.js)
+jobSchema.set('toJSON', {
+    transform: (doc, ret) => {
+        delete ret.embedding;
+        return ret;
+    },
+});
+
 module.exports = mongoose.model('Job', jobSchema);

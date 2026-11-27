@@ -63,7 +63,7 @@ const checkAiHealth = async (timeout = 4000) => {
   const { url, error } = readAiUrl();
   if (!url) return { reachable: false, error };
   try {
-    const res = await axios.get(`${url}/health`, { timeout });
+    const res = await axios.get(`${url}/health`, { timeout, headers: aiHeaders() });
     return {
       reachable: true,
       status: res.data?.status || "unknown",
@@ -75,16 +75,57 @@ const checkAiHealth = async (timeout = 4000) => {
   }
 };
 
+// Timeout cho mọi lời gọi AI: không có timeout thì AI service treo là request
+// của người dùng (và lượt cron) treo theo vô hạn.
+const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 15000;
+
+/** Khoá dùng chung với AI service (AI_API_KEY ở cả hai bên). */
+const aiHeaders = () => {
+  const key = String(process.env.AI_API_KEY || "").trim();
+  return key ? { "X-AI-API-Key": key } : {};
+};
+
+/**
+ * Cosine similarity tính ngay trong Node.
+ *
+ * Trước đây mỗi cặp CV–tin là một HTTP POST sang AI service: trang gợi ý việc
+ * làm với 200 tin mở = 200 request mỗi lần tải trang. Phép tính chỉ là một vòng
+ * lặp 768 phần tử (< 1ms cho 200 tin), không cần qua mạng.
+ * Vector lệch chiều hoặc có NaN/Infinity thì trả 0 thay vì kết quả rác.
+ */
+const cosineSimilarity = (a, b) => {
+  if (!Array.isArray(a) || !Array.isArray(b) || !a.length || a.length !== b.length) return 0;
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i];
+    const y = b[i];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+    dot += x * y;
+    na += x * x;
+    nb += y * y;
+  }
+  if (na === 0 || nb === 0) return 0;
+  const score = dot / (Math.sqrt(na) * Math.sqrt(nb));
+  return Number.isFinite(score) ? score : 0;
+};
+
 const aiService = {
   getEmbedding: async (text) => {
     const base = aiUrl();
     if (!base) {
       return null;
     }
+    const input = typeof text === "string" ? text.trim() : "";
+    if (!input) return null;
     try {
-      const response = await axios.post(`${base}/get-embedding`, {
-        text: text,
-      });
+      const response = await axios.post(
+        `${base}/get-embedding`,
+        // AI service giới hạn độ dài đầu vào; cắt ở đây để khỏi nhận 422
+        { text: input.slice(0, 10000) },
+        { timeout: AI_TIMEOUT_MS, headers: aiHeaders() },
+      );
       return response.data.embedding;
     } catch (error) {
       console.error("Lỗi khi gọi AI Service (Embedding):", error.message);
@@ -95,24 +136,11 @@ const aiService = {
     }
   },
 
-  calculateMatchingScore: async (cvEmbedding, jobEmbedding) => {
-    const base = aiUrl();
-    if (!base) {
-      return 0;
-    }
-    try {
-      const response = await axios.post(`${base}/calculate-matching`, {
-        cv_vector: cvEmbedding,
-        job_vector: jobEmbedding,
-      });
-      return response.data.score;
-    } catch (error) {
-      console.error("Lỗi khi gọi AI Service (Matching):", error.message);
-      return 0;
-    }
-  },
+  // Giữ chữ ký async để các chỗ gọi cũ không phải đổi
+  calculateMatchingScore: async (cvEmbedding, jobEmbedding) => cosineSimilarity(cvEmbedding, jobEmbedding),
 };
 
 module.exports = aiService;
 module.exports.getAiConfig = getAiConfig;
 module.exports.checkAiHealth = checkAiHealth;
+module.exports.cosineSimilarity = cosineSimilarity;

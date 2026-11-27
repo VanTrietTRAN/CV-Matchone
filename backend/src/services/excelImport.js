@@ -12,6 +12,33 @@ const XLSX = require('xlsx');
 
 const MAX_ROWS = 1000;
 
+/** File là bảng tính nhị phân (xlsx = zip "PK", xls = OLE) hay văn bản (CSV)? */
+const isBinarySheet = (buf) =>
+  buf.length >= 4 &&
+  ((buf[0] === 0x50 && buf[1] === 0x4b) || (buf[0] === 0xd0 && buf[1] === 0xcf && buf[2] === 0x11 && buf[3] === 0xe0));
+
+/**
+ * Ô bắt đầu bằng = @ (hoặc + - không phải số) là công thức khi mở lại bằng Excel
+ * — file xuất ra từ dữ liệu này có thể chạy lệnh trên máy người mở (CSV/Formula
+ * injection). Thêm dấu nháy đơn để Excel coi là chữ. Số điện thoại "+84..." và số
+ * âm vẫn giữ nguyên.
+ */
+const neutralizeFormula = (value) => {
+  const v = String(value);
+  if (/^[=@\t\r]/.test(v)) return `'${v}`;
+  if (/^[+-]/.test(v) && !/^[+-]?[\d\s().]+$/.test(v)) return `'${v}`;
+  return v;
+};
+
+/** Ngày trong ô Excel → 'YYYY-MM-DD' theo lịch người dùng thấy, không lệch múi giờ. */
+const formatCellDate = (d) => {
+  // SheetJS dựng Date lúc 00:00 giờ máy chủ; toISOString() đổi sang UTC nên ở
+  // múi giờ +7 thành ngày hôm trước. Cộng nửa ngày rồi đọc theo giờ máy chủ.
+  const x = new Date(d.getTime() + 12 * 60 * 60 * 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+};
+
 /** "Ngành học:" -> "nganh hoc" — bỏ dấu tiếng Việt và ký tự thừa để so khớp. */
 const normalizeHeader = (value) =>
   String(value ?? '')
@@ -30,13 +57,19 @@ const normalizeHeader = (value) =>
  * @returns {{rows: object[], headers: string[], missingColumns: string[], mapping: object}}
  */
 const parseSheet = (buffer, columns) => {
-  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  // CSV đọc dưới dạng chuỗi UTF-8: đọc như buffer thì SheetJS đoán bảng mã
+  // Latin-1 với file không có BOM ("Họ và tên" thành "Há» vÃ  tÃªn"), và tự
+  // đổi "0905123456" thành số 905123456. raw: true giữ nguyên chữ trong CSV.
+  const wb = isBinarySheet(buffer)
+    ? XLSX.read(buffer, { type: 'buffer', cellDates: true, sheetRows: MAX_ROWS + 50 })
+    : XLSX.read(buffer.toString('utf8').replace(/^\uFEFF/, ''), { type: 'string', raw: true, sheetRows: MAX_ROWS + 50 });
   const sheetName = wb.SheetNames[0];
   if (!sheetName) throw new Error('File không có sheet nào.');
 
+  // Giữ cả dòng trống (rồi tự bỏ qua) để số dòng báo lỗi khớp đúng dòng trong file
   const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
     header: 1,
-    blankrows: false,
+    blankrows: true,
     defval: '',
   });
   if (!raw.length) throw new Error('File trống, không có dòng nào.');
@@ -66,12 +99,13 @@ const parseSheet = (buffer, columns) => {
     for (const [field, idx] of Object.entries(mapping)) {
       const cell = line[idx];
       record[field] =
-        cell instanceof Date ? cell.toISOString().slice(0, 10) : String(cell ?? '').trim();
+        cell instanceof Date ? formatCellDate(cell) : neutralizeFormula(String(cell ?? '').trim());
     }
     rows.push(record);
   }
 
-  return { rows, headers: originalHeaders, missingColumns, mapping, truncated: raw.length - 1 > MAX_ROWS };
+  const dataRows = raw.slice(1).filter((l) => l && !l.every((c) => String(c ?? '').trim() === '')).length;
+  return { rows, headers: originalHeaders, missingColumns, mapping, truncated: dataRows > MAX_ROWS };
 };
 
 /** Sinh file Excel mẫu để người dùng tải về điền theo. */
@@ -151,6 +185,7 @@ const JOB_COLUMNS = {
 
 module.exports = {
   parseSheet,
+  neutralizeFormula,
   buildTemplate,
   normalizeHeader,
   STUDENT_COLUMNS,

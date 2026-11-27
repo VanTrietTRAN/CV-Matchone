@@ -222,6 +222,11 @@ const initTransporter = async () => {
       pool: true,
       maxConnections: 3,
       maxMessages: 100,
+      // Không có timeout thì máy chủ SMTP treo là worker gửi mail treo theo vô
+      // hạn (cả hàng đợi đứng). Mặc định của nodemailer cho socket là 10 phút.
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 30000,
     });
 
     console.log(`[Email] Đã khởi tạo SMTP transporter (${cfg.host}:${cfg.port}).`);
@@ -377,12 +382,20 @@ const dispatch = async ({ lane, kind, to, subject, html, text, from, headers, im
       text,
       ...(headers && Object.keys(headers).length ? { headers } : {}),
     });
-    await governor.recordSent({ lane, kind, recipients, messageId: info.messageId, importBatchId });
+    // SMTP có thể nhận thư nhưng từ chối một phần người nhận (info.rejected).
+    // Chỉ những địa chỉ được nhận mới tính là đã gửi.
+    const rejected = (info.rejected || []).map((r) => normalizeAddr(r?.address || r));
+    const delivered = recipients.filter((r) => !rejected.includes(r));
+    if (!delivered.length) {
+      await governor.release(slot);
+      return { sent: false, error: `Máy chủ SMTP từ chối người nhận: ${rejected.join(', ')}`, rejected };
+    }
+    await governor.recordSent({ lane, kind, recipients: delivered, messageId: info.messageId, importBatchId });
     return {
       sent: true,
       messageId: info.messageId,
-      rejected: info.rejected || [],
-      recipients,
+      rejected,
+      recipients: delivered,
       suppressed,
     };
   } catch (error) {

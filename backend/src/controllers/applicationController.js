@@ -2,17 +2,33 @@ const Application = require("../models/Application");
 const Job = require("../models/Job");
 const CvProfile = require("../models/CvProfile");
 const aiService = require("../services/aiService");
+const mongoose = require("mongoose");
+const Notification = require("../models/Notification");
+const { findPrimaryOrLatestCv } = require("../utils/primaryCv");
+const { attachCompanyNames } = require("../utils/companyNames");
+
+const STATUS_LABELS = {
+  pending: "Đang chờ",
+  reviewed: "Đã xem",
+  interview: "Mời phỏng vấn",
+  accepted: "Đã nhận",
+  rejected: "Không phù hợp",
+};
 
 const applyToJob = async (req, res) => {
   try {
     const { jobId, cvProfileId } = req.body;
-    if (!jobId) {
-      return res.status(400).json({ message: "Missing jobId" });
+    if (!jobId || !mongoose.isValidObjectId(jobId)) {
+      return res.status(400).json({ message: "Thiếu hoặc sai mã tin tuyển dụng." });
+    }
+    if (cvProfileId !== undefined && cvProfileId !== null && !mongoose.isValidObjectId(cvProfileId)) {
+      return res.status(400).json({ message: "Mã CV không hợp lệ." });
     }
 
     const job = await Job.findById(jobId);
-    if (!job || job.status !== "open") {
-      return res.status(404).json({ message: "Job post not found or is closed" });
+    const expired = job?.expiresAt && new Date(job.expiresAt) <= new Date();
+    if (!job || job.isDeleted || job.status !== "open" || expired) {
+      return res.status(404).json({ message: "Tin tuyển dụng không tồn tại hoặc đã đóng." });
     }
 
     let cvProfile;
@@ -22,7 +38,8 @@ const applyToJob = async (req, res) => {
         return res.status(403).json({ message: "Invalid CV profile" });
       }
     } else {
-      cvProfile = await CvProfile.findOne({ userId: req.user._id }).sort({ createdAt: -1 });
+      // Ưu tiên CV chính (isPrimary) — trước đây lấy CV mới nhất, nộp nhầm CV
+      cvProfile = await findPrimaryOrLatestCv(req.user._id);
       if (!cvProfile) {
         const email = req.user.email || "candidate";
         cvProfile = await CvProfile.create({
@@ -42,7 +59,7 @@ const applyToJob = async (req, res) => {
       candidateId: req.user._id,
     });
     if (existing) {
-      return res.status(400).json({ message: "You have already applied to this job" });
+      return res.status(409).json({ message: "Bạn đã ứng tuyển tin này rồi." });
     }
 
     let matchingScore = 0;
@@ -56,21 +73,30 @@ const applyToJob = async (req, res) => {
       matchingScore = Math.round(Math.min(1, Math.max(0, raw)) * 100);
     }
 
-    const application = await Application.create({
-      jobId,
-      candidateId: req.user._id,
-      cvProfileId: cvProfile._id,
-      matchingScore,
-      status: "pending",
-    });
+    let application;
+    try {
+      application = await Application.create({
+        jobId,
+        candidateId: req.user._id,
+        cvProfileId: cvProfile._id,
+        matchingScore,
+        status: "pending",
+      });
+    } catch (e) {
+      // Hai request nộp đơn cùng lúc: index unique chặn bản thứ hai
+      if (e.code === 11000) {
+        return res.status(409).json({ message: "Bạn đã ứng tuyển tin này rồi." });
+      }
+      throw e;
+    }
 
     const populated = await Application.findById(application._id).populate({
       path: "jobId",
-      populate: { path: "employerId", select: "email role" },
+      select: "-embedding",
+      populate: { path: "employerId", select: "role" },
     });
 
     try {
-      const Notification = require('../models/Notification');
       const scoreText = matchingScore > 0 ? ` — Match score: ${matchingScore}%` : '';
 
       await Notification.updateMany(
@@ -117,7 +143,7 @@ const getMyApplications = async (req, res) => {
       .populate({
         path: "jobId",
         select: "-embedding",
-        populate: { path: "employerId", select: "email role" },
+        populate: { path: "employerId", select: "role isPro" },
       })
       .sort({ appliedAt: -1 });
 
@@ -135,6 +161,8 @@ const getMyApplications = async (req, res) => {
       }
       return obj;
     });
+    // Tên công ty thay cho email đăng nhập của nhà tuyển dụng
+    await attachCompanyNames(safeApps.map((a) => a.jobId).filter((j) => j && !j.isDeleted));
 
     res.json({ data: safeApps });
   } catch (error) {
@@ -158,7 +186,7 @@ const getApplicationsForJob = async (req, res) => {
 
     const apps = await Application.find({ jobId: req.params.jobId })
       .populate("candidateId", "email role")
-      .populate("cvProfileId")
+      .populate("cvProfileId", "-embedding")
       .sort({ matchingScore: -1 });
 
     const BASE_URL = `${req.protocol}://${req.get('host')}`;
@@ -203,10 +231,31 @@ const updateApplicationStatus = async (req, res) => {
       return res.status(403).json({ message: 'You are not authorized to update this application' });
     }
 
+    const previous = app.status;
     app.status = status;
     await app.save();
 
-    res.json({ message: 'Status updated successfully', data: app });
+    // Báo cho ứng viên — trước đây đổi trạng thái không tạo thông báo nào,
+    // ứng viên chỉ biết khi tự mở lại danh sách đơn.
+    if (previous !== status) {
+      try {
+        await Notification.create({
+          userId: app.candidateId,
+          type: 'application_status_update',
+          title: `Cập nhật hồ sơ: ${app.jobId?.title || 'tin tuyển dụng'}`,
+          body: `Trạng thái hồ sơ của bạn đã chuyển sang "${STATUS_LABELS[status] || status}".`,
+          jobId: app.jobId?._id || app.jobId,
+          applicationId: app._id,
+          cvProfileId: app.cvProfileId,
+        });
+      } catch (notifErr) {
+        console.error('[Notification] Không tạo được thông báo đổi trạng thái:', notifErr.message);
+      }
+    }
+
+    const data = app.toObject();
+    if (data.jobId && typeof data.jobId === 'object') delete data.jobId.embedding;
+    res.json({ message: 'Status updated successfully', data });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -224,6 +273,12 @@ const deleteApplication = async (req, res) => {
       req.user.role !== "admin"
     ) {
       return res.status(403).json({ message: "You are not authorized to cancel this application" });
+    }
+
+    // Ứng viên chỉ rút được đơn CHƯA xử lý. Trước đây xoá được cả đơn đã bị từ
+    // chối rồi nộp lại ngay như mới — lách quyết định của nhà tuyển dụng.
+    if (req.user.role !== "admin" && app.status !== "pending") {
+      return res.status(400).json({ message: "Chỉ rút được hồ sơ đang chờ xử lý." });
     }
 
     await Application.findByIdAndDelete(req.params.id);
