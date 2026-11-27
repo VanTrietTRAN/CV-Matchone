@@ -87,7 +87,14 @@ async function main() {
 
   // ── 2. Webhook transactional ───────────────────────────────────────────────
   const url = `${origin}/webhooks/brevo`;
-  const hooks = (await http.get('/webhooks', { params: { type: 'transactional' } })).data.webhooks || [];
+  // Tài khoản chưa có webhook nào thì Brevo trả 400 document_not_found thay vì danh sách rỗng
+  const hooks = await http
+    .get('/webhooks', { params: { type: 'transactional' } })
+    .then((r) => r.data.webhooks || [])
+    .catch((e) => {
+      if (e.response?.data?.code === 'document_not_found') return [];
+      throw e;
+    });
   const existing = hooks.find((h) => h.url === url);
   const body = {
     url,
